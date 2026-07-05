@@ -3,8 +3,8 @@ from core.creature.creature import Creature
 from core.creature.ivs import IVs
 from core.creature.nature import Nature
 from core.creature.stat import Stat
-from core.species.species import Species
 from core.species.evolution_chain import EvolutionChain
+from core.species.species import Species
 
 
 def test_creature_returns_base_stat():
@@ -49,11 +49,7 @@ def test_creature_returns_base_stat():
             special_defense=31,
             speed=31,
         ),
-        nature=Nature(
-            name="Neutral",
-            increased_stat=None,
-            decreased_stat=None,
-        ),
+        nature=Nature("hardy"),
         size=1.0,
         current_form=None,
     )

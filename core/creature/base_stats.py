@@ -15,8 +15,8 @@ class BaseStats:
             Stat.HP: hp,
             Stat.ATTACK: attack,
             Stat.DEFENSE: defense,
-            Stat.SPECIAL_ATTACK: special_attack,
-            Stat.SPECIAL_DEFENSE: special_defense,
+            Stat.SP_ATTACK: special_attack,
+            Stat.SP_DEFENSE: special_defense,
             Stat.SPEED: speed,
         }
 

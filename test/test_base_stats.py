@@ -15,6 +15,6 @@ def test_returns_the_value_for_each_stat():
     assert base_stats.for_stat(Stat.HP) == 45
     assert base_stats.for_stat(Stat.ATTACK) == 49
     assert base_stats.for_stat(Stat.DEFENSE) == 49
-    assert base_stats.for_stat(Stat.SPECIAL_ATTACK) == 65
-    assert base_stats.for_stat(Stat.SPECIAL_DEFENSE) == 65
+    assert base_stats.for_stat(Stat.SP_ATTACK) == 65
+    assert base_stats.for_stat(Stat.SP_DEFENSE) == 65
     assert base_stats.for_stat(Stat.SPEED) == 45

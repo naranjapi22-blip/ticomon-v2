@@ -36,3 +36,5 @@ class Creature:
         return self.species.base_stats.for_stat(stat)
     def iv_for(self, stat: Stat) -> int:
         return self.ivs.for_stat(stat)
+    def nature_modifier_for(self, stat: Stat) -> float:
+        return self.nature.modifier_for(stat)

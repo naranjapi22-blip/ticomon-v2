@@ -8,7 +8,7 @@ from core.species.species import Species
 from core.stats.stat_calculator import StatCalculator
 
 
-def test_calculates_attack_stat_from_base_stats_and_ivs():
+def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
     species = Species(
         id=1,
         name="Bulbasaur",
@@ -50,11 +50,7 @@ def test_calculates_attack_stat_from_base_stats_and_ivs():
             special_defense=31,
             speed=31,
         ),
-        nature=Nature(
-            name="Neutral",
-            increased_stat=None,
-            decreased_stat=None,
-        ),
+        nature=Nature("adamant"),
         size=1.0,
         current_form=None,
     )
@@ -66,4 +62,4 @@ def test_calculates_attack_stat_from_base_stats_and_ivs():
         Stat.ATTACK,
     )
 
-    assert attack == 69
+    assert attack == 75

@@ -16,4 +16,6 @@ class StatCalculator:
         if stat == Stat.HP:
             return floor(((2 * base + iv) * self.LEVEL) / 100) + self.LEVEL + 10
 
-        return floor(((2 * base + iv) * self.LEVEL) / 100) + 5
+        value = floor(((2 * base + iv) * self.LEVEL) / 100) + 5
+
+        return floor(value * creature.nature_modifier_for(stat))

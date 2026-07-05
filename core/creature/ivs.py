@@ -17,7 +17,7 @@ class IVs:
             Stat.HP: self.hp,
             Stat.ATTACK: self.attack,
             Stat.DEFENSE: self.defense,
-            Stat.SPECIAL_ATTACK: self.special_attack,
-            Stat.SPECIAL_DEFENSE: self.special_defense,
+            Stat.SP_ATTACK: self.special_attack,
+            Stat.SP_DEFENSE: self.special_defense,
             Stat.SPEED: self.speed,
         }[stat]

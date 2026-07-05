@@ -5,6 +5,6 @@ class Stat(Enum):
     HP = "hp"
     ATTACK = "attack"
     DEFENSE = "defense"
-    SPECIAL_ATTACK = "special_attack"
-    SPECIAL_DEFENSE = "special_defense"
+    SP_ATTACK = "special_attack"
+    SP_DEFENSE = "special_defense"
     SPEED = "speed"
