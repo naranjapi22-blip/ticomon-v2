@@ -6,7 +6,7 @@ from core.creature.ivs import IVs
 from core.creature.nature import Nature
 from core.creature.stat import Stat
 from core.species.species import Species
-
+from core.creature.size import Size
 
 @dataclass
 class Creature:
@@ -26,7 +26,7 @@ class Creature:
 
     # Características individuales
     ivs: IVs
-    size: float
+    size: Size
     nature: Nature
     is_shiny: bool
 

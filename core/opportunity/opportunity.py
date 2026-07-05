@@ -6,7 +6,7 @@ from core.creature.ivs import IVs
 from core.creature.nature import Nature
 from core.species.species import Species
 from core.species.variant import Variant
-
+from core.creature.size import Size
 
 @dataclass
 class Opportunity:
@@ -25,7 +25,7 @@ class Opportunity:
 
     # Características individuales
     ivs: IVs
-    size: float
+    size: Size
     nature: Nature
     is_shiny: bool
 

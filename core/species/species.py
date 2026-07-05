@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.creature.base_stats import BaseStats
 
-@dataclass
+
+@dataclass(frozen=True)
 class Species:
-    """
-    Representa un tipo de criatura dentro del mundo de TicoMon.
-
-    Una Species define las características comunes que comparten todas las
-    Creature de esa especie. No conoce jugadores ni criaturas individuales.
-    """
-
     id: int
     name: str
 
@@ -24,7 +19,7 @@ class Species:
 
     # Características
     types: list[str]
-    base_stats: dict[str, int]
+    base_stats: BaseStats
     height: int
     weight: int
     capture_rate: int
@@ -33,5 +28,5 @@ class Species:
     forms_switchable: bool
 
     # Relaciones
-    evolution_chain: "EvolutionChain"
-    variants: list["Variant"]
+    evolution_chain: EvolutionChain
+    variants: list[Variant]
