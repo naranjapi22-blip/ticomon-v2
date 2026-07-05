@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.species.species import Species
-
 from core.creature.ivs import IVs
+from core.creature.nature import Nature
+from core.creature.stat import Stat
+from core.species.species import Species
 
 
 @dataclass
@@ -16,6 +17,7 @@ class Creature:
     estado y características individuales.
     """
 
+    # Identidad
     id: int
 
     # Relación
@@ -29,3 +31,6 @@ class Creature:
 
     # Estado
     current_form: str | None
+
+    def stat_for(self, stat: Stat) -> int:
+        return self.species.base_stats.value_for(stat)
