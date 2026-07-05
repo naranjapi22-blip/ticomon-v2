@@ -2,6 +2,7 @@ from core.creature.base_stats import BaseStats
 from core.creature.creature import Creature
 from core.creature.ivs import IVs
 from core.creature.nature import Nature
+from core.creature.size import Size
 from core.creature.stat import Stat
 from core.species.evolution_chain import EvolutionChain
 from core.species.species import Species
@@ -40,6 +41,7 @@ def test_creature_returns_base_stat():
     creature = Creature(
         id=1,
         species=species,
+        variant=None,
         trainer_id=1,
         ivs=IVs(
             hp=31,
@@ -51,7 +53,7 @@ def test_creature_returns_base_stat():
         ),
         nature=Nature("hardy"),
         is_shiny=False,
-        size=1.0,
+        size=Size(1.0),
         current_form=None,
     )
 

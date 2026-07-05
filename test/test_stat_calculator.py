@@ -6,7 +6,7 @@ from core.creature.stat import Stat
 from core.species.evolution_chain import EvolutionChain
 from core.species.species import Species
 from core.stats.stat_calculator import StatCalculator
-
+from core.creature.size import Size
 
 def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
     species = Species(
@@ -41,6 +41,7 @@ def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
     creature = Creature(
         id=1,
         species=species,
+        variant=None,
         trainer_id=1,
         ivs=IVs(
             hp=31,
@@ -52,7 +53,7 @@ def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
         ),
         nature=Nature("adamant"),
         is_shiny=False,
-        size=1.0,
+        size=Size(1.0),
         current_form=None,
     )
 

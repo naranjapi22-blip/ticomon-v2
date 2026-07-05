@@ -7,6 +7,7 @@ from core.creature.nature import Nature
 from core.creature.stat import Stat
 from core.species.species import Species
 from core.creature.size import Size
+from core.species.variant import Variant
 
 @dataclass
 class Creature:
@@ -22,6 +23,7 @@ class Creature:
 
     # Relación
     species: Species
+    variant: Variant | None
     trainer_id: int | None
 
     # Características individuales
