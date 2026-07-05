@@ -28,13 +28,16 @@ class Creature:
     ivs: IVs
     size: float
     nature: Nature
+    is_shiny: bool
 
     # Estado
     current_form: str | None
 
     def stat_for(self, stat: Stat) -> int:
         return self.species.base_stats.for_stat(stat)
+
     def iv_for(self, stat: Stat) -> int:
         return self.ivs.for_stat(stat)
+
     def nature_modifier_for(self, stat: Stat) -> float:
         return self.nature.modifier_for(stat)

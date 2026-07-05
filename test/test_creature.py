@@ -50,6 +50,7 @@ def test_creature_returns_base_stat():
             speed=31,
         ),
         nature=Nature("hardy"),
+        is_shiny=False,
         size=1.0,
         current_form=None,
     )

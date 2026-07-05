@@ -51,6 +51,7 @@ def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
             speed=31,
         ),
         nature=Nature("adamant"),
+        is_shiny=False,
         size=1.0,
         current_form=None,
     )
