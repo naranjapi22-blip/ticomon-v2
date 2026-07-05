@@ -33,4 +33,6 @@ class Creature:
     current_form: str | None
 
     def stat_for(self, stat: Stat) -> int:
-        return self.species.base_stats.value_for(stat)
+        return self.species.base_stats.for_stat(stat)
+    def iv_for(self, stat: Stat) -> int:
+        return self.ivs.for_stat(stat)

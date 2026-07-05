@@ -20,5 +20,5 @@ class BaseStats:
             Stat.SPEED: speed,
         }
 
-    def value_for(self, stat: Stat) -> int:
+    def for_stat(self, stat: Stat) -> int:
         return self._stats[stat]
