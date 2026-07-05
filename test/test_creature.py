@@ -12,11 +12,6 @@ def test_creature_returns_base_stat():
     species = Species(
         id=1,
         name="Bulbasaur",
-        generation=1,
-        habitat="grassland",
-        is_baby=False,
-        is_legendary=False,
-        is_mythical=False,
         types=["grass", "poison"],
         base_stats=BaseStats(
             hp=45,
@@ -29,7 +24,6 @@ def test_creature_returns_base_stat():
         height=7,
         weight=69,
         capture_rate=45,
-        forms_switchable=False,
         evolution_chain=EvolutionChain(
             id=1,
             species=[],

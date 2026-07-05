@@ -8,15 +8,11 @@ from core.species.species import Species
 from core.stats.stat_calculator import StatCalculator
 from core.creature.size import Size
 
+
 def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
     species = Species(
         id=1,
         name="Bulbasaur",
-        generation=1,
-        habitat="grassland",
-        is_baby=False,
-        is_legendary=False,
-        is_mythical=False,
         types=["grass", "poison"],
         base_stats=BaseStats(
             hp=45,
@@ -29,7 +25,6 @@ def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
         height=7,
         weight=69,
         capture_rate=45,
-        forms_switchable=False,
         evolution_chain=EvolutionChain(
             id=1,
             species=[],

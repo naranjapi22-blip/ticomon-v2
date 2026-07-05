@@ -1,32 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from core.creature.base_stats import BaseStats
+from core.evolution.evolution_chain import EvolutionChain
+from core.species.variant import Variant
 
 
 @dataclass(frozen=True)
 class Species:
+    # identidad interna del juego
     id: int
     name: str
 
-    # Clasificación
-    generation: int
-    habitat: str | None
-    is_baby: bool
-    is_legendary: bool
-    is_mythical: bool
-
-    # Características
+    # gameplay core
     types: list[str]
     base_stats: BaseStats
     height: int
     weight: int
     capture_rate: int
 
-    # Capacidades
-    forms_switchable: bool
-
-    # Relaciones
-    evolution_chain: EvolutionChain
-    variants: list[Variant]
+    # sistemas de juego (opcionales)
+    evolution_chain: EvolutionChain | None = None
+    variants: list[Variant] | None = None
