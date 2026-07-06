@@ -3,31 +3,14 @@ from core.creature.ivs import IVs
 from core.creature.nature import Nature
 from core.creature.size import Size
 from core.opportunity.opportunity import Opportunity
-from core.species.evolution_chain import EvolutionChain
-from core.species.species import Species
 from core.species.variant import Variant
+from test.factories import create_species
 
 
 def test_create_creature():
-    chain = EvolutionChain(id=1, species=[], candy_requirements={})
-
-    species = Species(
+    species = create_species(
         id=25,
         name="Pikachu",
-        types=["Electric"],
-        base_stats={
-            "hp": 35,
-            "attack": 55,
-            "defense": 40,
-            "special_attack": 50,
-            "special_defense": 50,
-            "speed": 90,
-        },
-        height=4,
-        weight=60,
-        capture_rate=190,
-        evolution_chain=chain,
-        variants=[],
     )
 
     opportunity = Opportunity(

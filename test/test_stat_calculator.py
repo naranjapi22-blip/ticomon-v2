@@ -4,16 +4,16 @@ from core.creature.ivs import IVs
 from core.creature.nature import Nature
 from core.creature.size import Size
 from core.creature.stat import Stat
-from core.species.evolution_chain import EvolutionChain
-from core.species.species import Species
 from core.stats.stat_calculator import StatCalculator
+from test.factories import create_species
 
 
 def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
-    species = Species(
+    species = create_species(
         id=1,
         name="Bulbasaur",
         types=["grass", "poison"],
+        capture_rate=45,
         base_stats=BaseStats(
             hp=45,
             attack=49,
@@ -22,15 +22,6 @@ def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
             special_defense=65,
             speed=45,
         ),
-        height=7,
-        weight=69,
-        capture_rate=45,
-        evolution_chain=EvolutionChain(
-            id=1,
-            species=[],
-            candy_requirements={},
-        ),
-        variants=[],
     )
 
     creature = Creature(

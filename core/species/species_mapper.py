@@ -1,23 +1,32 @@
 from core.creature.base_stats import BaseStats
 from core.species.species import Species
+from core.species.species_metadata import SpeciesMetadata
 
 
 class SpeciesMapper:
     @staticmethod
     def from_row(row) -> Species:
         return Species(
-            id=row[0],
-            name=row[2],
-            types=[row[3], row[4]] if row[4] else [row[3]],
+            id=row["id"],
+            name=row["name"],
+            types=[row["type_1"], row["type_2"]] if row["type_2"] else [row["type_1"]],
             base_stats=BaseStats(
-                hp=row[10],
-                attack=row[11],
-                defense=row[12],
-                special_attack=row[13],
-                special_defense=row[14],
-                speed=row[15],
+                hp=row["hp"],
+                attack=row["attack"],
+                defense=row["defense"],
+                special_attack=row["special_attack"],
+                special_defense=row["special_defense"],
+                speed=row["speed"],
             ),
-            height=row[5],
-            weight=row[6],
-            capture_rate=row[7],
+            height=row["height"],
+            weight=row["weight"],
+            capture_rate=row["capture_rate"],
+            metadata=SpeciesMetadata(
+                generation=row["generation"],
+                is_baby=row["is_baby"],
+                is_legendary=row["is_legendary"],
+                is_mythical=row["is_mythical"],
+            ),
+            evolution_chain=None,
+            variants=[],
         )

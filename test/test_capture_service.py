@@ -1,37 +1,22 @@
 from core.capture.capture_service import CaptureService
-from core.creature.base_stats import BaseStats
 from core.opportunity.opportunity_factory import OpportunityFactory
-from core.species.species import Species
+from test.factories import create_species
 
 
 def test_capture_service_flow():
     service = CaptureService()
 
-    # 🧬 Species REAL (gameplay model)
-    species = Species(
+    species = create_species(
         id=1,
-        name="pikachu",
-        types=["electric"],
-        base_stats=BaseStats(
-            hp=35,
-            attack=55,
-            defense=40,
-            special_attack=50,
-            special_defense=50,
-            speed=90,
-        ),
-        height=4,
-        weight=60,
-        capture_rate=190,
-        evolution_chain=None,
-        variants=[],
+        name="Pikachu",
     )
 
-    # 🎯 ahora Opportunity usa Species real
     opportunity = OpportunityFactory.create(species)
 
     result = service.capture(
-        opportunity=opportunity, trainer_id="trainer_1", creature_id=1
+        opportunity=opportunity,
+        trainer_id="trainer_1",
+        creature_id=1,
     )
 
     assert result.success in [True, False]

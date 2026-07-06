@@ -28,6 +28,8 @@ def build_species_v1():
         "display_scale": 1.0,
         # economía del juego (FUENTE REAL)
         "capture_rate": species_data["capture_rate"],
+        "generation": int(species_data["generation"]["url"].rstrip("/").split("/")[-1]),
+        "is_baby": species_data["is_baby"],
         "is_legendary": species_data["is_legendary"],
         "is_mythical": species_data["is_mythical"],
         # stats base

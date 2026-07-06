@@ -1,33 +1,18 @@
 from core.spawn.spawn_factory import SpawnFactory
-from core.species.evolution_chain import EvolutionChain
-from core.species.species import Species
+from test.factories import create_species
 
 
 def test_create_spawn():
-    chain = EvolutionChain(id=1, species=[], candy_requirements={})
-
-    pikachu = Species(
+    pikachu = create_species(
         id=25,
         name="Pikachu",
-        types=["Electric"],
-        base_stats={},
-        height=4,
-        weight=60,
-        capture_rate=190,
-        evolution_chain=chain,
-        variants=[],
     )
 
-    eevee = Species(
+    eevee = create_species(
         id=133,
         name="Eevee",
-        types=["Normal"],
-        base_stats={},
-        height=3,
-        weight=65,
+        types=["normal"],
         capture_rate=45,
-        evolution_chain=chain,
-        variants=[],
     )
 
     spawn = SpawnFactory.create(
