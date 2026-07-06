@@ -1,4 +1,5 @@
 from core.spawn.application.spawn_service import SpawnService
+from core.spawn.rarity_selector import RaritySelector
 from core.spawn.rule_engine import RuleEngine
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.weighted_selector import WeightedSelector
@@ -14,8 +15,10 @@ class SpawnFactory:
     def create(
         repository: SpeciesRepository,
     ) -> SpawnService:
+
         selector = SpeciesSelector(
             repository=repository,
+            rarity_selector=RaritySelector(),
             rule_engine=RuleEngine(),
             weighted_selector=WeightedSelector(),
         )

@@ -1,3 +1,4 @@
+from core.spawn.spawn_rarity import SpawnRarity
 from core.species.species import Species
 from core.species.species_mapper import SpeciesMapper
 from core.species.species_repository import SpeciesRepository
@@ -79,6 +80,30 @@ class NeonSpeciesRepository(SpeciesRepository):
                 FROM species
                 ORDER BY id
                 """
+            )
+
+        return tuple(self._mapper.from_row(row) for row in rows)
+
+    async def find_by_spawn_rarity(
+        self,
+        rarity: SpawnRarity,
+    ) -> tuple[Species, ...]:
+        """
+        Returns all species belonging to the given spawn rarity.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            rows = await connection.fetch(
+                """
+                SELECT *
+                FROM species
+                WHERE spawn_rarity = $1
+                ORDER BY id
+                """,
+                rarity.value,
             )
 
         return tuple(self._mapper.from_row(row) for row in rows)
