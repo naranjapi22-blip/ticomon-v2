@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.capture.application.capture_service import CaptureService
+from core.capture.service import CaptureService
 from core.spawn.context import SpawnContext
 from core.spawn.profile import SpawnProfile
 from core.spawn.region import Region
@@ -13,7 +13,7 @@ from infrastructure.species.neon_species_repository import NeonSpeciesRepository
 
 @pytest.mark.asyncio
 @patch(
-    "core.capture.application.capture_service.random.random",
+    "core.capture.service.random.random",
     return_value=0.0,
 )
 async def test_capture_converts_opportunity_into_creature(

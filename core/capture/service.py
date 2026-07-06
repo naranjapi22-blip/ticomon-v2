@@ -1,17 +1,34 @@
-from abc import ABC, abstractmethod
+import random
 
-from core.creature.creature import Creature
+from core.capture.capture_result import CaptureResult
+from core.creature.creature_factory import CreatureFactory
 from core.opportunity.opportunity import Opportunity
 
 
-class CaptureService(ABC):
-    """Servicio encargado de convertir una Opportunity en una Creature."""
+class CaptureService:
+    """
+    Domain service responsible for resolving a capture attempt.
+    """
 
-    @abstractmethod
-    async def capture(
+    def capture(
         self,
-        trainer_id: int,
+        trainer_id: str,
         opportunity: Opportunity,
-    ) -> Creature:
-        """Captura una Opportunity y devuelve la Creature creada."""
-        raise NotImplementedError
+    ) -> CaptureResult:
+        success = random.random() < 0.5
+
+        if not success:
+            return CaptureResult(
+                success=False,
+                creature=None,
+            )
+
+        creature = CreatureFactory.create(
+            trainer_id=trainer_id,
+            opportunity=opportunity,
+        )
+
+        return CaptureResult(
+            success=True,
+            creature=creature,
+        )

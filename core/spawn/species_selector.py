@@ -33,20 +33,36 @@ class SpeciesSelector:
         Returns the species selected for the current spawn.
         """
 
-        rarity = self._rarity_selector.select()
+        selected_species: list[Species] = []
+        selected_ids: set[int] = set()
 
-        species_pool = await self._repository.find_by_spawn_rarity(
-            rarity,
-        )
+        while len(selected_species) < profile.opportunity_count:
 
-        valid_species = self._rule_engine.apply(
-            species_pool,
-            profile.rules,
-            context,
-            profile,
-        )
+            rarity = self._rarity_selector.select()
 
-        return self._weighted_selector.select(
-            valid_species,
-            profile.opportunity_count,
-        )
+            species_pool = await self._repository.find_by_spawn_rarity(
+                rarity,
+            )
+
+            valid_species = self._rule_engine.apply(
+                species_pool,
+                profile.rules,
+                context,
+                profile,
+            )
+
+            if not valid_species:
+                continue
+
+            candidate = self._weighted_selector.select(
+                valid_species,
+                1,
+            )[0]
+
+            if candidate.id in selected_ids:
+                continue
+
+            selected_species.append(candidate)
+            selected_ids.add(candidate.id)
+
+        return tuple(selected_species)
