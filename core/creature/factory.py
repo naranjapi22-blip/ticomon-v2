@@ -1,13 +1,20 @@
 from core.creature.creature import Creature
+from core.opportunity.opportunity import Opportunity
 
 
 class CreatureFactory:
+    """
+    Construye una Creature a partir de una Opportunity.
 
-    @staticmethod
+    La captura no modifica las características del Pokémon; únicamente le
+    asigna un Trainer y crea una entidad persistente.
+    """
+
     def create(
-        trainer_id,
-        opportunity,
-    ):
+        self,
+        trainer_id: int,
+        opportunity: Opportunity,
+    ) -> Creature:
         return Creature(
             species=opportunity.species,
             variant=opportunity.variant,
@@ -17,6 +24,4 @@ class CreatureFactory:
             nature=opportunity.nature,
             is_shiny=opportunity.is_shiny,
             current_form=opportunity.initial_form,
-            id=None,
-            collection_number=None,
         )

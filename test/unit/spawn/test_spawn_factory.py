@@ -16,11 +16,9 @@ def test_create_spawn():
     )
 
     spawn = SpawnBuilder.create(
-        id=1,
         species=[pikachu, eevee],
     )
 
-    assert spawn.id == 1
     assert len(spawn.opportunities) == 2
     assert spawn.opportunities[0].species == pikachu
     assert spawn.opportunities[1].species == eevee

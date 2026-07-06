@@ -18,7 +18,6 @@ class CaptureService:
             return CaptureResult(success=False, creature=None)
 
         creature = CreatureFactory.create(
-            creature_id=creature_id,
             trainer_id=trainer_id,
             opportunity=opportunity,
         )

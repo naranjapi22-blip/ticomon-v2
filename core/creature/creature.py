@@ -19,9 +19,6 @@ class Creature:
     estado y características individuales.
     """
 
-    # Identidad
-    id: int
-
     # Relación
     species: Species
     variant: Variant | None
@@ -35,6 +32,10 @@ class Creature:
 
     # Estado
     current_form: str | None
+
+    # Identidad (asignada al persistir)
+    id: int | None = None
+    collection_number: int | None = None
 
     def stat_for(self, stat: Stat) -> int:
         return self.species.base_stats.for_stat(stat)

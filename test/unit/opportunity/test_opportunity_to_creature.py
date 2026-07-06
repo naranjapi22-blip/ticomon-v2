@@ -21,7 +21,8 @@ def test_core_opportunity_to_creature_flow():
     opportunity = OpportunityFactory.create(species)
 
     creature = CreatureFactory.create(
-        creature_id=1, trainer_id="trainer_1", opportunity=opportunity
+        trainer_id="trainer_1",
+        opportunity=opportunity,
     )
 
     # Assert - identidad base
@@ -35,4 +36,4 @@ def test_core_opportunity_to_creature_flow():
 
     # Assert - ownership
     assert creature.trainer_id == "trainer_1"
-    assert creature.id == 1
+    assert creature.id is None

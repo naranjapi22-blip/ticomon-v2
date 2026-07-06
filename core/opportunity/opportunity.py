@@ -18,9 +18,7 @@ class Opportunity:
     futura Creature, pero todavía no pertenece a ningún Trainer.
     """
 
-    id: int
-
-    # Identidad
+    # Identidad de la especie
     species: Species
     variant: Variant | None
 

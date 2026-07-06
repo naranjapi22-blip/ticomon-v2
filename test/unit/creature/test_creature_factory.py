@@ -14,7 +14,6 @@ def test_create_creature():
     )
 
     opportunity = Opportunity(
-        id=1,
         species=species,
         variant=Variant(id=1, name="Rockstar"),
         ivs=IVs(
@@ -33,12 +32,10 @@ def test_create_creature():
     )
 
     creature = CreatureFactory.create(
-        creature_id=100,
         trainer_id=50,
         opportunity=opportunity,
     )
 
-    assert creature.id == 100
     assert creature.trainer_id == 50
     assert creature.species is species
     assert creature.variant == opportunity.variant

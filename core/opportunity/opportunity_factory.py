@@ -15,7 +15,6 @@ class OpportunityFactory:
     @staticmethod
     def create(species: Species) -> Opportunity:
         return Opportunity(
-            id=1,
             species=species,
             variant=VariantFactory.create(species),
             ivs=IVFactory.create(),
