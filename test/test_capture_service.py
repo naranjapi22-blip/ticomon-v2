@@ -1,7 +1,7 @@
 from core.capture.capture_service import CaptureService
+from core.creature.base_stats import BaseStats
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.species.species import Species
-from core.creature.base_stats import BaseStats
 
 
 def test_capture_service_flow():
@@ -31,9 +31,7 @@ def test_capture_service_flow():
     opportunity = OpportunityFactory.create(species)
 
     result = service.capture(
-        opportunity=opportunity,
-        trainer_id="trainer_1",
-        creature_id=1
+        opportunity=opportunity, trainer_id="trainer_1", creature_id=1
     )
 
     assert result.success in [True, False]

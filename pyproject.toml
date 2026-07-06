@@ -1,0 +1,18 @@
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # Errores de estilo (pycodestyle)
+    "F",   # Errores lógicos (Pyflakes)
+    "I",   # Orden de imports
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"]

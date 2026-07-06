@@ -4,27 +4,16 @@ from core.species.species import Species
 
 
 def test_create_spawn():
-
-    chain = EvolutionChain(
-        id=1,
-        species=[],
-        candy_requirements={}
-    )
+    chain = EvolutionChain(id=1, species=[], candy_requirements={})
 
     pikachu = Species(
         id=25,
         name="Pikachu",
-        
-        
-        
-        
-        
         types=["Electric"],
         base_stats={},
         height=4,
         weight=60,
         capture_rate=190,
-        
         evolution_chain=chain,
         variants=[],
     )
@@ -32,17 +21,11 @@ def test_create_spawn():
     eevee = Species(
         id=133,
         name="Eevee",
-        
-        
-        
-        
-        
         types=["Normal"],
         base_stats={},
         height=3,
         weight=65,
         capture_rate=45,
-        
         evolution_chain=chain,
         variants=[],
     )

@@ -1,33 +1,22 @@
 from unittest.mock import patch
 
-from core.species.variant import Variant
 from core.creature.variant_factory import VariantFactory
 from core.species.evolution_chain import EvolutionChain
 from core.species.species import Species
+from core.species.variant import Variant
 
 
 def test_create_variant():
-
-    chain = EvolutionChain(
-        id=1,
-        species=[],
-        candy_requirements={}
-    )
+    chain = EvolutionChain(id=1, species=[], candy_requirements={})
 
     species = Species(
         id=25,
         name="Pikachu",
-        
-        
-        
-        
-        
         types=["Electric"],
         base_stats={},
         height=4,
         weight=60,
         capture_rate=190,
-        
         evolution_chain=chain,
         variants=[
             Variant(id=1, name="Rockstar"),
@@ -43,27 +32,16 @@ def test_create_variant():
 
 
 def test_create_without_variants():
-
-    chain = EvolutionChain(
-        id=1,
-        species=[],
-        candy_requirements={}
-    )
+    chain = EvolutionChain(id=1, species=[], candy_requirements={})
 
     species = Species(
         id=1,
         name="Bulbasaur",
-        
-        
-        
-        
-        
         types=["Grass"],
         base_stats={},
         height=7,
         weight=69,
         capture_rate=45,
-        
         evolution_chain=chain,
         variants=[],
     )

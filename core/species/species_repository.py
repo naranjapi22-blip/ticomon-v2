@@ -3,7 +3,6 @@ from infrastructure.db_config import get_connection
 
 
 class SpeciesRepository:
-
     @staticmethod
     def get_all():
         conn = get_connection()

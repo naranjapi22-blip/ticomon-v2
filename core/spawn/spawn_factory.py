@@ -4,17 +4,12 @@ from core.species.species import Species
 
 
 class SpawnFactory:
-
     @staticmethod
     def create(
         id: int,
         species: list[Species],
     ) -> Spawn:
-
-        opportunities = [
-            OpportunityFactory.create(s)
-            for s in species
-        ]
+        opportunities = [OpportunityFactory.create(s) for s in species]
 
         return Spawn.create(
             id=id,

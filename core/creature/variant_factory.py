@@ -1,11 +1,10 @@
 import random
 
-from core.species.variant import Variant
 from core.species.species import Species
+from core.species.variant import Variant
 
 
 class VariantFactory:
-
     PROBABILITY = 0.02
 
     @classmethod

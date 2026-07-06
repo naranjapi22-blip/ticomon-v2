@@ -1,9 +1,8 @@
-from core.species.species import Species
 from core.creature.base_stats import BaseStats
+from core.species.species import Species
 
 
 class SpeciesMapper:
-
     @staticmethod
     def from_row(row) -> Species:
         return Species(

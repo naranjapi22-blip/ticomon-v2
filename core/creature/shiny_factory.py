@@ -11,4 +11,3 @@ class ShinyFactory:
     @classmethod
     def create(cls) -> bool:
         return random.random() < cls.SHINY_RATE
-    

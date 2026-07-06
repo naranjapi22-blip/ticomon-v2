@@ -1,14 +1,16 @@
-from core.opportunity.opportunity_factory import OpportunityFactory
 from core.creature.creature_factory import CreatureFactory
+from core.opportunity.opportunity_factory import OpportunityFactory
 
 
 class FakeSpecies:
     """
     Species mínima para test sin depender de todo el sistema.
     """
+
     def __init__(self):
         self.name = "pikachu"
         self.default_form = "base"
+        self.variants = []
 
 
 def test_core_opportunity_to_creature_flow():
@@ -19,9 +21,7 @@ def test_core_opportunity_to_creature_flow():
     opportunity = OpportunityFactory.create(species)
 
     creature = CreatureFactory.create(
-        creature_id=1,
-        trainer_id="trainer_1",
-        opportunity=opportunity
+        creature_id=1, trainer_id="trainer_1", opportunity=opportunity
     )
 
     # Assert - identidad base

@@ -1,8 +1,8 @@
-from dotenv import load_dotenv
-from pathlib import Path
 import os
-import psycopg2
+from pathlib import Path
 
+import psycopg2
+from dotenv import load_dotenv
 
 # 🔥 cargar .env desde raíz
 BASE_DIR = Path(__file__).resolve().parent.parent

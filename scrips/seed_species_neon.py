@@ -7,7 +7,7 @@ def get_connection():
         database="YOUR_DB",
         user="YOUR_USER",
         password="YOUR_PASSWORD",
-        sslmode="require"
+        sslmode="require",
     )
 
 
@@ -21,7 +21,8 @@ def insert_species(conn, species):
 
     stats = species["base_stats"]
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO species (
             pokeapi_id, name,
             type_1, type_2,
@@ -32,24 +33,26 @@ def insert_species(conn, species):
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (pokeapi_id) DO NOTHING
-    """, (
-        species["pokeapi_id"],
-        species["name"],
-        type_1,
-        type_2,
-        species["height"],
-        species["weight"],
-        species["display_scale"],
-        species["capture_rate"],
-        species["is_legendary"],
-        species["is_mythical"],
-        stats["hp"],
-        stats["attack"],
-        stats["defense"],
-        stats["special_attack"],
-        stats["special_defense"],
-        stats["speed"],
-    ))
+    """,
+        (
+            species["pokeapi_id"],
+            species["name"],
+            type_1,
+            type_2,
+            species["height"],
+            species["weight"],
+            species["display_scale"],
+            species["capture_rate"],
+            species["is_legendary"],
+            species["is_mythical"],
+            stats["hp"],
+            stats["attack"],
+            stats["defense"],
+            stats["special_attack"],
+            stats["special_defense"],
+            stats["speed"],
+        ),
+    )
 
     cur.close()
 
@@ -72,8 +75,8 @@ def main():
             "defense": 49,
             "special_attack": 65,
             "special_defense": 65,
-            "speed": 45
-        }
+            "speed": 45,
+        },
     }
 
     conn = get_connection()

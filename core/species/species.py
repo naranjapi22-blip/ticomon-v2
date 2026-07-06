@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from core.creature.base_stats import BaseStats
 from core.evolution.evolution_chain import EvolutionChain
 from core.species.variant import Variant

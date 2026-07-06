@@ -9,12 +9,7 @@ from core.species.variant import Variant
 
 
 def test_create_creature():
-
-    chain = EvolutionChain(
-        id=1,
-        species=[],
-        candy_requirements={}
-    )
+    chain = EvolutionChain(id=1, species=[], candy_requirements={})
 
     species = Species(
         id=25,

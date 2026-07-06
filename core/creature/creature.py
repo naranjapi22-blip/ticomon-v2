@@ -4,10 +4,11 @@ from dataclasses import dataclass
 
 from core.creature.ivs import IVs
 from core.creature.nature import Nature
+from core.creature.size import Size
 from core.creature.stat import Stat
 from core.species.species import Species
-from core.creature.size import Size
 from core.species.variant import Variant
+
 
 @dataclass
 class Creature:

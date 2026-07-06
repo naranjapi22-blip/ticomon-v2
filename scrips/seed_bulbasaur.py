@@ -1,8 +1,8 @@
-from dotenv import load_dotenv
-from pathlib import Path
 import os
-import psycopg2
+from pathlib import Path
 
+import psycopg2
+from dotenv import load_dotenv
 
 # 🔥 cargar .env
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,7 +21,8 @@ def get_connection():
 def insert_bulbasaur(conn):
     cur = conn.cursor()
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO species (
             pokeapi_id, name,
             type_1, type_2,
@@ -39,7 +40,8 @@ def insert_bulbasaur(conn):
             65, 65, 45
         )
         ON CONFLICT (pokeapi_id) DO NOTHING;
-    """)
+    """
+    )
 
     conn.commit()
     cur.close()

@@ -1,7 +1,8 @@
-from dotenv import load_dotenv
 import os
 from pathlib import Path
+
 import psycopg2
+from dotenv import load_dotenv
 
 # 🔥 SIEMPRE cargar .env aquí (infra layer)
 BASE_DIR = Path(__file__).resolve().parent.parent
