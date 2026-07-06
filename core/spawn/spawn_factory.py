@@ -1,5 +1,5 @@
+from core.spawn.application.spawn_service import SpawnService
 from core.spawn.rule_engine import RuleEngine
-from core.spawn.spawn_service import SpawnService
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.weighted_selector import WeightedSelector
 from core.species.species_repository import SpeciesRepository

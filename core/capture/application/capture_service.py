@@ -10,7 +10,6 @@ class CaptureService:
         self,
         opportunity: Opportunity,
         trainer_id: str,
-        creature_id: int,
     ) -> CaptureResult:
         success = random.random() < 0.5
 

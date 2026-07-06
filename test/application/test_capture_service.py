@@ -1,4 +1,4 @@
-from core.capture.capture_service import CaptureService
+from core.capture.application.capture_service import CaptureService
 from core.opportunity.opportunity_factory import OpportunityFactory
 from test.factories import create_species
 
@@ -16,7 +16,6 @@ def test_capture_service_flow():
     result = service.capture(
         opportunity=opportunity,
         trainer_id="trainer_1",
-        creature_id=1,
     )
 
     assert result.success in [True, False]

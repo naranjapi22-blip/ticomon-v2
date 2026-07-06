@@ -17,3 +17,13 @@ class CreatureRepository(ABC):
         Persists a Creature and returns the stored entity.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def get(
+        self,
+        creature_id: int,
+    ) -> Creature:
+        """
+        Returns a Creature by its identifier.
+        """
+        raise NotImplementedError
