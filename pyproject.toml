@@ -1,3 +1,30 @@
+[project]
+name = "ticomon"
+version = "0.1.0"
+description = "TicoMon Game Engine"
+authors = [
+    { name = "Orange" }
+]
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+
+dependencies = [
+    "asyncpg>=0.31.0,<0.32.0",
+    "psycopg2-binary>=2.9.12,<3.0.0",
+    "python-dotenv>=1.2.2,<2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1,<27.0.0",
+    "pre-commit>=4.6.0,<5.0.0",
+    "pytest>=9.1.1,<10.0.0",
+    "ruff>=0.15.20,<0.16.0",
+]
+
+[tool.poetry]
+package-mode = false
+
 [tool.black]
 line-length = 88
 target-version = ["py311"]
@@ -8,11 +35,15 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = [
-    "E",   # Errores de estilo (pycodestyle)
-    "F",   # Errores lógicos (Pyflakes)
-    "I",   # Orden de imports
+    "E",
+    "F",
+    "I",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
 python_files = ["test_*.py"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
