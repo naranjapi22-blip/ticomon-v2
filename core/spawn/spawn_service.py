@@ -1,16 +1,24 @@
-import random
-
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.species.species_repository import SpeciesRepository
 
 
 class SpawnService:
-    def spawn(self):
-        species_pool = SpeciesRepository.get_all()
+    """
+    Creates spawn opportunities from registered species.
+    """
+
+    def __init__(
+        self,
+        repository: SpeciesRepository,
+    ) -> None:
+        self._repository = repository
+
+    async def spawn(self):
+        species_pool = await self._repository.get_all()
 
         if not species_pool:
-            raise Exception("No species available in DB")
+            raise ValueError("No species available.")
 
-        species = random.choice(species_pool)
+        species = species_pool[0]
 
         return OpportunityFactory.create(species)
