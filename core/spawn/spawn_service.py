@@ -1,24 +1,33 @@
+from core.opportunity.opportunity import Opportunity
 from core.opportunity.opportunity_factory import OpportunityFactory
-from core.species.species_repository import SpeciesRepository
+from core.spawn.context import SpawnContext
+from core.spawn.profile import SpawnProfile
+from core.spawn.species_selector import SpeciesSelector
 
 
 class SpawnService:
     """
-    Creates spawn opportunities from registered species.
+    Orchestrates the spawn generation process.
     """
 
     def __init__(
         self,
-        repository: SpeciesRepository,
+        selector: SpeciesSelector,
     ) -> None:
-        self._repository = repository
+        self._selector = selector
 
-    async def spawn(self):
-        species_pool = await self._repository.get_all()
+    async def spawn(
+        self,
+        context: SpawnContext,
+        profile: SpawnProfile,
+    ) -> tuple[Opportunity, ...]:
+        """
+        Generates the spawn opportunities for the current context.
+        """
 
-        if not species_pool:
-            raise ValueError("No species available.")
+        species = await self._selector.select(
+            context,
+            profile,
+        )
 
-        species = species_pool[0]
-
-        return OpportunityFactory.create(species)
+        return tuple(OpportunityFactory.create(candidate) for candidate in species)

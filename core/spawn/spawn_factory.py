@@ -1,17 +1,23 @@
-from core.opportunity.opportunity_factory import OpportunityFactory
-from core.spawn.spawn import Spawn
-from core.species.species import Species
+from core.spawn.rule_engine import RuleEngine
+from core.spawn.spawn_service import SpawnService
+from core.spawn.species_selector import SpeciesSelector
+from core.spawn.weighted_selector import WeightedSelector
+from core.species.species_repository import SpeciesRepository
 
 
 class SpawnFactory:
+    """
+    Builds the Spawn Engine.
+    """
+
     @staticmethod
     def create(
-        id: int,
-        species: list[Species],
-    ) -> Spawn:
-        opportunities = [OpportunityFactory.create(s) for s in species]
-
-        return Spawn.create(
-            id=id,
-            opportunities=opportunities,
+        repository: SpeciesRepository,
+    ) -> SpawnService:
+        selector = SpeciesSelector(
+            repository=repository,
+            rule_engine=RuleEngine(),
+            weighted_selector=WeightedSelector(),
         )
+
+        return SpawnService(selector)

@@ -11,7 +11,7 @@ class RuleEngine:
 
     def apply(
         self,
-        species: tuple[Species, ...],
+        species_pool: tuple[Species, ...],
         rules: tuple[Rule, ...],
         context: SpawnContext,
         profile: SpawnProfile,
@@ -22,6 +22,6 @@ class RuleEngine:
 
         return tuple(
             candidate
-            for candidate in species
+            for candidate in species_pool
             if all(rule.allows(candidate, context, profile) for rule in rules)
         )

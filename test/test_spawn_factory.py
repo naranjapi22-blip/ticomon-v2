@@ -1,4 +1,4 @@
-from core.spawn.spawn_factory import SpawnFactory
+from core.spawn.spawn_builder import SpawnBuilder
 from test.factories import create_species
 
 
@@ -15,7 +15,7 @@ def test_create_spawn():
         capture_rate=45,
     )
 
-    spawn = SpawnFactory.create(
+    spawn = SpawnBuilder.create(
         id=1,
         species=[pikachu, eevee],
     )

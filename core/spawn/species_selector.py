@@ -2,8 +2,8 @@ from core.spawn.context import SpawnContext
 from core.spawn.profile import SpawnProfile
 from core.spawn.rule_engine import RuleEngine
 from core.spawn.weighted_selector import WeightedSelector
-from core.species.repository import SpeciesRepository
 from core.species.species import Species
+from core.species.species_repository import SpeciesRepository
 
 
 class SpeciesSelector:
@@ -21,7 +21,7 @@ class SpeciesSelector:
         self._rule_engine = rule_engine
         self._weighted_selector = weighted_selector
 
-    def select(
+    async def select(
         self,
         context: SpawnContext,
         profile: SpawnProfile,
@@ -30,10 +30,11 @@ class SpeciesSelector:
         Returns the species selected for the current spawn.
         """
 
-        species = self._repository.get_all()
+        species_pool = await self._repository.get_all()
 
         valid_species = self._rule_engine.apply(
-            species,
+            species_pool,
+            profile.rules,
             context,
             profile,
         )
