@@ -44,7 +44,7 @@ async def test_capture_converts_opportunity_into_creature(
 
     result = capture_service.capture(
         opportunity=opportunity,
-        trainer_id="trainer-1",
+        trainer_id=1,
     )
 
     assert result.success is True

@@ -12,7 +12,7 @@ class CaptureService:
 
     def capture(
         self,
-        trainer_id: str,
+        trainer_id: int,
         opportunity: Opportunity,
     ) -> CaptureResult:
         success = random.random() < 0.5

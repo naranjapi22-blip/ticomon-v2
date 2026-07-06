@@ -72,3 +72,36 @@ class NeonCreatureRepository(CreatureRepository):
             row=row,
             species=species,
         )
+
+    async def get(
+        self,
+        creature_id: int,
+    ) -> Creature:
+        """
+        Returns a Creature by its identifier.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            row = await connection.fetchrow(
+                """
+                SELECT *
+                FROM creatures
+                WHERE id = $1
+                """,
+                creature_id,
+            )
+
+        if row is None:
+            raise ValueError(f"Creature with id {creature_id} was not found.")
+
+        species = await self._species_repository.get(
+            row["species_id"],
+        )
+
+        return self._mapper.from_row(
+            row=row,
+            species=species,
+        )

@@ -19,10 +19,9 @@ class CaptureApplicationService:
 
     async def capture(
         self,
-        trainer_id: str,
+        trainer_id: int,
         opportunity: Opportunity,
     ) -> CaptureResult:
-
         result = self._capture_service.capture(
             trainer_id=trainer_id,
             opportunity=opportunity,
@@ -31,7 +30,11 @@ class CaptureApplicationService:
         if not result.success:
             return result
 
-        creature = await self._creature_repository.save(result.creature)
+        assert result.creature is not None
+
+        creature = await self._creature_repository.save(
+            result.creature,
+        )
 
         return CaptureResult(
             success=True,

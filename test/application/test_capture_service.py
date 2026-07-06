@@ -13,15 +13,12 @@ def test_capture_service_flow():
 
     opportunity = OpportunityFactory.create(species)
 
-    result = service.capture(
-        opportunity=opportunity,
-        trainer_id="trainer_1",
-    )
+    result = service.capture(opportunity=opportunity, trainer_id=1)
 
     assert result.success in [True, False]
 
     if result.success:
         assert result.creature is not None
-        assert result.creature.trainer_id == "trainer_1"
+        assert result.creature.trainer_id == 1
     else:
         assert result.creature is None
