@@ -1,16 +1,17 @@
-import psycopg2
+import asyncpg
 
 
-def insert_species(conn: psycopg2.extensions.connection, species: dict) -> None:
-    cur = conn.cursor()
-
+async def insert_species(
+    conn: asyncpg.Connection,
+    species: dict,
+) -> None:
     types = species["types"]
     type_1 = types[0] if len(types) > 0 else None
     type_2 = types[1] if len(types) > 1 else None
 
     stats = species["base_stats"]
 
-    cur.execute(
+    await conn.execute(
         """
         INSERT INTO species (
             pokeapi_id,
@@ -21,6 +22,7 @@ def insert_species(conn: psycopg2.extensions.connection, species: dict) -> None:
             weight,
             display_scale,
             capture_rate,
+            spawn_rarity,
             generation,
             is_baby,
             is_legendary,
@@ -33,12 +35,12 @@ def insert_species(conn: psycopg2.extensions.connection, species: dict) -> None:
             speed
         )
         VALUES (
-            %s, %s,
-            %s, %s,
-            %s, %s, %s,
-            %s, %s, %s, %s, %s,
-            %s, %s, %s,
-            %s, %s, %s
+            $1, $2,
+            $3, $4,
+            $5, $6, $7,
+            $8, $9, $10, $11, $12, $13,
+            $14, $15, $16,
+            $17, $18, $19
         )
         ON CONFLICT (pokeapi_id)
         DO UPDATE SET
@@ -49,6 +51,7 @@ def insert_species(conn: psycopg2.extensions.connection, species: dict) -> None:
             weight = EXCLUDED.weight,
             display_scale = EXCLUDED.display_scale,
             capture_rate = EXCLUDED.capture_rate,
+            spawn_rarity = EXCLUDED.spawn_rarity,
             generation = EXCLUDED.generation,
             is_baby = EXCLUDED.is_baby,
             is_legendary = EXCLUDED.is_legendary,
@@ -60,26 +63,23 @@ def insert_species(conn: psycopg2.extensions.connection, species: dict) -> None:
             special_defense = EXCLUDED.special_defense,
             speed = EXCLUDED.speed;
         """,
-        (
-            species["pokeapi_id"],
-            species["name"],
-            type_1,
-            type_2,
-            species["height"],
-            species["weight"],
-            species["display_scale"],
-            species["capture_rate"],
-            species["generation"],
-            species["is_baby"],
-            species["is_legendary"],
-            species["is_mythical"],
-            stats["hp"],
-            stats["attack"],
-            stats["defense"],
-            stats["special_attack"],
-            stats["special_defense"],
-            stats["speed"],
-        ),
+        species["pokeapi_id"],
+        species["name"],
+        type_1,
+        type_2,
+        species["height"],
+        species["weight"],
+        species["display_scale"],
+        species["capture_rate"],
+        species["spawn_rarity"],
+        species["generation"],
+        species["is_baby"],
+        species["is_legendary"],
+        species["is_mythical"],
+        stats["hp"],
+        stats["attack"],
+        stats["defense"],
+        stats["special_attack"],
+        stats["special_defense"],
+        stats["speed"],
     )
-
-    cur.close()

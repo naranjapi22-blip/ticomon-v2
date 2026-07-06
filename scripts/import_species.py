@@ -1,4 +1,6 @@
-from infrastructure.db_config import get_connection
+import asyncio
+
+from infrastructure.db_config import close_pool, get_pool
 
 from .build_species import build_species
 from .seed_species_neon import insert_species
@@ -6,31 +8,28 @@ from .seed_species_neon import insert_species
 TOTAL_SPECIES = 1025
 
 
-def main():
-    conn = get_connection()
+async def main():
+    pool = await get_pool()
     imported = 0
 
-    try:
-        for pokemon_id in range(1, TOTAL_SPECIES + 1):
-            try:
-                species = build_species(pokemon_id)
-                insert_species(conn, species)
+    async with pool.acquire() as conn:
 
-                imported += 1
+        async with conn.transaction():
 
-                print(f"[{pokemon_id}/{TOTAL_SPECIES}] " f"✔ {species['name']}")
+            for pokemon_id in range(1, TOTAL_SPECIES + 1):
+                try:
+                    species = build_species(pokemon_id)
 
-            except Exception as e:
-                print(f"[{pokemon_id}] ERROR -> {e}")
+                    await insert_species(conn, species)
 
-        conn.commit()
+                    imported += 1
 
-    except Exception:
-        conn.rollback()
-        raise
+                    print(f"[{pokemon_id}/{TOTAL_SPECIES}] " f"✔ {species['name']}")
 
-    finally:
-        conn.close()
+                except Exception as e:
+                    print(f"[{pokemon_id}] ERROR -> {e}")
+
+    await close_pool()
 
     print(
         f"\n🎉 Importación finalizada. "
@@ -39,4 +38,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -1,4 +1,5 @@
 from core.creature.base_stats import BaseStats
+from core.spawn.spawn_rarity import SpawnRarity
 from core.species.species import Species
 from core.species.species_metadata import SpeciesMetadata
 
@@ -21,6 +22,7 @@ class SpeciesMapper:
             height=row["height"],
             weight=row["weight"],
             capture_rate=row["capture_rate"],
+            spawn_rarity=SpawnRarity(row["spawn_rarity"]),
             metadata=SpeciesMetadata(
                 generation=row["generation"],
                 is_baby=row["is_baby"],
