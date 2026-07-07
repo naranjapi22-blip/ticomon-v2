@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from core.capture.application.capture_service import (
     CaptureApplicationService,
 )
+from core.capture.domain.capture_ball_selector import CaptureBallSelector
+from core.capture.domain.capture_chance_calculator import (
+    CaptureChanceCalculator,
+)
 from core.capture.service import CaptureService
 from core.spawn.application.spawn_service import SpawnService
 from core.spawn.rarity_selector import RaritySelector
@@ -44,7 +48,10 @@ def build_core() -> CoreServices:
     )
 
     capture_application = CaptureApplicationService(
-        capture_service=CaptureService(),
+        capture_service=CaptureService(
+            chance_calculator=CaptureChanceCalculator(),
+            ball_selector=CaptureBallSelector(),
+        ),
         creature_repository=creature_repository,
     )
 

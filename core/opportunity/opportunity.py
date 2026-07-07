@@ -33,3 +33,6 @@ class Opportunity:
 
     # Interacción permitida
     interaction: str
+
+    # Estado de captura
+    failed_attempts: int = 0

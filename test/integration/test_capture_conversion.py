@@ -2,6 +2,10 @@ from unittest.mock import patch
 
 import pytest
 
+from core.capture.domain.capture_ball_selector import CaptureBallSelector
+from core.capture.domain.capture_chance_calculator import (
+    CaptureChanceCalculator,
+)
 from core.capture.service import CaptureService
 from core.spawn.context import SpawnContext
 from core.spawn.profile import SpawnProfile
@@ -40,7 +44,10 @@ async def test_capture_converts_opportunity_into_creature(
 
     opportunity = opportunities[0]
 
-    capture_service = CaptureService()
+    capture_service = CaptureService(
+        chance_calculator=CaptureChanceCalculator(),
+        ball_selector=CaptureBallSelector(),
+    )
 
     result = capture_service.capture(
         opportunity=opportunity,
