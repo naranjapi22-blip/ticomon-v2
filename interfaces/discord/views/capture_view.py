@@ -8,6 +8,7 @@ class CaptureView(discord.ui.View):
         super().__init__(timeout=60)
 
         self._core = core
+        self._session = None
 
         self.add_item(
             CaptureButton(

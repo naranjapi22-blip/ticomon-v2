@@ -8,6 +8,9 @@ from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
 )
 from core.capture.service import CaptureService
+from core.spawn.application.get_current_spawn_application_service import (
+    GetCurrentSpawnApplicationService,
+)
 from core.spawn.application.select_opportunity_application_service import (
     SelectOpportunityApplicationService,
 )
@@ -39,6 +42,7 @@ class CoreServices:
 
     spawn_application: SpawnApplicationService
     select_opportunity_application: SelectOpportunityApplicationService
+    get_current_spawn_application: GetCurrentSpawnApplicationService
     capture_application: CaptureApplicationService
 
 
@@ -91,12 +95,15 @@ def build_core(
     select_opportunity_application = SelectOpportunityApplicationService(
         spawn_session_repository=spawn_session_repository,
     )
-
+    get_current_spawn_application = GetCurrentSpawnApplicationService(
+        spawn_session_repository=spawn_session_repository,
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
         spawn_session_repository=spawn_session_repository,
         spawn_application=spawn_application,
         select_opportunity_application=select_opportunity_application,
+        get_current_spawn_application=get_current_spawn_application,
         capture_application=capture_application,
     )
