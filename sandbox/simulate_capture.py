@@ -38,24 +38,36 @@ async def main() -> None:
     print("\n========== CAPTURE ==========\n")
     print(f"Selected: {selected.species.name}")
 
-    result = await services.capture_application.capture(
-        trainer_id=123456789012345678,
-        opportunity=selected,
-    )
+    attempt_number = 1
 
-    if not result.success:
-        print("\nCapture failed!")
-        return
+    while True:
+        result = await services.capture_application.capture(
+            trainer_id=123456789012345678,
+            opportunity=selected,
+        )
 
-    assert result.creature is not None
+        print(f"\n----- Attempt #{attempt_number} -----")
+        print(f"Ball: {result.attempt.capture_ball.name}")
+        print(f"Chance: {result.attempt.chance * 100:.2f}%")
+        print(f"Failed Attempts: {selected.failed_attempts}")
 
-    print("\nCapture successful!\n")
+        if result.success:
+            assert result.creature is not None
 
-    print(f"ID: {result.creature.id}")
-    print(f"Collection #: {result.creature.collection_number}")
-    print(f"Species: {result.creature.species.name}")
-    print(f"Nature: {result.creature.nature.name}")
-    print(f"Shiny: {result.creature.is_shiny}")
+            print("\n✅ Capture successful!\n")
+
+            print(f"ID: {result.creature.id}")
+            print(f"Collection #: {result.creature.collection_number}")
+            print(f"Species: {result.creature.species.name}")
+            print(f"Nature: {result.creature.nature.name}")
+            print(f"Shiny: {result.creature.is_shiny}")
+            print(f"Attempts: {attempt_number}")
+
+            break
+
+        print("❌ Capture failed!")
+
+        attempt_number += 1
 
 
 if __name__ == "__main__":

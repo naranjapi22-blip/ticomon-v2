@@ -37,6 +37,7 @@ class CaptureApplicationService:
         )
 
         return CaptureResult(
+            attempt=result.attempt,
             success=True,
             creature=creature,
         )

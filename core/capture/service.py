@@ -47,6 +47,7 @@ class CaptureService:
             opportunity.failed_attempts += 1
 
             return CaptureResult(
+                attempt=attempt,
                 success=False,
                 creature=None,
             )
@@ -57,6 +58,7 @@ class CaptureService:
         )
 
         return CaptureResult(
+            attempt=attempt,
             success=True,
             creature=creature,
         )
