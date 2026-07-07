@@ -1,28 +1,12 @@
 import asyncio
 
 from application.bootstrap.core import build_core
-from core.spawn.context import SpawnContext
-from core.spawn.profile import SpawnProfile
-from core.spawn.region import Region
-from core.spawn.world import World
 
 
 async def main() -> None:
     services = build_core()
 
-    context = SpawnContext(
-        world=World.MAIN,
-        region=Region.KANTO,
-    )
-
-    profile = SpawnProfile(
-        opportunity_count=3,
-    )
-
-    opportunities = await services.spawn_service.spawn(
-        context=context,
-        profile=profile,
-    )
+    opportunities = await services.spawn_application.spawn()
 
     print("\n========== SPAWN ==========\n")
 

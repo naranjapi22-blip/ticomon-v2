@@ -2,10 +2,6 @@ import pytest
 
 from application.bootstrap.core import build_core
 from core.capture.domain.capture_ball import CaptureBall
-from core.spawn.context import SpawnContext
-from core.spawn.profile import SpawnProfile
-from core.spawn.region import Region
-from core.spawn.world import World
 
 
 class AlwaysMasterBallSelector:
@@ -26,20 +22,8 @@ async def test_complete_gameplay_loop():
 
     trainer_id = 999999999
 
-    context = SpawnContext(
-        world=World.MAIN,
-        region=Region.KANTO,
-    )
-
-    profile = SpawnProfile(
-        opportunity_count=3,
-    )
-
     # Act
-    opportunities = await services.spawn_service.spawn(
-        context=context,
-        profile=profile,
-    )
+    opportunities = await services.spawn_application.spawn()
 
     assert len(opportunities) == 3
 

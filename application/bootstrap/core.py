@@ -8,6 +8,9 @@ from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
 )
 from core.capture.service import CaptureService
+from core.spawn.application.spawn_application_service import (
+    SpawnApplicationService,
+)
 from core.spawn.application.spawn_service import SpawnService
 from core.spawn.rarity_selector import RaritySelector
 from core.spawn.rule_engine import RuleEngine
@@ -31,7 +34,7 @@ class CoreServices:
     species_repository: NeonSpeciesRepository
     creature_repository: NeonCreatureRepository
 
-    spawn_service: SpawnService
+    spawn_application: SpawnApplicationService
 
     capture_application: CaptureApplicationService
 
@@ -73,10 +76,12 @@ def build_core(
     spawn_service = SpawnService(
         selector=selector,
     )
-
+    spawn_application = SpawnApplicationService(
+        spawn_service=spawn_service,
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
-        spawn_service=spawn_service,
+        spawn_application=spawn_application,
         capture_application=capture_application,
     )
