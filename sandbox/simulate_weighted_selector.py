@@ -1,7 +1,7 @@
 import asyncio
 from collections import Counter
 
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 from core.spawn.weighted_selector import WeightedSelector
 from infrastructure.species.neon_species_repository import (
     NeonSpeciesRepository,
@@ -13,7 +13,7 @@ SIMULATIONS = 100_000
 async def analyze_rarity(
     repository: NeonSpeciesRepository,
     selector: WeightedSelector,
-    rarity: SpawnRarity,
+    rarity: Rarity,
 ) -> None:
     """
     Runs a statistical simulation for a single spawn rarity.
@@ -69,7 +69,7 @@ async def main():
     repository = NeonSpeciesRepository()
     selector = WeightedSelector()
 
-    for rarity in SpawnRarity:
+    for rarity in Rarity:
         await analyze_rarity(
             repository,
             selector,

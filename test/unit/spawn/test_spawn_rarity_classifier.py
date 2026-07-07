@@ -1,5 +1,5 @@
 from core.evolution.evolution_stage import EvolutionStage
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 from core.spawn.spawn_rarity_classifier import SpawnRarityClassifier
 
 
@@ -14,7 +14,7 @@ def test_mythical_is_always_mythical():
         is_mythical=True,
     )
 
-    assert rarity == SpawnRarity.MYTHICAL
+    assert rarity == Rarity.MYTHICAL
 
 
 def test_legendary_is_always_legendary():
@@ -28,7 +28,7 @@ def test_legendary_is_always_legendary():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.LEGENDARY
+    assert rarity == Rarity.LEGENDARY
 
 
 def test_final_evolution_with_high_bst_is_epic():
@@ -42,7 +42,7 @@ def test_final_evolution_with_high_bst_is_epic():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.EPIC
+    assert rarity == Rarity.EPIC
 
 
 def test_final_evolution_with_low_bst_is_very_rare():
@@ -56,7 +56,7 @@ def test_final_evolution_with_low_bst_is_very_rare():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.VERY_RARE
+    assert rarity == Rarity.VERY_RARE
 
 
 def test_second_evolution_with_low_capture_rate_is_very_rare():
@@ -70,7 +70,7 @@ def test_second_evolution_with_low_capture_rate_is_very_rare():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.VERY_RARE
+    assert rarity == Rarity.VERY_RARE
 
 
 def test_second_evolution_with_high_capture_rate_is_uncommon():
@@ -84,7 +84,7 @@ def test_second_evolution_with_high_capture_rate_is_uncommon():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.UNCOMMON
+    assert rarity == Rarity.UNCOMMON
 
 
 def test_first_evolution_with_very_high_capture_rate_is_very_common():
@@ -98,7 +98,7 @@ def test_first_evolution_with_very_high_capture_rate_is_very_common():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.VERY_COMMON
+    assert rarity == Rarity.VERY_COMMON
 
 
 def test_first_evolution_with_high_capture_rate_is_common():
@@ -112,7 +112,7 @@ def test_first_evolution_with_high_capture_rate_is_common():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.COMMON
+    assert rarity == Rarity.COMMON
 
 
 def test_first_evolution_with_medium_capture_rate_is_uncommon():
@@ -126,7 +126,7 @@ def test_first_evolution_with_medium_capture_rate_is_uncommon():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.UNCOMMON
+    assert rarity == Rarity.UNCOMMON
 
 
 def test_first_evolution_with_low_capture_rate_is_rare():
@@ -140,7 +140,7 @@ def test_first_evolution_with_low_capture_rate_is_rare():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.RARE
+    assert rarity == Rarity.RARE
 
 
 def test_first_evolution_with_very_low_capture_rate_is_very_rare():
@@ -154,4 +154,4 @@ def test_first_evolution_with_very_low_capture_rate_is_very_rare():
         is_mythical=False,
     )
 
-    assert rarity == SpawnRarity.VERY_RARE
+    assert rarity == Rarity.VERY_RARE

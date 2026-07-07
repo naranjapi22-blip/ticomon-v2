@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 from core.species.species import Species
 
 
@@ -21,7 +21,7 @@ class SpeciesRepository(ABC):
     @abstractmethod
     async def find_by_spawn_rarity(
         self,
-        rarity: SpawnRarity,
+        rarity: Rarity,
     ) -> tuple[Species, ...]:
         """
         Returns every species belonging to the given spawn rarity.

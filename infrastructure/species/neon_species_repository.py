@@ -1,4 +1,4 @@
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 from core.species.species import Species
 from core.species.species_mapper import SpeciesMapper
 from core.species.species_repository import SpeciesRepository
@@ -86,7 +86,7 @@ class NeonSpeciesRepository(SpeciesRepository):
 
     async def find_by_spawn_rarity(
         self,
-        rarity: SpawnRarity,
+        rarity: Rarity,
     ) -> tuple[Species, ...]:
         """
         Returns all species belonging to the given spawn rarity.

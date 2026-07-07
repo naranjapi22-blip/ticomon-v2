@@ -1,6 +1,6 @@
 import random
 
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 
 
 class RaritySelector:
@@ -9,14 +9,14 @@ class RaritySelector:
     """
 
     _RARITIES = (
-        SpawnRarity.VERY_COMMON,
-        SpawnRarity.COMMON,
-        SpawnRarity.UNCOMMON,
-        SpawnRarity.RARE,
-        SpawnRarity.VERY_RARE,
-        SpawnRarity.EPIC,
-        SpawnRarity.LEGENDARY,
-        SpawnRarity.MYTHICAL,
+        Rarity.VERY_COMMON,
+        Rarity.COMMON,
+        Rarity.UNCOMMON,
+        Rarity.RARE,
+        Rarity.VERY_RARE,
+        Rarity.EPIC,
+        Rarity.LEGENDARY,
+        Rarity.MYTHICAL,
     )
 
     _WEIGHTS = (
@@ -30,7 +30,7 @@ class RaritySelector:
         0.2,  # MYTHICAL
     )
 
-    def select(self) -> SpawnRarity:
+    def select(self) -> Rarity:
         """
         Returns a spawn rarity using the configured probability distribution.
         """

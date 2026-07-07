@@ -1,5 +1,5 @@
 from core.creature.base_stats import BaseStats
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 from core.species.evolution_chain import EvolutionChain
 from core.species.species import Species
 from core.species.species_metadata import SpeciesMetadata
@@ -41,7 +41,7 @@ def create_species(
         height=4,
         weight=60,
         capture_rate=capture_rate,
-        spawn_rarity=SpawnRarity.COMMON,
+        spawn_rarity=Rarity.COMMON,
         metadata=SpeciesMetadata(
             generation=generation,
             is_baby=is_baby,

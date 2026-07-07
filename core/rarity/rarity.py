@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class SpawnRarity(str, Enum):
+class Rarity(str, Enum):
     VERY_COMMON = "VERY_COMMON"
     COMMON = "COMMON"
     UNCOMMON = "UNCOMMON"

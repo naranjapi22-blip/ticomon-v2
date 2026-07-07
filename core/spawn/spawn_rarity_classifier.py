@@ -1,5 +1,5 @@
 from core.evolution.evolution_stage import EvolutionStage
-from core.spawn.spawn_rarity import SpawnRarity
+from core.rarity import Rarity
 
 
 class SpawnRarityClassifier:
@@ -12,40 +12,40 @@ class SpawnRarityClassifier:
         is_legendary: bool,
         is_mythical: bool,
         evolution_stage: EvolutionStage,
-    ) -> SpawnRarity:
+    ) -> Rarity:
 
         if is_mythical:
-            return SpawnRarity.MYTHICAL
+            return Rarity.MYTHICAL
 
         if is_legendary:
-            return SpawnRarity.LEGENDARY
+            return Rarity.LEGENDARY
 
         if evolution_stage == EvolutionStage.FINAL:
 
             if base_stat_total >= 520:
-                return SpawnRarity.EPIC
+                return Rarity.EPIC
 
-            return SpawnRarity.VERY_RARE
+            return Rarity.VERY_RARE
 
         if evolution_stage == EvolutionStage.SECOND:
 
             if capture_rate <= 45:
-                return SpawnRarity.VERY_RARE
+                return Rarity.VERY_RARE
 
-            return SpawnRarity.UNCOMMON
+            return Rarity.UNCOMMON
 
         # FIRST
 
         if capture_rate >= 200:
-            return SpawnRarity.VERY_COMMON
+            return Rarity.VERY_COMMON
 
         if capture_rate >= 150:
-            return SpawnRarity.COMMON
+            return Rarity.COMMON
 
         if capture_rate >= 100:
-            return SpawnRarity.UNCOMMON
+            return Rarity.UNCOMMON
 
         if capture_rate >= 45:
-            return SpawnRarity.RARE
+            return Rarity.RARE
 
-        return SpawnRarity.VERY_RARE
+        return Rarity.VERY_RARE
