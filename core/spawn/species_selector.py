@@ -51,6 +51,10 @@ class SpeciesSelector:
                 profile,
             )
 
+            valid_species = tuple(
+                species for species in valid_species if species.id not in selected_ids
+            )
+
             if not valid_species:
                 continue
 
@@ -58,9 +62,6 @@ class SpeciesSelector:
                 valid_species,
                 1,
             )[0]
-
-            if candidate.id in selected_ids:
-                continue
 
             selected_species.append(candidate)
             selected_ids.add(candidate.id)
