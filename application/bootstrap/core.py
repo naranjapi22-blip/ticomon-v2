@@ -36,7 +36,11 @@ class CoreServices:
     capture_application: CaptureApplicationService
 
 
-def build_core() -> CoreServices:
+def build_core(
+    *,
+    chance_calculator: CaptureChanceCalculator | None = None,
+    ball_selector: CaptureBallSelector | None = None,
+) -> CoreServices:
     """
     Builds the complete Core dependency graph.
     """
@@ -47,10 +51,14 @@ def build_core() -> CoreServices:
         species_repository=species_repository,
     )
 
+    chance_calculator = chance_calculator or CaptureChanceCalculator()
+
+    ball_selector = ball_selector or CaptureBallSelector()
+
     capture_application = CaptureApplicationService(
         capture_service=CaptureService(
-            chance_calculator=CaptureChanceCalculator(),
-            ball_selector=CaptureBallSelector(),
+            chance_calculator=chance_calculator,
+            ball_selector=ball_selector,
         ),
         creature_repository=creature_repository,
     )

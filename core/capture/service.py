@@ -1,6 +1,7 @@
 import random
 
 from core.capture.capture_result import CaptureResult
+from core.capture.domain.capture_attempt import CaptureAttempt
 from core.capture.domain.capture_ball_selector import CaptureBallSelector
 from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
@@ -34,7 +35,13 @@ class CaptureService:
             capture_ball=capture_ball,
         )
 
-        success = random.random() < chance
+        attempt = CaptureAttempt(
+            opportunity=opportunity,
+            capture_ball=capture_ball,
+            chance=chance,
+        )
+
+        success = random.random() < attempt.chance
 
         if not success:
             opportunity.failed_attempts += 1

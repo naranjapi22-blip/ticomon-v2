@@ -1,18 +1,28 @@
 import pytest
 
 from application.bootstrap.core import build_core
+from core.capture.domain.capture_ball import CaptureBall
 from core.spawn.context import SpawnContext
 from core.spawn.profile import SpawnProfile
 from core.spawn.region import Region
 from core.spawn.world import World
 
-MAX_CAPTURE_ATTEMPTS = 10
+
+class AlwaysMasterBallSelector:
+    """
+    Deterministic selector used by integration tests.
+    """
+
+    def select(self) -> CaptureBall:
+        return CaptureBall.MASTER_BALL
 
 
 @pytest.mark.asyncio
 async def test_complete_gameplay_loop():
     # Arrange
-    services = build_core()
+    services = build_core(
+        ball_selector=AlwaysMasterBallSelector(),
+    )
 
     trainer_id = 999999999
 
@@ -35,19 +45,12 @@ async def test_complete_gameplay_loop():
 
     selected = opportunities[0]
 
-    result = None
-
-    for _ in range(MAX_CAPTURE_ATTEMPTS):
-        result = await services.capture_application.capture(
-            trainer_id=trainer_id,
-            opportunity=selected,
-        )
-
-        if result.success:
-            break
+    result = await services.capture_application.capture(
+        trainer_id=trainer_id,
+        opportunity=selected,
+    )
 
     # Assert
-    assert result is not None
     assert result.success
     assert result.creature is not None
 
