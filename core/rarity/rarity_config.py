@@ -8,3 +8,6 @@ class RarityConfig:
     """
 
     spawn_weight: float
+    base_capture: float
+    fatigue_bonus: float
+    capture_cap: float
