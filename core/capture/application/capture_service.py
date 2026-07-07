@@ -42,6 +42,10 @@ class CaptureApplicationService:
         if not result.success:
             return result
 
+        session.remove_opportunity(
+            opportunity_index,
+        )
+
         assert result.creature is not None
 
         creature = await self._creature_repository.save(

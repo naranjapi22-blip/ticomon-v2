@@ -20,3 +20,13 @@ class SpawnSession:
         """
 
         return self.opportunities[index - 1]
+
+    def remove_opportunity(
+        self,
+        index: int,
+    ) -> None:
+        """
+        Removes a captured opportunity from the active session.
+        """
+
+        self.opportunities.pop(index - 1)
