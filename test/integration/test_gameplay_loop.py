@@ -27,12 +27,14 @@ async def test_complete_gameplay_loop():
 
     assert len(session.opportunities) == 3
 
-    selected = session.opportunities[0]
+    selected = await services.select_opportunity_application.select_opportunity(
+        opportunity_index=1,
+    )
 
     result = await services.capture_application.capture(
         trainer_id=trainer_id,
-        opportunity_index=1,
     )
+
     # Assert
     assert result.success
     assert result.creature is not None

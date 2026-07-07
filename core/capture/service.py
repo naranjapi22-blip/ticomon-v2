@@ -1,11 +1,11 @@
 import random
 
-from core.capture.capture_result import CaptureResult
 from core.capture.domain.capture_attempt import CaptureAttempt
 from core.capture.domain.capture_ball_selector import CaptureBallSelector
 from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
 )
+from core.capture.domain.capture_result import CaptureResult
 from core.creature.creature_factory import CreatureFactory
 from core.opportunity.opportunity import Opportunity
 

@@ -24,3 +24,11 @@ class SpawnSessionRepository(ABC):
         """
         Returns the active spawn session.
         """
+
+    @abstractmethod
+    async def clear(
+        self,
+    ) -> None:
+        """
+        Removes the active spawn session.
+        """

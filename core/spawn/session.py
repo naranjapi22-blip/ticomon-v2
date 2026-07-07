@@ -11,6 +11,8 @@ class SpawnSession:
 
     opportunities: list[Opportunity]
 
+    selected_opportunity: Opportunity | None = None
+
     def get_opportunity(
         self,
         index: int,
@@ -21,12 +23,20 @@ class SpawnSession:
 
         return self.opportunities[index - 1]
 
-    def remove_opportunity(
+    def select_opportunity(
         self,
         index: int,
-    ) -> None:
+    ) -> Opportunity:
         """
-        Removes a captured opportunity from the active session.
+        Selects an opportunity for the active capture session.
         """
 
-        self.opportunities.pop(index - 1)
+        if self.selected_opportunity is not None:
+            return self.selected_opportunity
+
+        opportunity = self.get_opportunity(index)
+
+        self.selected_opportunity = opportunity
+        self.opportunities = [opportunity]
+
+        return opportunity

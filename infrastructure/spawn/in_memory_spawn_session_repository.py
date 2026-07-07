@@ -24,3 +24,8 @@ class InMemorySpawnSessionRepository(
         self,
     ) -> SpawnSession | None:
         return self._session
+
+    async def clear(
+        self,
+    ) -> None:
+        self._session = None

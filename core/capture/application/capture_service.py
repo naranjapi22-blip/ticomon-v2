@@ -1,7 +1,10 @@
-from core.capture.capture_result import CaptureResult
+from core.capture.domain.capture_result import CaptureResult
 from core.capture.service import CaptureService
 from core.creature.creature_repository import CreatureRepository
-from core.spawn.exceptions import NoActiveSpawnSession
+from core.spawn.exceptions import (
+    NoActiveSpawnSession,
+    NoSelectedOpportunity,
+)
 from core.spawn.spawn_session_repository import SpawnSessionRepository
 
 
@@ -23,34 +26,30 @@ class CaptureApplicationService:
     async def capture(
         self,
         trainer_id: int,
-        opportunity_index: int,
     ) -> CaptureResult:
         session = await self._spawn_session_repository.get_active()
 
         if session is None:
             raise NoActiveSpawnSession()
 
-        opportunity = session.get_opportunity(
-            opportunity_index,
-        )
+        if session.selected_opportunity is None:
+            raise NoSelectedOpportunity()
 
         result = self._capture_service.capture(
             trainer_id=trainer_id,
-            opportunity=opportunity,
+            opportunity=session.selected_opportunity,
         )
 
         if not result.success:
             return result
-
-        session.remove_opportunity(
-            opportunity_index,
-        )
 
         assert result.creature is not None
 
         creature = await self._creature_repository.save(
             result.creature,
         )
+
+        await self._spawn_session_repository.clear()
 
         return CaptureResult(
             attempt=result.attempt,

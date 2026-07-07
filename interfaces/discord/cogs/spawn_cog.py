@@ -1,5 +1,7 @@
 from discord.ext import commands
 
+from interfaces.discord.views.spawn_view import SpawnView
+
 
 class SpawnCog(commands.Cog):
     def __init__(self, core):
@@ -21,4 +23,10 @@ class SpawnCog(commands.Cog):
                 f"({opportunity.species.spawn_rarity.name})"
             )
 
-        await ctx.send("\n".join(lines))
+        await ctx.send(
+            "\n".join(lines),
+            view=SpawnView(
+                self._core,
+                session,
+            ),
+        )

@@ -5,7 +5,7 @@ class DummyOpportunity:
     pass
 
 
-def test_remove_opportunity():
+def test_select_opportunity():
     first = DummyOpportunity()
     second = DummyOpportunity()
     third = DummyOpportunity()
@@ -18,10 +18,10 @@ def test_remove_opportunity():
         ],
     )
 
-    session.remove_opportunity(2)
+    selected = session.select_opportunity(2)
 
-    assert len(session.opportunities) == 2
+    assert selected is second
+    assert session.selected_opportunity is second
     assert session.opportunities == [
-        first,
-        third,
+        second,
     ]
