@@ -1,6 +1,6 @@
 import random
 
-from core.rarity import Rarity
+from core.rarity import RARITY_CONFIG, Rarity
 
 
 class RaritySelector:
@@ -19,16 +19,9 @@ class RaritySelector:
         Rarity.MYTHICAL,
     )
 
-    _WEIGHTS = (
-        35,  # VERY_COMMON
-        25,  # COMMON
-        20,  # UNCOMMON
-        10,  # RARE
-        6,  # VERY_RARE
-        3,  # EPIC
-        0.8,  # LEGENDARY
-        0.2,  # MYTHICAL
-    )
+    @property
+    def _weights(self) -> tuple[float, ...]:
+        return tuple(RARITY_CONFIG[rarity].spawn_weight for rarity in self._RARITIES)
 
     def select(self) -> Rarity:
         """
@@ -37,6 +30,6 @@ class RaritySelector:
 
         return random.choices(
             self._RARITIES,
-            weights=self._WEIGHTS,
+            weights=self._weights,
             k=1,
         )[0]
