@@ -31,9 +31,8 @@ async def test_complete_gameplay_loop():
 
     result = await services.capture_application.capture(
         trainer_id=trainer_id,
-        opportunity=selected,
+        opportunity_index=1,
     )
-
     # Assert
     assert result.success
     assert result.creature is not None

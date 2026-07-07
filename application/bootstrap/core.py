@@ -65,6 +65,7 @@ def build_core(
             ball_selector=ball_selector,
         ),
         creature_repository=creature_repository,
+        spawn_session_repository=spawn_session_repository,
     )
 
     selector = SpeciesSelector(
