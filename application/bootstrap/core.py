@@ -19,6 +19,9 @@ from core.spawn.weighted_selector import WeightedSelector
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
 )
+from infrastructure.spawn.in_memory_spawn_session_repository import (
+    InMemorySpawnSessionRepository,
+)
 from infrastructure.species.neon_species_repository import (
     NeonSpeciesRepository,
 )
@@ -26,16 +29,12 @@ from infrastructure.species.neon_species_repository import (
 
 @dataclass(frozen=True, slots=True)
 class CoreServices:
-    """
-    Root object containing every service required
-    to execute the Core.
-    """
-
     species_repository: NeonSpeciesRepository
     creature_repository: NeonCreatureRepository
 
-    spawn_application: SpawnApplicationService
+    spawn_session_repository: InMemorySpawnSessionRepository
 
+    spawn_application: SpawnApplicationService
     capture_application: CaptureApplicationService
 
 
@@ -53,6 +52,8 @@ def build_core(
     creature_repository = NeonCreatureRepository(
         species_repository=species_repository,
     )
+
+    spawn_session_repository = InMemorySpawnSessionRepository()
 
     chance_calculator = chance_calculator or CaptureChanceCalculator()
 
@@ -76,12 +77,16 @@ def build_core(
     spawn_service = SpawnService(
         selector=selector,
     )
+
     spawn_application = SpawnApplicationService(
         spawn_service=spawn_service,
+        spawn_session_repository=spawn_session_repository,
     )
+
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
+        spawn_session_repository=spawn_session_repository,
         spawn_application=spawn_application,
         capture_application=capture_application,
     )

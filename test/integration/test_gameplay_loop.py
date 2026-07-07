@@ -23,11 +23,11 @@ async def test_complete_gameplay_loop():
     trainer_id = 999999999
 
     # Act
-    opportunities = await services.spawn_application.spawn()
+    session = await services.spawn_application.spawn()
 
-    assert len(opportunities) == 3
+    assert len(session.opportunities) == 3
 
-    selected = opportunities[0]
+    selected = session.opportunities[0]
 
     result = await services.capture_application.capture(
         trainer_id=trainer_id,

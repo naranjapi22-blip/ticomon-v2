@@ -7,11 +7,14 @@ class SpawnCog(commands.Cog):
 
     @commands.command(name="spawn")
     async def spawn(self, ctx):
-        opportunities = await self._core.spawn_application.spawn()
+        session = await self._core.spawn_application.spawn()
 
         lines = ["Spawn:\n"]
 
-        for index, opportunity in enumerate(opportunities, start=1):
+        for index, opportunity in enumerate(
+            session.opportunities,
+            start=1,
+        ):
             lines.append(
                 f"{index}. "
                 f"{opportunity.species.name} "
