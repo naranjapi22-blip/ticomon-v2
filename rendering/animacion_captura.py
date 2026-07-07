@@ -126,11 +126,6 @@ def ease_in_out(t):
 # ============================================================
 # SPRITES
 # ============================================================
-def ruta_sprite(pokemon_id, es_shiny):
-
-    carpeta = "shiny" if es_shiny else "regular"
-
-    return f"sprites/{carpeta}/{pokemon_id}.png"
 
 
 def cargar_sprite(ruta):
@@ -1100,7 +1095,7 @@ class CaptureAnimation:
 
 if __name__ == "__main__":
     anim = CaptureAnimation(
-        sprite_path="https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/gifs_pokeapi/regular/25.gif",
+        sprite_path="https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/regular/25.gif",
         pokemon_name="Pikachu",
         capturado=True,
     )
