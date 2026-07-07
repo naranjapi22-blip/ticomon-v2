@@ -27,7 +27,7 @@ from PIL import (
     ImageSequence,
 )
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent
 
 ASSETS_DIR = BASE_DIR / "assets"
 
@@ -1099,13 +1099,13 @@ class CaptureAnimation:
 # ============================================================
 
 if __name__ == "__main__":
-
     anim = CaptureAnimation(
-        sprite_path="sprites/regular/25.png", pokemon_name="Pikachu", capturado=True
+        sprite_path="https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/gifs_pokeapi/regular/25.gif",
+        pokemon_name="Pikachu",
+        capturado=True,
     )
 
     anim.render()
-
     anim.save_gif("captura.gif")
 
     print("✅ GIF de captura generado correctamente.")
