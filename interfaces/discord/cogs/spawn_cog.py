@@ -1,9 +1,11 @@
+import discord
 from discord.ext import commands
 
 from core.spawn.application.spawn_application_service import (
     SpawnAlreadyActive,
 )
 from interfaces.discord.views.spawn_view import SpawnView
+from rendering.spawn_preview import generate_spawn_preview
 
 
 class SpawnCog(commands.Cog):
@@ -23,20 +25,16 @@ class SpawnCog(commands.Cog):
             )
             return
 
-        lines = ["Spawn:\n"]
-
-        for index, opportunity in enumerate(
+        preview = generate_spawn_preview(
             session.opportunities,
-            start=1,
-        ):
-            lines.append(
-                f"{index}. "
-                f"{opportunity.species.name} "
-                f"({opportunity.species.spawn_rarity.name})"
-            )
+        )
 
         await ctx.send(
-            "\n".join(lines),
+            content="**A wild spawn appeared!**",
+            file=discord.File(
+                preview,
+                filename="spawn.png",
+            ),
             view=SpawnView(
                 self._core,
                 session,

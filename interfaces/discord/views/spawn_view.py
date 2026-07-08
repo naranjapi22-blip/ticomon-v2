@@ -6,10 +6,11 @@ from interfaces.discord.buttons.opportunity_button import OpportunityButton
 class SpawnView(discord.ui.View):
     def __init__(self, core, session):
         super().__init__(timeout=300)
+
         self._core = core
         self._session = session
 
-        for index, opportunity in enumerate(
+        for index, _ in enumerate(
             session.opportunities,
             start=1,
         ):
@@ -17,6 +18,6 @@ class SpawnView(discord.ui.View):
                 OpportunityButton(
                     core=self._core,
                     index=index,
-                    label=opportunity.species.name,
+                    label=f"Pokémon {index}",
                 )
             )
