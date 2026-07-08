@@ -22,8 +22,6 @@ from pathlib import Path
 from PIL import (
     Image,
     ImageDraw,
-    ImageFilter,
-    ImageFont,
     ImageSequence,
 )
 
@@ -34,8 +32,6 @@ ASSETS_DIR = BASE_DIR / "assets"
 FONDOS_DIR = ASSETS_DIR / "fondos"
 
 POKEBALLS_DIR = ASSETS_DIR / "pokeballs"
-
-FONTS_DIR = ASSETS_DIR / "fonts"
 
 # ============================================================
 # CONFIGURACIÓN
@@ -76,23 +72,6 @@ GREEN = (90, 255, 120)
 
 CYAN = (150, 240, 255)
 
-# ============================================================
-# FUENTES
-# ============================================================
-
-
-def load_font(size):
-    try:
-        return ImageFont.truetype(
-            str(FONTS_DIR / "DejaVuSans-Bold.ttf"),
-            size,
-        )
-    except Exception:
-        return ImageFont.load_default()
-
-
-TITLE_FONT = load_font(34)
-TEXT_FONT = load_font(22)
 
 # ============================================================
 # UTILIDADES
@@ -143,8 +122,6 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
     if str(ruta).startswith("http"):
 
-        print(ruta)
-
         from urllib.error import HTTPError
         from urllib.request import Request, urlopen
 
@@ -162,8 +139,6 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
                 raise
 
             ruta = ruta.replace("/shiny/", "/regular/")
-
-            print("Fallback:", ruta)
 
             req = Request(ruta, headers={"User-Agent": "Mozilla/5.0"})
 
@@ -207,8 +182,6 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
 def cargar_pokeball(tipo):
     archivo = tipo.lower().replace("é", "e").replace(" ", "_") + ".png"
-
-    print("Cargando:", archivo)
 
     return Image.open(POKEBALLS_DIR / archivo).convert("RGBA")
 
@@ -270,88 +243,6 @@ class Background:
 
 
 BACKGROUND = Background()
-# ============================================================
-# HALO
-# ============================================================
-
-
-class Halo:
-
-    def draw(self, img, frame):
-
-        capa = Image.new("RGBA", img.size, (0, 0, 0, 0))
-
-        draw = ImageDraw.Draw(capa)
-
-        radio = 110 + math.sin(frame * 0.30) * 6
-
-        draw.ellipse(
-            (CENTER_X - radio, CENTER_Y - radio, CENTER_X + radio, CENTER_Y + radio),
-            fill=(CYAN[0], CYAN[1], CYAN[2], 70),
-        )
-
-        capa = capa.filter(ImageFilter.GaussianBlur(35))
-
-        img.alpha_composite(capa)
-
-
-# ============================================================
-# GLOW
-# ============================================================
-
-
-class Glow:
-
-    def __init__(self):
-
-        self.cache = {}
-
-    def draw(self, img, sprite, x, y):
-
-        key = ((sprite.width // 8) * 8, (sprite.height // 8) * 8)
-
-        if key not in self.cache:
-
-            glow = Image.new("RGBA", sprite.size, (CYAN[0], CYAN[1], CYAN[2], 180))
-
-            glow.putalpha(sprite.getchannel("A"))
-
-            glow = glow.filter(ImageFilter.GaussianBlur(3))
-
-            self.cache[key] = glow
-
-        img.alpha_composite(self.cache[key], (x, y))
-
-
-# ============================================================
-# SOMBRA
-# ============================================================
-
-
-class Shadow:
-
-    def draw(self, img, x, y, sprite, frame):
-
-        capa = Image.new("RGBA", img.size, (0, 0, 0, 0))
-
-        draw = ImageDraw.Draw(capa)
-
-        mover = math.sin(frame * 0.30) * 4
-
-        centro_x = x + sprite.width // 2
-        base_y = y + sprite.height - 6
-
-        ancho = sprite.width * 0.40
-        alto = 10
-
-        draw.ellipse(
-            (centro_x - ancho, base_y + mover, centro_x + ancho, base_y + alto + mover),
-            fill=(0, 0, 0, 120),
-        )
-
-        capa = capa.filter(ImageFilter.GaussianBlur(10))
-
-        img.alpha_composite(capa)
 
 
 # ============================================================
@@ -514,11 +405,6 @@ class ParticleEmitter:
 # INSTANCIAS
 # ============================================================
 
-HALO = Halo()
-
-GLOW = Glow()
-
-SHADOW = Shadow()
 
 CAMERA = Camera()
 
@@ -786,7 +672,6 @@ class CaptureAnimation:
         self.pokeball = pokeball
 
         # Crear la Poké Ball con ese sprite
-        print(f"Poké Ball recibida: '{self.pokeball}'")
         self.pokeball_sprite = Pokeball(self.pokeball)
 
     # --------------------------------------------------------
@@ -881,31 +766,6 @@ class CaptureAnimation:
 
     # --------------------------------------------------------
 
-    def draw_text(self, img, frame):
-
-        draw = ImageDraw.Draw(img)
-
-        if frame < 19:
-
-            texto = "Throwing Poké Ball..."
-
-        elif self.capturado:
-
-            texto = f"{self.nombre.capitalize()} was caught!"
-
-        else:
-
-            texto = f"{self.nombre.capitalize()} escaped!"
-
-        bbox = draw.textbbox((0, 0), texto, font=TEXT_FONT)
-
-        draw.text(
-            ((WIDTH - (bbox[2] - bbox[0])) // 2, HEIGHT - 30),
-            texto,
-            font=TEXT_FONT,
-            fill=WHITE,
-        )
-
     # --------------------------------------------------------
 
     def render_frame(self, frame):
@@ -918,7 +778,6 @@ class CaptureAnimation:
 
         img = BACKGROUND.render(frame)
 
-        HALO.draw(img, frame)
         # =====================================
         # Partículas del impacto
         # =====================================
@@ -930,10 +789,9 @@ class CaptureAnimation:
         if frame >= 12:
 
             EMITTER.update()
-
             EMITTER.draw(img)
 
-        SPARKS.draw(img, frame)
+            SPARKS.draw(img, frame)
 
         self.sprite_timer += FRAME_DURATION
 
@@ -973,15 +831,12 @@ class CaptureAnimation:
         sprite.putalpha(a)
 
         x, y = self.sprite_position(sprite, frame)
-        SHADOW.draw(img, x, y, sprite, frame)
 
         img.alpha_composite(sprite, (x, y))
 
         self.pokeball_sprite.draw(img)
 
         FLASH.draw(img, frame)
-
-        self.draw_text(img, frame)
 
         return img
 
@@ -991,21 +846,16 @@ class CaptureAnimation:
 
         global BACKGROUND
         global HALO
-        global GLOW
         global SHADOW
         global FLASH
         global SPARKS
 
         BACKGROUND = Background(self.tipo)
 
-        HALO = Halo()
-        GLOW = Glow()
-        SHADOW = Shadow()
         FLASH = ImpactFlash()
         SPARKS = SparkEmitter()
 
         self.frames.clear()
-
         self.sprite_index = 0
         self.sprite_timer = 0
 
@@ -1022,8 +872,6 @@ class CaptureAnimation:
         for _ in range(12):
 
             self.frames.append(ultimo.copy())
-
-        return self.frames
 
     # ========================================================
 
@@ -1067,9 +915,6 @@ class CaptureAnimation:
 
         buffer.seek(0)
 
-        print("Frames:", len(self.frames))
-        print("Resolución:", self.frames[0].size)
-        print("Duración:", FRAME_DURATION)
         return buffer
 
     # ========================================================
@@ -1097,7 +942,9 @@ if __name__ == "__main__":
     anim = CaptureAnimation(
         sprite_path="https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/regular/25.gif",
         pokemon_name="Pikachu",
+        pokeball="Poké Ball",
         capturado=True,
+        tipo="electric",
     )
 
     anim.render()
