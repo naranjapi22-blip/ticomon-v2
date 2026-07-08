@@ -186,6 +186,16 @@ def cargar_pokeball(tipo):
     return Image.open(POKEBALLS_DIR / archivo).convert("RGBA")
 
 
+TRAINERS_DIR = ASSETS_DIR / "trainers"
+
+
+def cargar_trainer(nombre: str):
+
+    frames, _ = cargar_frames_gif(TRAINERS_DIR / f"{nombre}.gif")
+
+    return frames
+
+
 def sprite_blanco(sprite):
 
     alpha = sprite.getchannel("A")
@@ -409,6 +419,46 @@ class ParticleEmitter:
 CAMERA = Camera()
 
 EMITTER = ParticleEmitter()
+
+
+TRAINER_SCALE = 0.55
+
+
+class Trainer:
+
+    def __init__(self, nombre="red"):
+
+        self.frames = cargar_trainer(nombre)
+
+    def frame(self, frame):
+
+        index = min(
+            len(self.frames) - 1,
+            frame // 1,
+        )
+        return self.frames[index]
+
+    def draw(self, img, frame):
+
+        trainer = self.frame(frame)
+
+        trainer = trainer.resize(
+            (
+                int(trainer.width * TRAINER_SCALE),
+                int(trainer.height * TRAINER_SCALE),
+            ),
+            Image.NEAREST,
+        )
+
+        img.alpha_composite(
+            trainer,
+            (-15, HEIGHT - trainer.height + 10),
+        )
+
+
+TRAINER = Trainer()
+
+
 # ============================================================
 # POKEBALL
 # ============================================================
@@ -569,6 +619,9 @@ class Pokeball:
     def draw(self, img):
 
         if not self.visible:
+            return
+
+        if self.frame <= 2:
             return
 
         if 12 <= self.frame <= 15:
@@ -777,6 +830,9 @@ class CaptureAnimation:
         self.pokeball_sprite.position(frame)
 
         img = BACKGROUND.render(frame)
+        img = BACKGROUND.render(frame)
+
+        TRAINER.draw(img, frame)
 
         # =====================================
         # Partículas del impacto
@@ -851,7 +907,9 @@ class CaptureAnimation:
         global SPARKS
 
         BACKGROUND = Background(self.tipo)
+        global TRAINER
 
+        self.trainer = Trainer()
         FLASH = ImpactFlash()
         SPARKS = SparkEmitter()
 
