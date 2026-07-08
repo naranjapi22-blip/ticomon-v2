@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from application.creature.creature_info_service import (
     CreatureInfoService,
 )
+from application.pokedex.pokedex_service import PokedexService
 from application.profile.profile_service import ProfileService
 from application.species_info.species_info_service import (
     SpeciesInfoService,
@@ -63,6 +64,7 @@ class CoreServices:
     profile_service: ProfileService
     creature_info_service: CreatureInfoService
     species_info_service: SpeciesInfoService
+    pokedex_service: PokedexService
 
 
 def build_core(
@@ -136,7 +138,10 @@ def build_core(
     get_current_spawn_application = GetCurrentSpawnApplicationService(
         spawn_session_repository=spawn_session_repository,
     )
-
+    pokedex_service = PokedexService(
+        species_repository=species_repository,
+        creature_repository=creature_repository,
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
@@ -149,4 +154,5 @@ def build_core(
         profile_service=profile_service,
         creature_info_service=creature_info_service,
         species_info_service=species_info_service,
+        pokedex_service=pokedex_service,
     )

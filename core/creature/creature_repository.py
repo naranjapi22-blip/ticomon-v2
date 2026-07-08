@@ -90,3 +90,13 @@ class CreatureRepository(ABC):
         Returns all creatures of the given species owned by the trainer.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def get_discovered_species(
+        self,
+        trainer_id: int,
+    ) -> set[int]:
+        """
+        Returns the ids of every species discovered by the trainer.
+        """
+        raise NotImplementedError

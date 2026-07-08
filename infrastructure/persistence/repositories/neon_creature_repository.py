@@ -272,3 +272,26 @@ class NeonCreatureRepository(CreatureRepository):
             )
 
         return creatures
+
+    async def get_discovered_species(
+        self,
+        trainer_id: int,
+    ) -> set[int]:
+        """
+        Returns the ids of every discovered species.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            rows = await connection.fetch(
+                """
+                SELECT DISTINCT species_id
+                FROM creatures
+                WHERE trainer_id = $1
+                """,
+                trainer_id,
+            )
+
+        return {row["species_id"] for row in rows}
