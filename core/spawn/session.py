@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 
 from core.opportunity.opportunity import Opportunity
 
@@ -9,9 +10,13 @@ class SpawnSession:
     Represents an active spawn containing capture opportunities.
     """
 
+    owner_id: int
+
     opportunities: list[Opportunity]
 
     selected_opportunity: Opportunity | None = None
+
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
     def get_opportunity(
         self,
@@ -37,6 +42,5 @@ class SpawnSession:
         opportunity = self.get_opportunity(index)
 
         self.selected_opportunity = opportunity
-        self.opportunities = [opportunity]
 
         return opportunity

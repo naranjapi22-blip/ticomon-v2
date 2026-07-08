@@ -18,9 +18,12 @@ class SelectOpportunityApplicationService:
 
     async def select_opportunity(
         self,
+        guild_id: int,
         opportunity_index: int,
     ) -> Opportunity:
-        session = await self._spawn_session_repository.get_active()
+        session = await self._spawn_session_repository.get_active(
+            guild_id,
+        )
 
         if session is None:
             raise NoActiveSpawnSession()

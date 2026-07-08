@@ -26,8 +26,11 @@ class CaptureApplicationService:
     async def capture(
         self,
         trainer_id: int,
+        guild_id: int,
     ) -> CaptureResult:
-        session = await self._spawn_session_repository.get_active()
+        session = await self._spawn_session_repository.get_active(
+            guild_id,
+        )
 
         if session is None:
             raise NoActiveSpawnSession()
@@ -49,7 +52,9 @@ class CaptureApplicationService:
             result.creature,
         )
 
-        await self._spawn_session_repository.clear()
+        await self._spawn_session_repository.clear(
+            guild_id,
+        )
 
         return CaptureResult(
             attempt=result.attempt,

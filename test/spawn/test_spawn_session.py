@@ -11,6 +11,7 @@ def test_select_opportunity():
     third = DummyOpportunity()
 
     session = SpawnSession(
+        owner_id=123,
         opportunities=[
             first,
             second,
@@ -23,5 +24,7 @@ def test_select_opportunity():
     assert selected is second
     assert session.selected_opportunity is second
     assert session.opportunities == [
+        first,
         second,
+        third,
     ]

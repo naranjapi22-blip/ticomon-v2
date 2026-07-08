@@ -9,5 +9,10 @@ class GetCurrentSpawnApplicationService:
     ) -> None:
         self._spawn_session_repository = spawn_session_repository
 
-    async def get_current(self) -> SpawnSession | None:
-        return await self._spawn_session_repository.get_active()
+    async def get_current(
+        self,
+        guild_id: int,
+    ) -> SpawnSession | None:
+        return await self._spawn_session_repository.get_active(
+            guild_id,
+        )

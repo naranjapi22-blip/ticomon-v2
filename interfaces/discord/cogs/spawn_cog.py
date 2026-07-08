@@ -1,5 +1,8 @@
 from discord.ext import commands
 
+from core.spawn.application.spawn_application_service import (
+    SpawnAlreadyActive,
+)
 from interfaces.discord.views.spawn_view import SpawnView
 
 
@@ -9,7 +12,16 @@ class SpawnCog(commands.Cog):
 
     @commands.command(name="spawn")
     async def spawn(self, ctx):
-        session = await self._core.spawn_application.spawn()
+        try:
+            session = await self._core.spawn_application.spawn(
+                guild_id=ctx.guild.id,
+                owner_id=ctx.author.id,
+            )
+        except SpawnAlreadyActive:
+            await ctx.send(
+                "Ya existe un !spawn activo en este servidor.",
+            )
+            return
 
         lines = ["Spawn:\n"]
 

@@ -5,30 +5,33 @@ from core.spawn.session import SpawnSession
 
 class SpawnSessionRepository(ABC):
     """
-    Stores active spawn sessions.
+    Stores active spawn sessions by guild.
     """
 
     @abstractmethod
     async def save(
         self,
+        guild_id: int,
         session: SpawnSession,
     ) -> None:
         """
-        Stores an active spawn session.
+        Stores the active spawn session for a guild.
         """
 
     @abstractmethod
     async def get_active(
         self,
+        guild_id: int,
     ) -> SpawnSession | None:
         """
-        Returns the active spawn session.
+        Returns the active spawn session for a guild.
         """
 
     @abstractmethod
     async def clear(
         self,
+        guild_id: int,
     ) -> None:
         """
-        Removes the active spawn session.
+        Removes the active spawn session for a guild.
         """

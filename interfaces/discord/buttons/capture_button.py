@@ -21,6 +21,7 @@ class CaptureButton(discord.ui.Button):
     ):
         result = await self._core.capture_application.capture(
             trainer_id=interaction.user.id,
+            guild_id=interaction.guild.id,
         )
 
         ball_name = result.attempt.capture_ball.name.replace("_", " ").title()
