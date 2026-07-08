@@ -48,7 +48,7 @@ class CaptureButton(discord.ui.Button):
                     f"🎉 {interaction.user.mention} caught "
                     f"{result.creature.species.name.title()} "
                     f"using a {ball_name}!\n"
-                    f"🎯 Capture Chance: {result.attempt.chance:.2f}%"
+                    f"🎯 Capture Chance: {result.attempt.chance * 100:.2f}%"
                 ),
                 embeds=[],
                 attachments=[
@@ -64,7 +64,7 @@ class CaptureButton(discord.ui.Button):
             await interaction.response.send_message(
                 (
                     f"🎯 You threw a {ball_name}\n"
-                    f"Chance: {result.attempt.chance:.2f}%\n\n"
+                    f"Chance: {result.attempt.chance * 100:.2f}%\n\n"
                     "❌ Capture failed!"
                 ),
                 ephemeral=True,
