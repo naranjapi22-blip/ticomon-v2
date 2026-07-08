@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 
+from application.creature.creature_info_service import (
+    CreatureInfoService,
+)
+from application.profile.profile_service import ProfileService
 from core.capture.application.capture_service import (
     CaptureApplicationService,
 )
@@ -22,8 +26,12 @@ from core.spawn.rarity_selector import RaritySelector
 from core.spawn.rule_engine import RuleEngine
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.weighted_selector import WeightedSelector
+from core.stats.stat_calculator import StatCalculator
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
+)
+from infrastructure.persistence.repositories.neon_profile_repository import (
+    NeonProfileRepository,
 )
 from infrastructure.spawn.in_memory_spawn_session_repository import (
     InMemorySpawnSessionRepository,
@@ -40,10 +48,15 @@ class CoreServices:
 
     spawn_session_repository: InMemorySpawnSessionRepository
 
+    stat_calculator: StatCalculator
+
     spawn_application: SpawnApplicationService
     select_opportunity_application: SelectOpportunityApplicationService
     get_current_spawn_application: GetCurrentSpawnApplicationService
     capture_application: CaptureApplicationService
+
+    profile_service: ProfileService
+    creature_info_service: CreatureInfoService
 
 
 def build_core(
@@ -61,7 +74,15 @@ def build_core(
         species_repository=species_repository,
     )
 
+    creature_info_service = CreatureInfoService(
+        creature_repository=creature_repository,
+    )
+
+    profile_repository = NeonProfileRepository()
+
     spawn_session_repository = InMemorySpawnSessionRepository()
+
+    stat_calculator = StatCalculator()
 
     chance_calculator = chance_calculator or CaptureChanceCalculator()
 
@@ -74,6 +95,11 @@ def build_core(
         ),
         creature_repository=creature_repository,
         spawn_session_repository=spawn_session_repository,
+    )
+
+    profile_service = ProfileService(
+        creature_repository=creature_repository,
+        profile_repository=profile_repository,
     )
 
     selector = SpeciesSelector(
@@ -95,15 +121,20 @@ def build_core(
     select_opportunity_application = SelectOpportunityApplicationService(
         spawn_session_repository=spawn_session_repository,
     )
+
     get_current_spawn_application = GetCurrentSpawnApplicationService(
         spawn_session_repository=spawn_session_repository,
     )
+
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
         spawn_session_repository=spawn_session_repository,
+        stat_calculator=stat_calculator,
         spawn_application=spawn_application,
         select_opportunity_application=select_opportunity_application,
         get_current_spawn_application=get_current_spawn_application,
         capture_application=capture_application,
+        profile_service=profile_service,
+        creature_info_service=creature_info_service,
     )

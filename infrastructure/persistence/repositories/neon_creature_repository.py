@@ -131,3 +131,103 @@ class NeonCreatureRepository(CreatureRepository):
                 trainer_id,
                 species_id,
             )
+
+    async def count_creatures(
+        self,
+        trainer_id: int,
+    ) -> int:
+        """
+        Returns the total number of creatures owned by the trainer.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            return await connection.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM creatures
+                WHERE trainer_id = $1
+                """,
+                trainer_id,
+            )
+
+    async def count_species(
+        self,
+        trainer_id: int,
+    ) -> int:
+        """
+        Returns the number of unique species owned by the trainer.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            return await connection.fetchval(
+                """
+                SELECT COUNT(DISTINCT species_id)
+                FROM creatures
+                WHERE trainer_id = $1
+                """,
+                trainer_id,
+            )
+
+    async def count_shinies(
+        self,
+        trainer_id: int,
+    ) -> int:
+        """
+        Returns the number of shiny creatures owned by the trainer.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            return await connection.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM creatures
+                WHERE trainer_id = $1
+                  AND is_shiny = TRUE
+                """,
+                trainer_id,
+            )
+
+    async def get_by_collection_number(
+        self,
+        trainer_id: int,
+        collection_number: int,
+    ) -> Creature:
+        """
+        Returns a trainer's creature by its collection number.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            row = await connection.fetchrow(
+                """
+                SELECT *
+                FROM creatures
+                WHERE trainer_id = $1
+                  AND collection_number = $2
+                """,
+                trainer_id,
+                collection_number,
+            )
+
+        if row is None:
+            raise ValueError(f"Creature #{collection_number} was not found.")
+
+        species = await self._species_repository.get(
+            row["species_id"],
+        )
+
+        return self._mapper.from_row(
+            row=row,
+            species=species,
+        )

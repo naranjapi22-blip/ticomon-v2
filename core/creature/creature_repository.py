@@ -38,3 +38,44 @@ class CreatureRepository(ABC):
         Returns whether the trainer has already captured the species.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def count_creatures(
+        self,
+        trainer_id: int,
+    ) -> int:
+        """
+        Returns the total number of creatures owned by the trainer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def count_species(
+        self,
+        trainer_id: int,
+    ) -> int:
+        """
+        Returns the number of unique species owned by the trainer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def count_shinies(
+        self,
+        trainer_id: int,
+    ) -> int:
+        """
+        Returns the number of shiny creatures owned by the trainer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_by_collection_number(
+        self,
+        trainer_id: int,
+        collection_number: int,
+    ) -> Creature:
+        """
+        Returns a trainer's creature by its collection number.
+        """
+        raise NotImplementedError

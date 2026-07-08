@@ -39,5 +39,28 @@ class Nature:
         if self.name not in _MODIFIERS:
             raise ValueError(f"Unknown nature: {self.name}")
 
-    def modifier_for(self, stat: Stat) -> float:
-        return _MODIFIERS[self.name].get(stat, 1.0)
+    def modifier_for(
+        self,
+        stat: Stat,
+    ) -> float:
+        return _MODIFIERS[self.name].get(
+            stat,
+            1.0,
+        )
+
+    def arrow_for(
+        self,
+        stat: Stat,
+    ) -> str:
+        modifier = self.modifier_for(stat)
+
+        if modifier > 1:
+            return " ⬆️"
+
+        if modifier < 1:
+            return " ⬇️"
+
+        return ""
+
+    def __str__(self) -> str:
+        return self.name.title()
