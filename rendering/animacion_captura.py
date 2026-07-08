@@ -927,7 +927,7 @@ class CaptureAnimation:
 
         ultimo = self.frames[-1]
 
-        for _ in range(12):
+        for _ in range(6):
 
             self.frames.append(ultimo.copy())
 
