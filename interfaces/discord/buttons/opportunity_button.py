@@ -65,6 +65,7 @@ class OpportunityButton(discord.ui.Button):
         await interaction.response.edit_message(
             content=None,
             embed=embed,
+            attachments=[],
             view=CaptureView(
                 self._core,
             ),
