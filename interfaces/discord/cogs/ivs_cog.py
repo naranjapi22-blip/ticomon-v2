@@ -28,10 +28,18 @@ class IVsCog(commands.Cog):
         ctx: commands.Context,
         collection_number: int,
     ):
-        creature = await self.core.creature_info_service.get_creature(
-            trainer_id=ctx.author.id,
-            collection_number=collection_number,
-        )
+        try:
+            creature = await self.core.creature_info_service.get_creature(
+                trainer_id=ctx.author.id,
+                collection_number=collection_number,
+            )
+
+        except ValueError:
+            await ctx.send(
+                "❌ You don't own a creature with collection number "
+                f"**{collection_number}**."
+            )
+            return
 
         embed = discord.Embed(
             title=creature.species.name.title(),

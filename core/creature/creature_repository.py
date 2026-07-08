@@ -79,3 +79,14 @@ class CreatureRepository(ABC):
         Returns a trainer's creature by its collection number.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def get_by_species(
+        self,
+        trainer_id: int,
+        species_id: int,
+    ) -> list[Creature]:
+        """
+        Returns all creatures of the given species owned by the trainer.
+        """
+        raise NotImplementedError

@@ -55,7 +55,7 @@ class NeonSpeciesRepository(SpeciesRepository):
                 """
                 SELECT *
                 FROM species
-                WHERE name = $1
+                WHERE name ILIKE $1
                 """,
                 name,
             )

@@ -231,3 +231,44 @@ class NeonCreatureRepository(CreatureRepository):
             row=row,
             species=species,
         )
+
+    async def get_by_species(
+        self,
+        trainer_id: int,
+        species_id: int,
+    ) -> list[Creature]:
+        """
+        Returns every creature of the given species owned by the trainer.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            rows = await connection.fetch(
+                """
+                SELECT *
+                FROM creatures
+                WHERE trainer_id = $1
+                  AND species_id = $2
+                ORDER BY collection_number
+                """,
+                trainer_id,
+                species_id,
+            )
+
+        creatures: list[Creature] = []
+
+        for row in rows:
+            species = await self._species_repository.get(
+                row["species_id"],
+            )
+
+            creatures.append(
+                self._mapper.from_row(
+                    row=row,
+                    species=species,
+                )
+            )
+
+        return creatures

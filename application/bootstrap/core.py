@@ -4,6 +4,9 @@ from application.creature.creature_info_service import (
     CreatureInfoService,
 )
 from application.profile.profile_service import ProfileService
+from application.species_info.species_info_service import (
+    SpeciesInfoService,
+)
 from core.capture.application.capture_service import (
     CaptureApplicationService,
 )
@@ -57,6 +60,9 @@ class CoreServices:
 
     profile_service: ProfileService
     creature_info_service: CreatureInfoService
+    profile_service: ProfileService
+    creature_info_service: CreatureInfoService
+    species_info_service: SpeciesInfoService
 
 
 def build_core(
@@ -75,6 +81,11 @@ def build_core(
     )
 
     creature_info_service = CreatureInfoService(
+        creature_repository=creature_repository,
+    )
+
+    species_info_service = SpeciesInfoService(
+        species_repository=species_repository,
         creature_repository=creature_repository,
     )
 
@@ -137,4 +148,5 @@ def build_core(
         capture_application=capture_application,
         profile_service=profile_service,
         creature_info_service=creature_info_service,
+        species_info_service=species_info_service,
     )
