@@ -105,3 +105,29 @@ class NeonCreatureRepository(CreatureRepository):
             row=row,
             species=species,
         )
+
+    async def has_species(
+        self,
+        trainer_id: int,
+        species_id: int,
+    ) -> bool:
+        """
+        Returns whether the trainer has already captured the species.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            return await connection.fetchval(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM creatures
+                    WHERE trainer_id = $1
+                      AND species_id = $2
+                )
+                """,
+                trainer_id,
+                species_id,
+            )

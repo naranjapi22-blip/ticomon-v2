@@ -1,6 +1,7 @@
 import discord
 
 from interfaces.discord.buttons.capture_button import CaptureButton
+from interfaces.discord.buttons.pokedex_button import PokedexButton
 
 
 class CaptureView(discord.ui.View):
@@ -12,6 +13,12 @@ class CaptureView(discord.ui.View):
 
         self.add_item(
             CaptureButton(
+                self._core,
+            )
+        )
+
+        self.add_item(
+            PokedexButton(
                 self._core,
             )
         )

@@ -27,3 +27,14 @@ class CreatureRepository(ABC):
         Returns a Creature by its identifier.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def has_species(
+        self,
+        trainer_id: int,
+        species_id: int,
+    ) -> bool:
+        """
+        Returns whether the trainer has already captured the species.
+        """
+        raise NotImplementedError
