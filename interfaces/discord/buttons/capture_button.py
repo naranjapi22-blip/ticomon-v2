@@ -1,4 +1,9 @@
+import asyncio
+
 import discord
+
+from rendering.animacion_captura import CaptureAnimation
+from rendering.sprites import get_capture_sprite
 
 
 class CaptureButton(discord.ui.Button):
@@ -14,24 +19,53 @@ class CaptureButton(discord.ui.Button):
         self,
         interaction: discord.Interaction,
     ):
-        from interfaces.discord.views.capture_view import CaptureView
-
         result = await self._core.capture_application.capture(
             trainer_id=interaction.user.id,
         )
 
+        ball_name = result.attempt.capture_ball.name.replace("_", " ").title()
+
         if result.success:
-            await interaction.response.edit_message(
-                content=f"✅ You captured {result.creature.species.name}!",
-                view=None,
+            sprite_path = get_capture_sprite(
+                species_id=result.creature.species.id,
+                shiny=result.creature.is_shiny,
             )
-        else:
+
+            animation = CaptureAnimation(
+                sprite_path=sprite_path,
+                pokemon_name=result.creature.species.name,
+                pokeball=result.attempt.capture_ball.name,
+                capturado=True,
+                tipo=result.creature.species.types[0],
+            )
+
+            gif = await asyncio.to_thread(
+                animation.gif_bytes,
+            )
+
             await interaction.response.edit_message(
                 content=(
-                    f"🎯 You threw a "
-                    f"{result.attempt.capture_ball.name}\n"
+                    f"🎉 {interaction.user.mention} caught "
+                    f"{result.creature.species.name.title()} "
+                    f"using a {ball_name}!\n"
+                    f"🎯 Capture Chance: {result.attempt.chance:.2f}%"
+                ),
+                embeds=[],
+                attachments=[
+                    discord.File(
+                        gif,
+                        filename="capture.gif",
+                    )
+                ],
+                view=None,
+            )
+
+        else:
+            await interaction.response.send_message(
+                (
+                    f"🎯 You threw a {ball_name}\n"
                     f"Chance: {result.attempt.chance:.2f}%\n\n"
                     "❌ Capture failed!"
                 ),
-                view=CaptureView(self._core),
+                ephemeral=True,
             )
