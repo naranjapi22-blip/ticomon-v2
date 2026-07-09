@@ -4,73 +4,12 @@ from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.candy.candy_type import CandyType
-from core.creature.base_stats import BaseStats
-from core.creature.creature import Creature
-from core.creature.ivs import IVs
-from core.creature.nature import Nature
-from core.creature.size import Size
-from core.evolution.evolution_chain import EvolutionChain
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
-from core.rarity import Rarity
 from core.species.species import Species
-from core.species.species_metadata import SpeciesMetadata
 from core.species.species_repository import SpeciesRepository
-
-
-def make_species(species_id: int) -> Species:
-    return Species(
-        id=species_id,
-        name=f"Species {species_id}",
-        types=["fire"],
-        base_stats=BaseStats(
-            hp=45,
-            attack=49,
-            defense=49,
-            special_attack=65,
-            special_defense=65,
-            speed=45,
-        ),
-        height=7,
-        weight=69,
-        capture_rate=45,
-        spawn_rarity=Rarity.COMMON,
-        metadata=SpeciesMetadata(
-            generation=1,
-            is_baby=False,
-            is_legendary=False,
-            is_mythical=False,
-        ),
-        evolution_chain=EvolutionChain(
-            id=1,
-            species=[1, 2],
-            candy_requirements={
-                1: 25,
-            },
-        ),
-    )
-
-
-def make_creature(
-    species: Species | None = None,
-) -> Creature:
-    return Creature(
-        species=species or make_species(1),
-        variant=None,
-        trainer_id=1,
-        ivs=IVs(
-            hp=31,
-            attack=31,
-            defense=31,
-            special_attack=31,
-            special_defense=31,
-            speed=31,
-        ),
-        size=Size(1.0),
-        nature=Nature("hardy"),
-        is_shiny=False,
-        current_form=None,
-    )
+from test.builders.creature_builder import CreatureBuilder
+from test.builders.species_builder import SpeciesBuilder
 
 
 class FakeSpeciesRepository(SpeciesRepository):
@@ -108,8 +47,9 @@ class FakeSpeciesRepository(SpeciesRepository):
 @pytest.mark.asyncio
 async def test_evolve_changes_species_and_consumes_candies():
 
-    first = make_species(1)
-    second = make_species(2)
+    first = SpeciesBuilder().with_id(1).build()
+
+    second = SpeciesBuilder().with_id(2).build()
 
     service = EvolutionService(
         policy=EvolutionPolicy(),
@@ -119,7 +59,7 @@ async def test_evolve_changes_species_and_consumes_candies():
         ),
     )
 
-    creature = make_creature(first)
+    creature = CreatureBuilder().with_species(first).build()
 
     inventory = CandyInventory()
 
@@ -150,8 +90,9 @@ async def test_evolve_changes_species_and_consumes_candies():
 @pytest.mark.asyncio
 async def test_evolve_does_not_change_species_when_validation_fails():
 
-    first = make_species(1)
-    second = make_species(2)
+    first = SpeciesBuilder().with_id(1).build()
+
+    second = SpeciesBuilder().with_id(2).build()
 
     service = EvolutionService(
         policy=EvolutionPolicy(),
@@ -161,7 +102,7 @@ async def test_evolve_does_not_change_species_when_validation_fails():
         ),
     )
 
-    creature = make_creature(first)
+    creature = CreatureBuilder().with_species(first).build()
 
     inventory = CandyInventory()
 
@@ -177,8 +118,9 @@ async def test_evolve_does_not_change_species_when_validation_fails():
 @pytest.mark.asyncio
 async def test_evolve_returns_new_species():
 
-    first = make_species(1)
-    second = make_species(2)
+    first = SpeciesBuilder().with_id(1).build()
+
+    second = SpeciesBuilder().with_id(2).build()
 
     service = EvolutionService(
         policy=EvolutionPolicy(),
@@ -188,7 +130,7 @@ async def test_evolve_returns_new_species():
         ),
     )
 
-    creature = make_creature(first)
+    creature = CreatureBuilder().with_species(first).build()
 
     inventory = CandyInventory()
 
