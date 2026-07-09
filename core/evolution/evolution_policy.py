@@ -1,10 +1,10 @@
-from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
-from core.candy.candy_type import CandyType
 from core.creature.creature import Creature
+from core.evolution.evolution_cost_policy import EvolutionCostPolicy
 from core.evolution.evolution_failure_reason import EvolutionFailureReason
 from core.evolution.evolution_result import EvolutionResult
+from core.evolution.evolution_rule import EvolutionRule
 
 
 class EvolutionPolicy:
@@ -12,40 +12,29 @@ class EvolutionPolicy:
     Domain expert responsible for validating creature evolutions.
     """
 
+    def __init__(
+        self,
+        cost_policy: EvolutionCostPolicy,
+    ) -> None:
+        self._cost_policy = cost_policy
+
     def validate(
         self,
         creature: Creature,
         inventory: CandyInventory,
+        rule: EvolutionRule,
     ) -> EvolutionResult:
         """
         Validates whether a creature can evolve.
         """
 
-        chain = creature.species.evolution_chain
-
-        if chain is None:
-            return EvolutionResult.failed(
-                previous_species=creature.species,
-                reason=EvolutionFailureReason.FINAL_STAGE,
-            )
-
-        if chain.is_final_stage(
-            creature.species.id,
-        ):
-            return EvolutionResult.failed(
-                previous_species=creature.species,
-                reason=EvolutionFailureReason.FINAL_STAGE,
-            )
-
-        cost = chain.candy_cost_for(
-            creature.species.id,
+        cost = self._cost_policy.calculate(
+            candy_type=rule.candy_type,
+            tier=rule.tier,
         )
 
         bundle = CandyBundle.from_amounts(
-            CandyAmount(
-                CandyType(creature.species.types[0]),
-                cost,
-            )
+            cost,
         )
 
         if not inventory.has(bundle):

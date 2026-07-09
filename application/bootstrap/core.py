@@ -20,6 +20,9 @@ from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
 )
 from core.capture.service import CaptureService
+from core.evolution.evolution_cost_policy import (
+    EvolutionCostPolicy,
+)
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
 from core.spawn.application.get_current_spawn_application_service import (
@@ -37,6 +40,9 @@ from core.spawn.rule_engine import RuleEngine
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.weighted_selector import WeightedSelector
 from core.stats.stat_calculator import StatCalculator
+from infrastructure.evolution.neon_evolution_repository import (
+    NeonEvolutionRepository,
+)
 from infrastructure.persistence.repositories.neon_candy_repository import (
     NeonCandyRepository,
 )
@@ -92,7 +98,7 @@ def build_core(
     )
 
     candy_repository = NeonCandyRepository()
-
+    evolution_repository = NeonEvolutionRepository()
     reward_policy = RewardPolicy()
 
     creature_info_service = CreatureInfoService(
@@ -127,7 +133,10 @@ def build_core(
 
     evolution_application = EvolutionApplicationService(
         evolution_service=EvolutionService(
-            policy=EvolutionPolicy(),
+            policy=EvolutionPolicy(
+                cost_policy=EvolutionCostPolicy(),
+            ),
+            evolution_repository=evolution_repository,
             species_repository=species_repository,
         ),
         creature_repository=creature_repository,

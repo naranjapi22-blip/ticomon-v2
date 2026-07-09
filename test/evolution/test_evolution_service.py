@@ -4,44 +4,37 @@ from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.candy.candy_type import CandyType
+from core.evolution.evolution_cost_policy import EvolutionCostPolicy
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
-from core.species.species import Species
-from core.species.species_repository import SpeciesRepository
 from test.builders.creature_builder import CreatureBuilder
+from test.builders.evolution_rule_builder import EvolutionRuleBuilder
 from test.builders.species_builder import SpeciesBuilder
+from test.fakes.fake_evolution_repository import (
+    FakeEvolutionRepository,
+)
+from test.fakes.fake_species_repository import (
+    FakeSpeciesRepository,
+)
 
 
-class FakeSpeciesRepository(SpeciesRepository):
-
-    def __init__(
-        self,
-        *species: Species,
-    ) -> None:
-        self._species = {s.id: s for s in species}
-
-    async def get(
-        self,
-        species_id: int,
-    ) -> Species:
-        return self._species[species_id]
-
-    async def find_by_name(
-        self,
-        name: str,
-    ) -> Species | None:
-        raise NotImplementedError
-
-    async def get_all(
-        self,
-    ):
-        raise NotImplementedError
-
-    async def find_by_spawn_rarity(
-        self,
-        rarity,
-    ):
-        raise NotImplementedError
+def create_service(
+    rule,
+    first_species,
+    second_species,
+):
+    return EvolutionService(
+        policy=EvolutionPolicy(
+            cost_policy=EvolutionCostPolicy(),
+        ),
+        evolution_repository=FakeEvolutionRepository(
+            rule,
+        ),
+        species_repository=FakeSpeciesRepository(
+            first_species,
+            second_species,
+        ),
+    )
 
 
 @pytest.mark.asyncio
@@ -51,15 +44,36 @@ async def test_evolve_changes_species_and_consumes_candies():
 
     second = SpeciesBuilder().with_id(2).build()
 
-    service = EvolutionService(
-        policy=EvolutionPolicy(),
-        species_repository=FakeSpeciesRepository(
-            first,
-            second,
-        ),
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(
+            1,
+        )
+        .with_to_species(
+            2,
+        )
+        .with_candy_type(
+            CandyType.FIRE,
+        )
+        .with_tier(
+            "basic",
+        )
+        .build()
     )
 
-    creature = CreatureBuilder().with_species(first).build()
+    service = create_service(
+        rule,
+        first,
+        second,
+    )
+
+    creature = (
+        CreatureBuilder()
+        .with_species(
+            first,
+        )
+        .build()
+    )
 
     inventory = CandyInventory()
 
@@ -67,7 +81,7 @@ async def test_evolve_changes_species_and_consumes_candies():
         CandyBundle.from_amounts(
             CandyAmount(
                 CandyType.FIRE,
-                25,
+                10,
             )
         )
     )
@@ -79,6 +93,7 @@ async def test_evolve_changes_species_and_consumes_candies():
 
     assert result.success
     assert creature.species.id == 2
+
     assert (
         inventory.get_amount(
             CandyType.FIRE,
@@ -88,21 +103,36 @@ async def test_evolve_changes_species_and_consumes_candies():
 
 
 @pytest.mark.asyncio
-async def test_evolve_does_not_change_species_when_validation_fails():
+async def test_evolve_does_not_change_species_when_no_candies():
 
     first = SpeciesBuilder().with_id(1).build()
 
     second = SpeciesBuilder().with_id(2).build()
 
-    service = EvolutionService(
-        policy=EvolutionPolicy(),
-        species_repository=FakeSpeciesRepository(
-            first,
-            second,
-        ),
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(
+            1,
+        )
+        .with_to_species(
+            2,
+        )
+        .build()
     )
 
-    creature = CreatureBuilder().with_species(first).build()
+    service = create_service(
+        rule,
+        first,
+        second,
+    )
+
+    creature = (
+        CreatureBuilder()
+        .with_species(
+            first,
+        )
+        .build()
+    )
 
     inventory = CandyInventory()
 
@@ -122,15 +152,30 @@ async def test_evolve_returns_new_species():
 
     second = SpeciesBuilder().with_id(2).build()
 
-    service = EvolutionService(
-        policy=EvolutionPolicy(),
-        species_repository=FakeSpeciesRepository(
-            first,
-            second,
-        ),
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(
+            1,
+        )
+        .with_to_species(
+            2,
+        )
+        .build()
     )
 
-    creature = CreatureBuilder().with_species(first).build()
+    service = create_service(
+        rule,
+        first,
+        second,
+    )
+
+    creature = (
+        CreatureBuilder()
+        .with_species(
+            first,
+        )
+        .build()
+    )
 
     inventory = CandyInventory()
 
@@ -138,7 +183,7 @@ async def test_evolve_returns_new_species():
         CandyBundle.from_amounts(
             CandyAmount(
                 CandyType.FIRE,
-                25,
+                10,
             )
         )
     )

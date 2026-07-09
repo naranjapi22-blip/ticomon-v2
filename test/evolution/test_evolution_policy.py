@@ -2,46 +2,34 @@ from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.candy.candy_type import CandyType
+from core.evolution.evolution_cost_policy import EvolutionCostPolicy
 from core.evolution.evolution_failure_reason import EvolutionFailureReason
 from core.evolution.evolution_policy import EvolutionPolicy
 from test.builders.creature_builder import CreatureBuilder
-from test.builders.evolution_builder import EvolutionBuilder
-from test.builders.species_builder import SpeciesBuilder
+from test.builders.evolution_rule_builder import EvolutionRuleBuilder
+
+
+def make_policy():
+
+    return EvolutionPolicy(
+        cost_policy=EvolutionCostPolicy(),
+    )
 
 
 def test_validate_success():
 
     creature = CreatureBuilder().build()
 
-    inventory = CandyInventory()
-
-    inventory.add(
-        CandyBundle.from_amounts(
-            CandyAmount(
-                CandyType.FIRE,
-                25,
-            )
-        )
-    )
-
-    result = EvolutionPolicy().validate(
-        creature,
-        inventory,
-    )
-
-    assert result.success
-    assert result.failure_reason is None
-    assert (
-        result.consumed_candies.get(
+    rule = (
+        EvolutionRuleBuilder()
+        .with_candy_type(
             CandyType.FIRE,
         )
-        == 25
+        .with_tier(
+            "basic",
+        )
+        .build()
     )
-
-
-def test_validate_fails_when_trainer_has_not_enough_candies():
-
-    creature = CreatureBuilder().build()
 
     inventory = CandyInventory()
 
@@ -54,48 +42,79 @@ def test_validate_fails_when_trainer_has_not_enough_candies():
         )
     )
 
-    result = EvolutionPolicy().validate(
+    result = make_policy().validate(
         creature,
         inventory,
+        rule,
     )
 
-    assert not result.success
-    assert result.failure_reason == EvolutionFailureReason.NOT_ENOUGH_CANDIES
-
-
-def test_validate_fails_when_creature_is_final_stage():
-
-    chain = (
-        EvolutionBuilder()
-        .with_species(
-            [1, 2],
+    assert result.success
+    assert result.failure_reason is None
+    assert (
+        result.consumed_candies.get(
+            CandyType.FIRE,
         )
-        .build()
+        == 10
     )
 
-    species = (
-        SpeciesBuilder()
-        .with_id(2)
-        .with_evolution_chain(
-            chain,
+
+def test_validate_fails_when_trainer_has_not_enough_candies():
+
+    creature = CreatureBuilder().build()
+
+    rule = (
+        EvolutionRuleBuilder()
+        .with_candy_type(
+            CandyType.FIRE,
         )
-        .build()
-    )
-
-    creature = (
-        CreatureBuilder()
-        .with_species(
-            species,
+        .with_tier(
+            "basic",
         )
         .build()
     )
 
     inventory = CandyInventory()
 
-    result = EvolutionPolicy().validate(
+    inventory.add(
+        CandyBundle.from_amounts(
+            CandyAmount(
+                CandyType.FIRE,
+                5,
+            )
+        )
+    )
+
+    result = make_policy().validate(
         creature,
         inventory,
+        rule,
     )
 
     assert not result.success
-    assert result.failure_reason == EvolutionFailureReason.FINAL_STAGE
+    assert result.failure_reason == EvolutionFailureReason.NOT_ENOUGH_CANDIES
+
+
+def test_validate_requires_evolution_rule():
+
+    creature = CreatureBuilder().build()
+
+    rule = (
+        EvolutionRuleBuilder()
+        .with_candy_type(
+            CandyType.FIRE,
+        )
+        .with_tier(
+            "exceptional",
+        )
+        .build()
+    )
+
+    inventory = CandyInventory()
+
+    result = make_policy().validate(
+        creature,
+        inventory,
+        rule,
+    )
+
+    assert not result.success

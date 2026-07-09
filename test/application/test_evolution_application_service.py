@@ -7,13 +7,36 @@ from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.candy.candy_type import CandyType
-from core.evolution.evolution_policy import EvolutionPolicy
-from core.evolution.evolution_service import EvolutionService
-from test.builders.creature_builder import CreatureBuilder
-from test.builders.species_builder import SpeciesBuilder
-from test.fakes.fake_candy_repository import FakeCandyRepository
-from test.fakes.fake_creature_repository import FakeCreatureRepository
-from test.fakes.fake_species_repository import FakeSpeciesRepository
+from core.evolution.evolution_cost_policy import (
+    EvolutionCostPolicy,
+)
+from core.evolution.evolution_policy import (
+    EvolutionPolicy,
+)
+from core.evolution.evolution_service import (
+    EvolutionService,
+)
+from test.builders.creature_builder import (
+    CreatureBuilder,
+)
+from test.builders.evolution_rule_builder import (
+    EvolutionRuleBuilder,
+)
+from test.builders.species_builder import (
+    SpeciesBuilder,
+)
+from test.fakes.fake_candy_repository import (
+    FakeCandyRepository,
+)
+from test.fakes.fake_creature_repository import (
+    FakeCreatureRepository,
+)
+from test.fakes.fake_evolution_repository import (
+    FakeEvolutionRepository,
+)
+from test.fakes.fake_species_repository import (
+    FakeSpeciesRepository,
+)
 
 
 @pytest.mark.asyncio
@@ -23,7 +46,13 @@ async def test_evolution_application_service_evolves_creature():
 
     second_species = SpeciesBuilder().with_id(2).build()
 
-    creature = CreatureBuilder().with_species(first_species).build()
+    creature = (
+        CreatureBuilder()
+        .with_species(
+            first_species,
+        )
+        .build()
+    )
 
     creature_repository = FakeCreatureRepository(
         creature,
@@ -35,7 +64,7 @@ async def test_evolution_application_service_evolves_creature():
         CandyBundle.from_amounts(
             CandyAmount(
                 CandyType.FIRE,
-                25,
+                10,
             )
         )
     )
@@ -44,9 +73,31 @@ async def test_evolution_application_service_evolves_creature():
         inventory,
     )
 
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(
+            1,
+        )
+        .with_to_species(
+            2,
+        )
+        .with_candy_type(
+            CandyType.FIRE,
+        )
+        .with_tier(
+            "basic",
+        )
+        .build()
+    )
+
     service = EvolutionApplicationService(
         evolution_service=EvolutionService(
-            policy=EvolutionPolicy(),
+            policy=EvolutionPolicy(
+                cost_policy=EvolutionCostPolicy(),
+            ),
+            evolution_repository=FakeEvolutionRepository(
+                rule,
+            ),
             species_repository=FakeSpeciesRepository(
                 first_species,
                 second_species,
