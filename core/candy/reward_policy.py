@@ -25,7 +25,9 @@ class RewardPolicy:
 
         reward = stage * 2
 
-        candy_types = [CandyType(type_name) for type_name in creature.species.types]
+        candy_types = [
+            CandyType(type_name.lower()) for type_name in creature.species.types
+        ]
 
         if len(candy_types) == 1:
             return CandyBundle.from_amounts(

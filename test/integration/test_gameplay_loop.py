@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from application.bootstrap.core import build_core
@@ -20,7 +22,11 @@ async def test_complete_gameplay_loop():
         ball_selector=AlwaysMasterBallSelector(),
     )
 
-    trainer_id = 999999999
+    trainer_id = uuid.uuid4().int & 0x7FFFFFFF
+
+    inventory_before = await services.candy_repository.get(
+        trainer_id,
+    )
 
     # Act
     session = await services.spawn_application.spawn(
@@ -60,11 +66,14 @@ async def test_complete_gameplay_loop():
     assert persisted.trainer_id == trainer_id
     assert persisted.species.id == selected.species.id
 
-    inventory = await services.candy_repository.get(
+    inventory_after = await services.candy_repository.get(
         trainer_id,
     )
 
-    assert not inventory.is_empty()
+    assert not inventory_after.is_empty()
 
     for candy_type, amount in result.reward.items():
-        assert inventory.get_amount(candy_type) == amount
+        assert (
+            inventory_after.get_amount(candy_type)
+            == inventory_before.get_amount(candy_type) + amount
+        )

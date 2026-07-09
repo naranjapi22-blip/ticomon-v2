@@ -1,6 +1,6 @@
 from core.creature.base_stats import BaseStats
+from core.evolution.evolution_chain import EvolutionChain
 from core.rarity import Rarity
-from core.species.evolution_chain import EvolutionChain
 from core.species.species import Species
 from core.species.species_metadata import SpeciesMetadata
 from core.species.variant import Variant
@@ -18,12 +18,16 @@ def create_species(
     is_mythical: bool = False,
     variants: list[Variant] | None = None,
     base_stats: BaseStats | None = None,
+    evolution_species: list[int] | None = None,
 ):
     if types is None:
         types = ["electric"]
 
     if variants is None:
         variants = []
+
+    if evolution_species is None:
+        evolution_species = [id]
 
     return Species(
         id=id,
@@ -50,7 +54,7 @@ def create_species(
         ),
         evolution_chain=EvolutionChain(
             id=1,
-            species=[],
+            species=evolution_species,
             candy_requirements={},
         ),
         variants=variants,
