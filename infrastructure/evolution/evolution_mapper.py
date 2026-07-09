@@ -1,3 +1,5 @@
+from typing import Any, Mapping
+
 from core.candy.candy_type import CandyType
 from core.evolution.evolution_rule import EvolutionRule
 
@@ -9,7 +11,7 @@ class EvolutionMapper:
 
     def from_row(
         self,
-        row,
+        row: Mapping[str, Any],
     ) -> EvolutionRule:
 
         return EvolutionRule(

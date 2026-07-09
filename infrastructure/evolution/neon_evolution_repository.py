@@ -16,9 +16,6 @@ class NeonEvolutionRepository(EvolutionRepository):
         self,
         species_id: int,
     ) -> EvolutionRule | None:
-        """
-        Returns the evolution rule for a species.
-        """
 
         pool = await get_pool()
 
@@ -29,6 +26,7 @@ class NeonEvolutionRepository(EvolutionRepository):
                 SELECT *
                 FROM pokemon_evolutions
                 WHERE from_species_id = $1
+                ORDER BY id
                 LIMIT 1
                 """,
                 species_id,
