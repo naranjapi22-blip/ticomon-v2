@@ -24,9 +24,17 @@ class CaptureButton(discord.ui.Button):
             guild_id=interaction.guild.id,
         )
 
-        ball_name = result.attempt.capture_ball.name.replace("_", " ").title()
+        ball_name = result.attempt.capture_ball.name.replace(
+            "_",
+            " ",
+        ).title()
 
         if result.success:
+
+            trainer = await self._core.profile_service.get_selected_trainer(
+                interaction.user.id,
+            )
+
             sprite_path = get_capture_sprite(
                 species_id=result.creature.species.id,
                 shiny=result.creature.is_shiny,
@@ -35,6 +43,7 @@ class CaptureButton(discord.ui.Button):
             animation = CaptureAnimation(
                 sprite_path=sprite_path,
                 pokemon_name=result.creature.species.name,
+                trainer=trainer.gif.removesuffix(".gif"),
                 pokeball=result.attempt.capture_ball.name,
                 capturado=True,
                 tipo=result.creature.species.types[0],

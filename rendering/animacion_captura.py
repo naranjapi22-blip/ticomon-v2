@@ -456,9 +456,6 @@ class Trainer:
         )
 
 
-TRAINER = Trainer()
-
-
 # ============================================================
 # POKEBALL
 # ============================================================
@@ -703,8 +700,15 @@ SPARKS = SparkEmitter()
 
 
 class CaptureAnimation:
+
     def __init__(
-        self, sprite_path, pokemon_name, pokeball="Pokéball", capturado=True, tipo=None
+        self,
+        sprite_path,
+        pokemon_name,
+        trainer="red",
+        pokeball="Pokéball",
+        capturado=True,
+        tipo=None,
     ):
 
         self.sprite_frames, self.sprite_duraciones = cargar_frames_gif(sprite_path)
@@ -720,7 +724,7 @@ class CaptureAnimation:
         self.capturado = capturado
         self.tipo = tipo
         self.frames = []
-
+        self.trainer_name = trainer
         # Guardar el nombre de la Poké Ball
         self.pokeball = pokeball
 
@@ -832,7 +836,10 @@ class CaptureAnimation:
         img = BACKGROUND.render(frame)
         img = BACKGROUND.render(frame)
 
-        TRAINER.draw(img, frame)
+        self.trainer.draw(
+            img,
+            frame,
+        )
 
         # =====================================
         # Partículas del impacto
@@ -901,15 +908,13 @@ class CaptureAnimation:
     def render(self):
 
         global BACKGROUND
-        global HALO
-        global SHADOW
         global FLASH
         global SPARKS
 
         BACKGROUND = Background(self.tipo)
-        global TRAINER
-
-        self.trainer = Trainer()
+        self.trainer = Trainer(
+            self.trainer_name,
+        )
         FLASH = ImpactFlash()
         SPARKS = SparkEmitter()
 
@@ -1000,6 +1005,7 @@ if __name__ == "__main__":
     anim = CaptureAnimation(
         sprite_path="https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/regular/25.gif",
         pokemon_name="Pikachu",
+        trainer="leaf",
         pokeball="Poké Ball",
         capturado=True,
         tipo="electric",

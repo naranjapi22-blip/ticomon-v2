@@ -93,3 +93,19 @@ class ProfileService:
             trainer_id,
             selected_trainer,
         )
+
+    async def get_selected_trainer(
+        self,
+        trainer_id: int,
+    ):
+        """
+        Returns the trainer selected by the player.
+        """
+
+        selected_trainer = await self._profile_repository.get_selected_trainer(
+            trainer_id,
+        )
+
+        return get_trainer(
+            selected_trainer,
+        )
