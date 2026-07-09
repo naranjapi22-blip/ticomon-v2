@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 
-from core.creature.creature import Creature
-
 
 class ProfileRepository(ABC):
     """
@@ -9,10 +7,10 @@ class ProfileRepository(ABC):
     """
 
     @abstractmethod
-    async def get_featured_creature(
+    async def get_featured_creature_id(
         self,
         trainer_id: int,
-    ) -> Creature | None:
+    ) -> int | None:
         raise NotImplementedError
 
     @abstractmethod
@@ -20,5 +18,20 @@ class ProfileRepository(ABC):
         self,
         trainer_id: int,
         creature_id: int,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_selected_trainer(
+        self,
+        trainer_id: int,
+    ) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def set_selected_trainer(
+        self,
+        trainer_id: int,
+        selected_trainer: int,
     ) -> None:
         raise NotImplementedError

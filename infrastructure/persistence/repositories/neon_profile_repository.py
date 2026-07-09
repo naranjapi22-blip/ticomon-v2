@@ -49,3 +49,48 @@ class NeonProfileRepository(ProfileRepository):
                 trainer_id,
                 creature_id,
             )
+
+    async def get_selected_trainer(
+        self,
+        trainer_id: int,
+    ) -> int:
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            selected_trainer = await connection.fetchval(
+                """
+                SELECT selected_trainer_id
+                FROM trainer_profiles
+                WHERE trainer_id = $1
+                """,
+                trainer_id,
+            )
+
+        return selected_trainer or 1
+
+    async def set_selected_trainer(
+        self,
+        trainer_id: int,
+        selected_trainer: int,
+    ) -> None:
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            await connection.execute(
+                """
+                INSERT INTO trainer_profiles (
+                    trainer_id,
+                    selected_trainer_id
+                )
+                VALUES ($1, $2)
+                ON CONFLICT (trainer_id)
+                DO UPDATE SET
+                    selected_trainer_id = EXCLUDED.selected_trainer_id
+                """,
+                trainer_id,
+                selected_trainer,
+            )

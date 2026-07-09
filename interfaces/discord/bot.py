@@ -9,6 +9,7 @@ from interfaces.discord.cogs.pokedex_cog import PokedexCog
 from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.cogs.select_cog import SelectCog
 from interfaces.discord.cogs.spawn_cog import SpawnCog
+from interfaces.discord.cogs.trainer_cog import TrainerCog
 
 
 class TicoMonBot(commands.Bot):
@@ -28,6 +29,7 @@ class TicoMonBot(commands.Bot):
         await self.add_cog(SelectCog(self.core))
         await self.add_cog(CaptureCog(self.core))
         await self.add_cog(ProfileCog(self.core))
+        await self.add_cog(TrainerCog(self.core))
         await self.add_cog(IVsCog(self.core))
         await self.add_cog(InfoCog(self.core))
         await self.add_cog(PokedexCog(self.core))
