@@ -100,3 +100,13 @@ class CreatureRepository(ABC):
         Returns the ids of every species discovered by the trainer.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def update(
+        self,
+        creature: Creature,
+    ) -> Creature:
+        """
+        Updates an existing Creature.
+        """
+        raise NotImplementedError

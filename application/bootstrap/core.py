@@ -136,9 +136,9 @@ def build_core(
             policy=EvolutionPolicy(
                 cost_policy=EvolutionCostPolicy(),
             ),
-            evolution_repository=evolution_repository,
             species_repository=species_repository,
         ),
+        evolution_repository=evolution_repository,
         creature_repository=creature_repository,
         candy_repository=candy_repository,
     )

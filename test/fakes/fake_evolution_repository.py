@@ -3,21 +3,16 @@ from core.evolution.evolution_rule import EvolutionRule
 
 
 class FakeEvolutionRepository(EvolutionRepository):
-    """
-    In-memory evolution repository for tests.
-    """
 
     def __init__(
         self,
         *rules: EvolutionRule,
-    ) -> None:
-        self._rules = {rule.from_species_id: rule for rule in rules}
+    ):
+        self._rules = list(rules)
 
-    async def find_next(
+    async def find_options(
         self,
         species_id: int,
-    ) -> EvolutionRule | None:
+    ) -> list[EvolutionRule]:
 
-        return self._rules.get(
-            species_id,
-        )
+        return [rule for rule in self._rules if rule.from_species_id == species_id]

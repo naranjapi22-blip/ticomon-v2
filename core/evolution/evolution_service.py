@@ -1,8 +1,8 @@
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature import Creature
 from core.evolution.evolution_policy import EvolutionPolicy
-from core.evolution.evolution_repository import EvolutionRepository
 from core.evolution.evolution_result import EvolutionResult
+from core.evolution.evolution_rule import EvolutionRule
 from core.species.species_repository import SpeciesRepository
 
 
@@ -14,27 +14,17 @@ class EvolutionService:
     def __init__(
         self,
         policy: EvolutionPolicy,
-        evolution_repository: EvolutionRepository,
         species_repository: SpeciesRepository,
     ) -> None:
         self._policy = policy
-        self._evolution_repository = evolution_repository
         self._species_repository = species_repository
 
     async def evolve(
         self,
         creature: Creature,
         inventory: CandyInventory,
+        rule: EvolutionRule,
     ) -> EvolutionResult:
-
-        rule = await self._evolution_repository.find_next(
-            creature.species.id,
-        )
-
-        if rule is None:
-            return EvolutionResult.failed_final_stage(
-                creature.species,
-            )
 
         result = self._policy.validate(
             creature=creature,
@@ -62,3 +52,17 @@ class EvolutionService:
             evolved_species=evolved_species,
             consumed_candies=result.consumed_candies,
         )
+
+    def get_cost(
+        self,
+        rule: EvolutionRule,
+    ):
+        return self._policy.get_cost(
+            rule,
+        )
+
+    async def get_species(
+        self,
+        species_id: int,
+    ):
+        return await self._species_repository.get(species_id)

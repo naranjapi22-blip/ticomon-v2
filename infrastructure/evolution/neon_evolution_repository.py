@@ -12,27 +12,23 @@ class NeonEvolutionRepository(EvolutionRepository):
     def __init__(self) -> None:
         self._mapper = EvolutionMapper()
 
-    async def find_next(
+    async def find_options(
         self,
         species_id: int,
-    ) -> EvolutionRule | None:
+    ) -> list[EvolutionRule]:
 
         pool = await get_pool()
 
         async with pool.acquire() as connection:
 
-            row = await connection.fetchrow(
+            rows = await connection.fetch(
                 """
                 SELECT *
                 FROM pokemon_evolutions
                 WHERE from_species_id = $1
                 ORDER BY id
-                LIMIT 1
                 """,
                 species_id,
             )
 
-        if row is None:
-            return None
-
-        return self._mapper.from_row(row)
+        return [self._mapper.from_row(row) for row in rows]

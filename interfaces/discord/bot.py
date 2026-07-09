@@ -2,7 +2,9 @@ import discord
 from discord.ext import commands
 
 from interfaces.discord.bootstrap import build_discord
+from interfaces.discord.cogs.candy_cog import CandyCog
 from interfaces.discord.cogs.capture_cog import CaptureCog
+from interfaces.discord.cogs.evolution_cog import EvolutionCog
 from interfaces.discord.cogs.info import InfoCog
 from interfaces.discord.cogs.ivs_cog import IVsCog
 from interfaces.discord.cogs.pokedex_cog import PokedexCog
@@ -33,6 +35,8 @@ class TicoMonBot(commands.Bot):
         await self.add_cog(IVsCog(self.core))
         await self.add_cog(InfoCog(self.core))
         await self.add_cog(PokedexCog(self.core))
+        await self.add_cog(EvolutionCog(self.core))
+        await self.add_cog(CandyCog(self.core))
 
 
 def create_bot() -> TicoMonBot:

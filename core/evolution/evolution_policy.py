@@ -1,3 +1,4 @@
+from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature import Creature
@@ -48,4 +49,13 @@ class EvolutionPolicy:
             previous_species=creature.species,
             evolved_species=None,
             consumed_candies=bundle,
+        )
+
+    def get_cost(
+        self,
+        rule: EvolutionRule,
+    ) -> CandyAmount:
+        return self._cost_policy.calculate(
+            candy_type=rule.candy_type,
+            tier=rule.tier,
         )

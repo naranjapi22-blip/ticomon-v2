@@ -90,28 +90,32 @@ async def test_evolution_application_service_evolves_creature():
         .build()
     )
 
+    species_repository = FakeSpeciesRepository(
+        first_species,
+        second_species,
+    )
+
+    evolution_repository = FakeEvolutionRepository(
+        rule,
+    )
+
     service = EvolutionApplicationService(
-        evolution_service=EvolutionService(
+        EvolutionService(
             policy=EvolutionPolicy(
                 cost_policy=EvolutionCostPolicy(),
             ),
-            evolution_repository=FakeEvolutionRepository(
-                rule,
-            ),
-            species_repository=FakeSpeciesRepository(
-                first_species,
-                second_species,
-            ),
+            species_repository=species_repository,
         ),
+        evolution_repository=evolution_repository,
         creature_repository=creature_repository,
         candy_repository=candy_repository,
     )
 
     result = await service.evolve(
         trainer_id=1,
-        creature_id=creature.id,
+        collection_number=1,
+        rule=rule,
     )
-
     assert result.success
 
     assert result.creature.species.id == 2
@@ -127,7 +131,7 @@ async def test_evolution_application_service_evolves_creature():
 
     assert (
         len(
-            creature_repository.saved,
+            creature_repository.updated,
         )
         == 1
     )

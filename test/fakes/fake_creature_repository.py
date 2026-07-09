@@ -13,7 +13,12 @@ class FakeCreatureRepository(CreatureRepository):
     ) -> None:
         self._creatures = {creature.id: creature for creature in creatures}
 
+        self._collection_numbers = {
+            index + 1: creature for index, creature in enumerate(creatures)
+        }
+
         self.saved: list[Creature] = []
+        self.updated: list[Creature] = []
 
     async def get(
         self,
@@ -27,6 +32,19 @@ class FakeCreatureRepository(CreatureRepository):
     ) -> Creature:
         self._creatures[creature.id] = creature
         self.saved.append(creature)
+
+        return creature
+
+    async def update(
+        self,
+        creature: Creature,
+    ) -> Creature:
+        self._creatures[creature.id] = creature
+
+        if creature.collection_number is not None:
+            self._collection_numbers[creature.collection_number] = creature
+
+        self.updated.append(creature)
 
         return creature
 
@@ -81,7 +99,7 @@ class FakeCreatureRepository(CreatureRepository):
         trainer_id: int,
         collection_number: int,
     ) -> Creature:
-        return self._creatures[collection_number]
+        return self._collection_numbers[collection_number]
 
     async def get_by_species(
         self,

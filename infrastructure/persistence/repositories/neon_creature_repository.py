@@ -66,7 +66,9 @@ class NeonCreatureRepository(CreatureRepository):
                 *params[1:],
             )
 
-        species = await self._species_repository.get(row["species_id"])
+        species = await self._species_repository.get(
+            row["species_id"],
+        )
 
         return self._mapper.from_row(
             row=row,
@@ -295,3 +297,62 @@ class NeonCreatureRepository(CreatureRepository):
             )
 
         return {row["species_id"] for row in rows}
+
+    async def update(
+        self,
+        creature: Creature,
+    ) -> Creature:
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            params = self._mapper.to_row(
+                creature,
+            )
+
+            row = await connection.fetchrow(
+                """
+                UPDATE creatures
+                SET
+                    species_id = $1,
+                    variant = $2,
+                    is_shiny = $3,
+                    nature = $4,
+                    size = $5,
+                    hp_iv = $6,
+                    attack_iv = $7,
+                    defense_iv = $8,
+                    special_attack_iv = $9,
+                    special_defense_iv = $10,
+                    speed_iv = $11,
+                    current_form = $12
+                WHERE id = $13
+                RETURNING *
+                """,
+                params[1],  # species_id
+                params[2],  # variant
+                params[3],  # is_shiny
+                params[4],  # nature
+                params[5],  # size
+                params[6],  # hp_iv
+                params[7],  # attack_iv
+                params[8],  # defense_iv
+                params[9],  # special_attack_iv
+                params[10],  # special_defense_iv
+                params[11],  # speed_iv
+                params[12],  # current_form
+                creature.id,
+            )
+
+        if row is None:
+            raise ValueError(f"Creature with id {creature.id} was not found.")
+
+        species = await self._species_repository.get(
+            row["species_id"],
+        )
+
+        return self._mapper.from_row(
+            row=row,
+            species=species,
+        )

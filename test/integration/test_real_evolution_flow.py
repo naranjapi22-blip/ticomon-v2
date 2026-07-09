@@ -62,13 +62,17 @@ async def test_real_evolution_flow_bulbasaur_to_ivysaur():
         policy=EvolutionPolicy(
             cost_policy=EvolutionCostPolicy(),
         ),
-        evolution_repository=evolution_repository,
         species_repository=species_repository,
+    )
+
+    rule = await evolution_repository.find_next(
+        bulbasaur.id,
     )
 
     result = await service.evolve(
         creature,
         inventory,
+        rule,
     )
 
     assert result.success

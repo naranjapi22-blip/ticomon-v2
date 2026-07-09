@@ -10,9 +10,6 @@ from core.evolution.evolution_service import EvolutionService
 from test.builders.creature_builder import CreatureBuilder
 from test.builders.evolution_rule_builder import EvolutionRuleBuilder
 from test.builders.species_builder import SpeciesBuilder
-from test.fakes.fake_evolution_repository import (
-    FakeEvolutionRepository,
-)
 from test.fakes.fake_species_repository import (
     FakeSpeciesRepository,
 )
@@ -26,9 +23,6 @@ def create_service(
     return EvolutionService(
         policy=EvolutionPolicy(
             cost_policy=EvolutionCostPolicy(),
-        ),
-        evolution_repository=FakeEvolutionRepository(
-            rule,
         ),
         species_repository=FakeSpeciesRepository(
             first_species,
@@ -89,8 +83,8 @@ async def test_evolve_changes_species_and_consumes_candies():
     result = await service.evolve(
         creature,
         inventory,
+        rule,
     )
-
     assert result.success
     assert creature.species.id == 2
 
@@ -139,6 +133,7 @@ async def test_evolve_does_not_change_species_when_no_candies():
     result = await service.evolve(
         creature,
         inventory,
+        rule,
     )
 
     assert not result.success
@@ -191,6 +186,7 @@ async def test_evolve_returns_new_species():
     result = await service.evolve(
         creature,
         inventory,
+        rule,
     )
 
     assert result.previous_species.id == 1
