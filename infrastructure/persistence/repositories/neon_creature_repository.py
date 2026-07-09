@@ -356,3 +356,21 @@ class NeonCreatureRepository(CreatureRepository):
             row=row,
             species=species,
         )
+
+    async def delete(
+        self,
+        creature: Creature,
+    ) -> None:
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            await connection.execute(
+                """
+                DELETE
+                FROM creatures
+                WHERE id = $1
+                """,
+                creature.id,
+            )

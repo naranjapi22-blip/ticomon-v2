@@ -110,3 +110,13 @@ class CreatureRepository(ABC):
         Updates an existing Creature.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def delete(
+        self,
+        creature: Creature,
+    ) -> None:
+        """
+        Deletes an existing Creature.
+        """
+        raise NotImplementedError

@@ -19,6 +19,7 @@ class FakeCreatureRepository(CreatureRepository):
 
         self.saved: list[Creature] = []
         self.updated: list[Creature] = []
+        self.deleted: list[Creature] = []
 
     async def get(
         self,
@@ -121,3 +122,17 @@ class FakeCreatureRepository(CreatureRepository):
             for creature in self._creatures.values()
             if creature.trainer_id == trainer_id
         }
+
+    async def delete(
+        self,
+        creature: Creature,
+    ) -> None:
+        self._creatures.pop(creature.id, None)
+
+        if creature.collection_number is not None:
+            self._collection_numbers.pop(
+                creature.collection_number,
+                None,
+            )
+
+        self.deleted.append(creature)

@@ -14,6 +14,8 @@ class CreatureBuilder:
         self._species = SpeciesBuilder().build()
         self._trainer_id = 1
         self._is_shiny = False
+        self._id = None
+        self._collection_number = None
 
     def with_species(
         self,
@@ -51,4 +53,20 @@ class CreatureBuilder:
             nature=Nature("hardy"),
             is_shiny=self._is_shiny,
             current_form=None,
+            id=self._id,
+            collection_number=self._collection_number,
         )
+
+    def with_id(
+        self,
+        creature_id: int,
+    ):
+        self._id = creature_id
+        return self
+
+    def with_collection_number(
+        self,
+        collection_number: int,
+    ):
+        self._collection_number = collection_number
+        return self
