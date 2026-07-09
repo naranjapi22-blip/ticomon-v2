@@ -1,4 +1,3 @@
-from core.evolution.evolution_stage import EvolutionStage
 from core.rarity import Rarity
 from core.spawn.spawn_rarity_classifier import SpawnRarityClassifier
 
@@ -9,7 +8,7 @@ def test_mythical_is_always_mythical():
     rarity = classifier.classify(
         capture_rate=3,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=False,
         is_mythical=True,
     )
@@ -23,7 +22,7 @@ def test_legendary_is_always_legendary():
     rarity = classifier.classify(
         capture_rate=3,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=True,
         is_mythical=False,
     )
@@ -37,7 +36,7 @@ def test_final_evolution_with_high_bst_is_epic():
     rarity = classifier.classify(
         capture_rate=45,
         base_stat_total=600,
-        evolution_stage=EvolutionStage.FINAL,
+        stage=3,
         is_legendary=False,
         is_mythical=False,
     )
@@ -51,7 +50,7 @@ def test_final_evolution_with_low_bst_is_very_rare():
     rarity = classifier.classify(
         capture_rate=75,
         base_stat_total=450,
-        evolution_stage=EvolutionStage.FINAL,
+        stage=3,
         is_legendary=False,
         is_mythical=False,
     )
@@ -65,7 +64,7 @@ def test_second_evolution_with_low_capture_rate_is_very_rare():
     rarity = classifier.classify(
         capture_rate=45,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.SECOND,
+        stage=2,
         is_legendary=False,
         is_mythical=False,
     )
@@ -79,7 +78,7 @@ def test_second_evolution_with_high_capture_rate_is_uncommon():
     rarity = classifier.classify(
         capture_rate=120,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.SECOND,
+        stage=2,
         is_legendary=False,
         is_mythical=False,
     )
@@ -93,7 +92,7 @@ def test_first_evolution_with_very_high_capture_rate_is_very_common():
     rarity = classifier.classify(
         capture_rate=255,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=False,
         is_mythical=False,
     )
@@ -107,7 +106,7 @@ def test_first_evolution_with_high_capture_rate_is_common():
     rarity = classifier.classify(
         capture_rate=180,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=False,
         is_mythical=False,
     )
@@ -121,7 +120,7 @@ def test_first_evolution_with_medium_capture_rate_is_uncommon():
     rarity = classifier.classify(
         capture_rate=120,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=False,
         is_mythical=False,
     )
@@ -135,7 +134,7 @@ def test_first_evolution_with_low_capture_rate_is_rare():
     rarity = classifier.classify(
         capture_rate=90,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=False,
         is_mythical=False,
     )
@@ -149,7 +148,7 @@ def test_first_evolution_with_very_low_capture_rate_is_very_rare():
     rarity = classifier.classify(
         capture_rate=3,
         base_stat_total=300,
-        evolution_stage=EvolutionStage.FIRST,
+        stage=1,
         is_legendary=False,
         is_mythical=False,
     )
