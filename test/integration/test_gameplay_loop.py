@@ -43,6 +43,7 @@ async def test_complete_gameplay_loop():
     # Assert
     assert result.success
     assert result.creature is not None
+    assert not result.reward.is_empty()
 
     creature = result.creature
 
@@ -58,3 +59,12 @@ async def test_complete_gameplay_loop():
     assert persisted.id == creature.id
     assert persisted.trainer_id == trainer_id
     assert persisted.species.id == selected.species.id
+
+    inventory = await services.candy_repository.get(
+        trainer_id,
+    )
+
+    assert not inventory.is_empty()
+
+    for candy_type, amount in result.reward.items():
+        assert inventory.get_amount(candy_type) == amount

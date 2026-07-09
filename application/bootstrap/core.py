@@ -8,6 +8,7 @@ from application.profile.profile_service import ProfileService
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
+from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_service import (
     CaptureApplicationService,
 )
@@ -31,6 +32,9 @@ from core.spawn.rule_engine import RuleEngine
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.weighted_selector import WeightedSelector
 from core.stats.stat_calculator import StatCalculator
+from infrastructure.persistence.repositories.neon_candy_repository import (
+    NeonCandyRepository,
+)
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
 )
@@ -49,6 +53,7 @@ from infrastructure.species.neon_species_repository import (
 class CoreServices:
     species_repository: NeonSpeciesRepository
     creature_repository: NeonCreatureRepository
+    candy_repository: NeonCandyRepository
 
     spawn_session_repository: InMemorySpawnSessionRepository
 
@@ -59,8 +64,6 @@ class CoreServices:
     get_current_spawn_application: GetCurrentSpawnApplicationService
     capture_application: CaptureApplicationService
 
-    profile_service: ProfileService
-    creature_info_service: CreatureInfoService
     profile_service: ProfileService
     creature_info_service: CreatureInfoService
     species_info_service: SpeciesInfoService
@@ -81,6 +84,10 @@ def build_core(
     creature_repository = NeonCreatureRepository(
         species_repository=species_repository,
     )
+
+    candy_repository = NeonCandyRepository()
+
+    reward_policy = RewardPolicy()
 
     creature_info_service = CreatureInfoService(
         creature_repository=creature_repository,
@@ -107,6 +114,8 @@ def build_core(
             ball_selector=ball_selector,
         ),
         creature_repository=creature_repository,
+        candy_repository=candy_repository,
+        reward_policy=reward_policy,
         spawn_session_repository=spawn_session_repository,
     )
 
@@ -138,13 +147,16 @@ def build_core(
     get_current_spawn_application = GetCurrentSpawnApplicationService(
         spawn_session_repository=spawn_session_repository,
     )
+
     pokedex_service = PokedexService(
         species_repository=species_repository,
         creature_repository=creature_repository,
     )
+
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
+        candy_repository=candy_repository,
         spawn_session_repository=spawn_session_repository,
         stat_calculator=stat_calculator,
         spawn_application=spawn_application,

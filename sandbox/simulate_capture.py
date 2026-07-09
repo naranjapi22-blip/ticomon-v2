@@ -2,22 +2,34 @@ import asyncio
 
 from application.bootstrap.core import build_core
 
+GUILD_ID = 123456789
+TRAINER_ID = 987654321
+
 
 async def main() -> None:
     services = build_core()
 
-    opportunities = await services.spawn_application.spawn()
+    session = await services.spawn_application.spawn(
+        guild_id=GUILD_ID,
+        owner_id=TRAINER_ID,
+    )
 
     print("\n========== SPAWN ==========\n")
 
-    for index, opportunity in enumerate(opportunities, start=1):
+    for index, opportunity in enumerate(
+        session.opportunities,
+        start=1,
+    ):
         print(
             f"[{index}] "
             f"{opportunity.species.name:<15}"
             f"{opportunity.species.spawn_rarity.name}"
         )
 
-    selected = opportunities[0]
+    selected = await services.select_opportunity_application.select_opportunity(
+        guild_id=GUILD_ID,
+        opportunity_index=0,
+    )
 
     print("\n========== CAPTURE ==========\n")
     print(f"Selected: {selected.species.name}")
@@ -25,15 +37,15 @@ async def main() -> None:
     attempt_number = 1
 
     while True:
+
         result = await services.capture_application.capture(
-            trainer_id=123456789012345678,
-            opportunity=selected,
+            trainer_id=TRAINER_ID,
+            guild_id=GUILD_ID,
         )
 
         print(f"\n----- Attempt #{attempt_number} -----")
         print(f"Ball: {result.attempt.capture_ball.name}")
         print(f"Chance: {result.attempt.chance * 100:.2f}%")
-        print(f"Failed Attempts: {selected.failed_attempts}")
 
         if result.success:
             assert result.creature is not None
@@ -45,7 +57,11 @@ async def main() -> None:
             print(f"Species: {result.creature.species.name}")
             print(f"Nature: {result.creature.nature.name}")
             print(f"Shiny: {result.creature.is_shiny}")
-            print(f"Attempts: {attempt_number}")
+
+            print("\nCandies:")
+
+            for candy_type, amount in result.reward.items():
+                print(f"  {candy_type.value.title()}: +{amount}")
 
             break
 

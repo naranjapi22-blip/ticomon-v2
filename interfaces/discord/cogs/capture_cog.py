@@ -15,6 +15,7 @@ class CaptureCog(commands.Cog):
         try:
             result = await self._core.capture_application.capture(
                 trainer_id=ctx.author.id,
+                guild_id=ctx.guild.id,
             )
 
         except NoActiveSpawnSession:
@@ -26,6 +27,14 @@ class CaptureCog(commands.Cog):
             return
 
         if result.success:
-            await ctx.send(f"✅ You captured {result.creature.species.name}!")
+
+            rewards = "\n".join(
+                f"🍬 {candy_type.value.title()}: +{amount}"
+                for candy_type, amount in result.reward.items()
+            )
+
+            await ctx.send(
+                f"✅ You captured {result.creature.species.name}!\n\n" f"{rewards}"
+            )
         else:
             await ctx.send("❌ Capture failed!")

@@ -53,12 +53,18 @@ class CaptureButton(discord.ui.Button):
                 animation.gif_bytes,
             )
 
+            rewards = "\n".join(
+                f"🍬 {candy_type.value.title()}: +{amount}"
+                for candy_type, amount in result.reward.items()
+            )
+
             await interaction.response.edit_message(
                 content=(
                     f"🎉 {interaction.user.mention} caught "
                     f"{result.creature.species.name.title()} "
                     f"using a {ball_name}!\n"
-                    f"🎯 Capture Chance: {result.attempt.chance * 100:.2f}%"
+                    f"🎯 Capture Chance: {result.attempt.chance * 100:.2f}%\n\n"
+                    f"{rewards}"
                 ),
                 embeds=[],
                 attachments=[
@@ -68,14 +74,4 @@ class CaptureButton(discord.ui.Button):
                     )
                 ],
                 view=None,
-            )
-
-        else:
-            await interaction.response.send_message(
-                (
-                    f"🎯 You threw a {ball_name}\n"
-                    f"Chance: {result.attempt.chance * 100:.2f}%\n\n"
-                    "❌ Capture failed!"
-                ),
-                ephemeral=True,
             )
