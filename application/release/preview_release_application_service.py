@@ -1,13 +1,15 @@
-from application.release.release_result import ReleaseResult
+from application.release.preview_release_result import (
+    PreviewReleaseResult,
+)
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_repository import CandyRepository
 from core.candy.reward_policy import RewardPolicy
 from core.creature.creature_repository import CreatureRepository
 
 
-class ReleaseApplicationService:
+class PreviewReleaseApplicationService:
     """
-    Orchestrates the release use case.
+    Orchestrates the release preview use case.
     """
 
     def __init__(
@@ -20,17 +22,13 @@ class ReleaseApplicationService:
         self._candy_repository = candy_repository
         self._reward_policy = reward_policy
 
-    async def release(
+    async def preview(
         self,
         trainer_id: int,
         collection_numbers: list[int],
-    ) -> ReleaseResult:
+    ) -> PreviewReleaseResult:
 
-        inventory = await self._candy_repository.get(
-            trainer_id,
-        )
-
-        released_creatures = []
+        creatures = []
 
         reward_bundle = CandyBundle()
 
@@ -49,25 +47,11 @@ class ReleaseApplicationService:
                 bundle,
             )
 
-            inventory.add(
-                bundle,
-            )
-
-            await self._creature_repository.delete(
+            creatures.append(
                 creature,
             )
 
-            released_creatures.append(
-                creature,
-            )
-
-        await self._candy_repository.save(
-            trainer_id,
-            inventory,
-        )
-
-        return ReleaseResult(
-            success=True,
-            released_creatures=released_creatures,
+        return PreviewReleaseResult(
+            creatures=creatures,
             reward_bundle=reward_bundle,
         )

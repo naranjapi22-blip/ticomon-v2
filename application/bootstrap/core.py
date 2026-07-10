@@ -8,6 +8,12 @@ from application.evolution.evolution_application_service import (
 )
 from application.pokedex.pokedex_service import PokedexService
 from application.profile.profile_service import ProfileService
+from application.release.preview_release_application_service import (
+    PreviewReleaseApplicationService,
+)
+from application.release.release_application_service import (
+    ReleaseApplicationService,
+)
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
@@ -75,7 +81,8 @@ class CoreServices:
     get_current_spawn_application: GetCurrentSpawnApplicationService
     capture_application: CaptureApplicationService
     evolution_application: EvolutionApplicationService
-
+    release_application: ReleaseApplicationService
+    preview_release_application: PreviewReleaseApplicationService
     profile_service: ProfileService
     creature_info_service: CreatureInfoService
     species_info_service: SpeciesInfoService
@@ -142,7 +149,17 @@ def build_core(
         creature_repository=creature_repository,
         candy_repository=candy_repository,
     )
+    release_application = ReleaseApplicationService(
+        creature_repository=creature_repository,
+        candy_repository=candy_repository,
+        reward_policy=reward_policy,
+    )
 
+    preview_release_application = PreviewReleaseApplicationService(
+        creature_repository=creature_repository,
+        candy_repository=candy_repository,
+        reward_policy=reward_policy,
+    )
     profile_service = ProfileService(
         creature_repository=creature_repository,
         profile_repository=profile_repository,
@@ -188,6 +205,8 @@ def build_core(
         get_current_spawn_application=get_current_spawn_application,
         capture_application=capture_application,
         evolution_application=evolution_application,
+        release_application=release_application,
+        preview_release_application=preview_release_application,
         profile_service=profile_service,
         creature_info_service=creature_info_service,
         species_info_service=species_info_service,

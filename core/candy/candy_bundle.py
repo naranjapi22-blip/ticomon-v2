@@ -24,6 +24,19 @@ class CandyBundle:
 
         return cls(_amounts=candies)
 
+    def merge(
+        self,
+        other: "CandyBundle",
+    ) -> "CandyBundle":
+        candies = dict(self._amounts)
+
+        for candy_type, amount in other.items():
+            candies[candy_type] = candies.get(candy_type, 0) + amount
+
+        return CandyBundle(
+            _amounts=candies,
+        )
+
     def get(
         self,
         candy_type: CandyType,
