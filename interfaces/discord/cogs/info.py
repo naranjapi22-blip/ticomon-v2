@@ -39,7 +39,7 @@ class InfoCog(commands.Cog):
 
         embed.set_image(
             url=get_species_gif(
-                species_id=species.id,
+                species_id=species.pokeapi_id,
                 shiny=False,
             )
         )

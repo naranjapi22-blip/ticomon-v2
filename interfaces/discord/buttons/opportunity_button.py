@@ -49,7 +49,7 @@ class OpportunityButton(discord.ui.Button):
         selected = session.selected_opportunity
 
         gif_url = get_species_gif(
-            species_id=selected.species.id,
+            species_id=selected.species.pokeapi_id,
             shiny=selected.is_shiny,
         )
 

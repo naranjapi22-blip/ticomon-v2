@@ -54,6 +54,7 @@ class SpeciesBuilder:
 
         return Species(
             id=self._id,
+            pokeapi_id=self._id,
             name=self._name,
             types=self._types,
             base_stats=BaseStats(

@@ -73,7 +73,7 @@ class ProfileCog(commands.Cog):
 
             embed.set_image(
                 url=get_species_gif(
-                    species_id=profile.featured_creature.species.id,
+                    species_id=profile.featured_creature.species.pokeapi_id,
                     shiny=profile.featured_creature.is_shiny,
                 )
             )

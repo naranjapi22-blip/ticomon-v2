@@ -31,6 +31,7 @@ def create_species(
 
     return Species(
         id=id,
+        pokeapi_id=id,
         name=name,
         types=types,
         base_stats=base_stats

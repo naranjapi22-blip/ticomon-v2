@@ -12,6 +12,7 @@ from core.species.variant import Variant
 @dataclass(frozen=True)
 class Species:
     id: int
+    pokeapi_id: int
     name: str
 
     types: list[str]

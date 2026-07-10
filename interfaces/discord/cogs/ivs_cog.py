@@ -84,7 +84,7 @@ class IVsCog(commands.Cog):
 
         embed.set_image(
             url=get_species_gif(
-                species_id=creature.species.id,
+                species_id=creature.species.pokeapi_id,
                 shiny=creature.is_shiny,
             )
         )

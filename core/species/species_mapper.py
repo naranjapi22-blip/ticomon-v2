@@ -9,6 +9,7 @@ class SpeciesMapper:
     def from_row(row) -> Species:
         return Species(
             id=row["id"],
+            pokeapi_id=row["pokeapi_id"],
             name=row["name"],
             types=[row["type_1"], row["type_2"]] if row["type_2"] else [row["type_1"]],
             base_stats=BaseStats(
