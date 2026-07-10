@@ -2,6 +2,7 @@ import asyncio
 
 import discord
 
+from core.spawn.exceptions import NoActiveSpawnSession
 from rendering.animacion_captura import CaptureAnimation
 from rendering.sprites import get_capture_sprite
 
@@ -19,13 +20,19 @@ class CaptureButton(discord.ui.Button):
         self,
         interaction: discord.Interaction,
     ):
-
         await interaction.response.defer()
 
-        result = await self._core.capture_application.capture(
-            trainer_id=interaction.user.id,
-            guild_id=interaction.guild.id,
-        )
+        try:
+            result = await self._core.capture_application.capture(
+                trainer_id=interaction.user.id,
+                guild_id=interaction.guild.id,
+            )
+        except NoActiveSpawnSession:
+            await interaction.followup.send(
+                "❌ This encounter is no longer available.",
+                ephemeral=True,
+            )
+            return
 
         ball_name = result.attempt.capture_ball.name.replace(
             "_",
@@ -44,16 +51,26 @@ class CaptureButton(discord.ui.Button):
 
             return
 
-            return
-
         trainer = await self._core.profile_service.get_selected_trainer(
             interaction.user.id,
         )
 
         sprite_path = get_capture_sprite(
-            species_id=result.creature.species.id,
-            shiny=result.creature.is_shiny,
+            result.creature,
         )
+
+        print("=" * 60)
+        print("Species:", result.creature.species.name)
+        print("Species ID:", result.creature.species.id)
+        print("PokéAPI ID:", result.creature.species.pokeapi_id)
+        print("Current Form:", result.creature.current_form)
+
+        if result.creature.current_form is not None:
+            print("Variant Name:", result.creature.current_form.name)
+
+        print("Shiny:", result.creature.is_shiny)
+        print("Sprite Path:", sprite_path)
+        print("=" * 60)
 
         animation = CaptureAnimation(
             sprite_path=sprite_path,
