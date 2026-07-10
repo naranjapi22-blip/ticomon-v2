@@ -13,7 +13,6 @@ class CreatureMapper:
             id=row["id"],
             collection_number=row["collection_number"],
             species=species,
-            variant=Variant(row["variant"]) if row["variant"] else None,
             trainer_id=row["trainer_id"],
             ivs=IVs(
                 hp=row["hp_iv"],
@@ -26,7 +25,14 @@ class CreatureMapper:
             size=Size(row["size"]),
             nature=Nature(row["nature"]),
             is_shiny=row["is_shiny"],
-            current_form=row["current_form"],
+            current_form=(
+                Variant(
+                    id=row["variant_id"],
+                    name=row["variant_name"],
+                )
+                if row["variant_id"] is not None
+                else None
+            ),
         )
 
     @staticmethod
@@ -34,7 +40,7 @@ class CreatureMapper:
         return (
             creature.trainer_id,
             creature.species.id,
-            creature.variant.name if creature.variant else None,
+            creature.current_form.id if creature.current_form else None,
             creature.is_shiny,
             creature.nature.name,
             creature.size.value,
@@ -44,5 +50,4 @@ class CreatureMapper:
             creature.ivs.special_attack,
             creature.ivs.special_defense,
             creature.ivs.speed,
-            creature.current_form,
         )

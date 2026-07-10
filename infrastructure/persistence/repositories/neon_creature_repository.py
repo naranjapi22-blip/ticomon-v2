@@ -37,13 +37,13 @@ class NeonCreatureRepository(CreatureRepository):
 
             params = self._mapper.to_row(creature)
 
-            row = await connection.fetchrow(
+            created = await connection.fetchrow(
                 """
                 INSERT INTO creatures (
                     trainer_id,
                     collection_number,
                     species_id,
-                    variant,
+                    current_form_id,
                     is_shiny,
                     nature,
                     size,
@@ -52,28 +52,41 @@ class NeonCreatureRepository(CreatureRepository):
                     defense_iv,
                     special_attack_iv,
                     special_defense_iv,
-                    speed_iv,
-                    current_form
+                    speed_iv
                 )
                 VALUES (
                     $1, $2, $3, $4, $5, $6, $7,
-                    $8, $9, $10, $11, $12, $13, $14
+                    $8, $9, $10, $11, $12, $13
                 )
-                RETURNING *
+                RETURNING id
                 """,
                 params[0],  # trainer_id
                 collection_number,
                 *params[1:],
             )
 
-        species = await self._species_repository.get(
-            row["species_id"],
-        )
+            row = await connection.fetchrow(
+                """
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.id = $1
+                """,
+                created["id"],
+            )
 
-        return self._mapper.from_row(
-            row=row,
-            species=species,
-        )
+            species = await self._species_repository.get(
+                row["species_id"],
+            )
+
+            return self._mapper.from_row(
+                row=row,
+                species=species,
+            )
 
     async def get(
         self,
@@ -89,13 +102,17 @@ class NeonCreatureRepository(CreatureRepository):
 
             row = await connection.fetchrow(
                 """
-                SELECT *
-                FROM creatures
-                WHERE id = $1
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.id = $1
                 """,
                 creature_id,
             )
-
         if row is None:
             raise ValueError(f"Creature with id {creature_id} was not found.")
 
@@ -213,10 +230,15 @@ class NeonCreatureRepository(CreatureRepository):
 
             row = await connection.fetchrow(
                 """
-                SELECT *
-                FROM creatures
-                WHERE trainer_id = $1
-                  AND collection_number = $2
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.trainer_id = $1
+                AND c.collection_number = $2
                 """,
                 trainer_id,
                 collection_number,
@@ -249,11 +271,16 @@ class NeonCreatureRepository(CreatureRepository):
 
             rows = await connection.fetch(
                 """
-                SELECT *
-                FROM creatures
-                WHERE trainer_id = $1
-                  AND species_id = $2
-                ORDER BY collection_number
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.trainer_id = $1
+                AND c.species_id = $2
+                ORDER BY c.collection_number
                 """,
                 trainer_id,
                 species_id,
@@ -311,12 +338,12 @@ class NeonCreatureRepository(CreatureRepository):
                 creature,
             )
 
-            row = await connection.fetchrow(
+            updated = await connection.fetchrow(
                 """
                 UPDATE creatures
                 SET
                     species_id = $1,
-                    variant = $2,
+                    current_form_id = $2,
                     is_shiny = $3,
                     nature = $4,
                     size = $5,
@@ -325,13 +352,12 @@ class NeonCreatureRepository(CreatureRepository):
                     defense_iv = $8,
                     special_attack_iv = $9,
                     special_defense_iv = $10,
-                    speed_iv = $11,
-                    current_form = $12
-                WHERE id = $13
-                RETURNING *
+                    speed_iv = $11
+                WHERE id = $12
+                RETURNING id
                 """,
                 params[1],  # species_id
-                params[2],  # variant
+                params[2],  # current_form_id
                 params[3],  # is_shiny
                 params[4],  # nature
                 params[5],  # size
@@ -341,21 +367,34 @@ class NeonCreatureRepository(CreatureRepository):
                 params[9],  # special_attack_iv
                 params[10],  # special_defense_iv
                 params[11],  # speed_iv
-                params[12],  # current_form
                 creature.id,
             )
 
-        if row is None:
-            raise ValueError(f"Creature with id {creature.id} was not found.")
+            if updated is None:
+                raise ValueError(f"Creature with id {creature.id} was not found.")
 
-        species = await self._species_repository.get(
-            row["species_id"],
-        )
+            row = await connection.fetchrow(
+                """
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.id = $1
+                """,
+                updated["id"],
+            )
 
-        return self._mapper.from_row(
-            row=row,
-            species=species,
-        )
+            species = await self._species_repository.get(
+                row["species_id"],
+            )
+
+            return self._mapper.from_row(
+                row=row,
+                species=species,
+            )
 
     async def delete(
         self,
@@ -374,3 +413,25 @@ class NeonCreatureRepository(CreatureRepository):
                 """,
                 creature.id,
             )
+
+
+async def _fetch_creature(
+    self,
+    connection,
+    query: str,
+    *args,
+):
+    return await connection.fetchrow(
+        f"""
+        SELECT
+            c.*,
+            sv.id AS variant_id,
+            sv.name AS variant_name
+        FROM (
+            {query}
+        ) c
+        LEFT JOIN species_variants sv
+            ON sv.id = c.current_form_id
+        """,
+        *args,
+    )

@@ -16,11 +16,10 @@ class OpportunityFactory:
     def create(species: Species) -> Opportunity:
         return Opportunity(
             species=species,
-            variant=VariantFactory.create(species),
             ivs=IVFactory.create(),
             size=SizeFactory.create(),
             nature=NatureFactory.create(),
             is_shiny=ShinyFactory.create(),
-            initial_form=None,
+            initial_form=VariantFactory.create(species),
             interaction="capture",
         )

@@ -2,11 +2,15 @@ from core.creature.base_stats import BaseStats
 from core.rarity import Rarity
 from core.species.species import Species
 from core.species.species_metadata import SpeciesMetadata
+from core.species.variant import Variant
 
 
 class SpeciesMapper:
     @staticmethod
-    def from_row(row) -> Species:
+    def from_row(
+        row,
+        variants: tuple[Variant, ...],
+    ) -> Species:
         return Species(
             id=row["id"],
             pokeapi_id=row["pokeapi_id"],
@@ -31,5 +35,5 @@ class SpeciesMapper:
                 is_mythical=row["is_mythical"],
             ),
             evolution_chain=None,
-            variants=[],
+            variants=variants,
         )

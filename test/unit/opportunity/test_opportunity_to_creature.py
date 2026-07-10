@@ -27,7 +27,7 @@ def test_core_opportunity_to_creature_flow():
 
     # Assert - identidad base
     assert creature.species == opportunity.species
-    assert creature.variant == opportunity.variant
+    assert creature.current_form == opportunity.initial_form
     assert creature.ivs == opportunity.ivs
     assert creature.size == opportunity.size
     assert creature.nature == opportunity.nature

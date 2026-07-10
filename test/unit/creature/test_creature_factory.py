@@ -15,7 +15,6 @@ def test_create_creature():
 
     opportunity = Opportunity(
         species=species,
-        variant=Variant(id=1, name="Rockstar"),
         ivs=IVs(
             hp=31,
             attack=31,
@@ -27,10 +26,12 @@ def test_create_creature():
         size=Size(1.10),
         nature=Nature("adamant"),
         is_shiny=True,
-        initial_form=None,
+        initial_form=Variant(
+            id=1,
+            name="Rockstar",
+        ),
         interaction="capture",
     )
-
     creature = CreatureFactory.create(
         trainer_id=50,
         opportunity=opportunity,
@@ -38,7 +39,8 @@ def test_create_creature():
 
     assert creature.trainer_id == 50
     assert creature.species is species
-    assert creature.variant == opportunity.variant
+    assert creature.current_form == opportunity.initial_form
+    assert creature.current_form.name == "Rockstar"
     assert creature.ivs == opportunity.ivs
     assert creature.size == opportunity.size
     assert creature.nature == opportunity.nature

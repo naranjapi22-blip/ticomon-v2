@@ -26,7 +26,6 @@ def test_creature_returns_base_stat():
     creature = Creature(
         id=1,
         species=species,
-        variant=None,
         trainer_id=1,
         ivs=IVs(
             hp=31,

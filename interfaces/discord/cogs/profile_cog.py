@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
-from interfaces.discord.images import get_species_gif
+from interfaces.discord.images import get_creature_gif
 
 
 class ProfileCog(commands.Cog):
@@ -72,9 +72,8 @@ class ProfileCog(commands.Cog):
             )
 
             embed.set_image(
-                url=get_species_gif(
-                    species_id=profile.featured_creature.species.pokeapi_id,
-                    shiny=profile.featured_creature.is_shiny,
+                url=get_creature_gif(
+                    profile.featured_creature,
                 )
             )
 

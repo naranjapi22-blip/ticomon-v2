@@ -20,7 +20,6 @@ class Opportunity:
 
     # Identidad de la especie
     species: Species
-    variant: Variant | None
 
     # Características individuales
     ivs: IVs
@@ -28,8 +27,8 @@ class Opportunity:
     nature: Nature
     is_shiny: bool
 
-    # Estado inicial
-    initial_form: str | None
+    # Forma visual inicial
+    initial_form: Variant | None
 
     # Interacción permitida
     interaction: str

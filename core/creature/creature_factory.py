@@ -10,7 +10,6 @@ class CreatureFactory:
     ):
         return Creature(
             species=opportunity.species,
-            variant=opportunity.variant,
             trainer_id=trainer_id,
             ivs=opportunity.ivs,
             size=opportunity.size,

@@ -21,7 +21,6 @@ class Creature:
 
     # Relación
     species: Species
-    variant: Variant | None
     trainer_id: int | None
 
     # Características individuales
@@ -31,7 +30,7 @@ class Creature:
     is_shiny: bool
 
     # Estado
-    current_form: str | None
+    current_form: Variant | None
 
     # Identidad (asignada al persistir)
     id: int | None = None

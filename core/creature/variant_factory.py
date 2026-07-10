@@ -3,16 +3,34 @@ import random
 from core.species.species import Species
 from core.species.variant import Variant
 
+SPECIAL_VARIANT_CHANCES = {
+    "Pikachu": 0.005,
+    "Greninja": 0.005,
+}
+
 
 class VariantFactory:
-    PROBABILITY = 0.02
+    """
+    Creates cosmetic variants for a species.
+    """
 
-    @classmethod
-    def create(cls, species: Species) -> Variant | None:
+    @staticmethod
+    def create(
+        species: Species,
+    ) -> Variant | None:
+
         if not species.variants:
             return None
 
-        if random.random() > cls.PROBABILITY:
-            return None
+        chance = SPECIAL_VARIANT_CHANCES.get(
+            species.name,
+        )
 
-        return random.choice(species.variants)
+        if chance is not None:
+
+            if random.random() >= chance:
+                return None
+
+        return random.choice(
+            species.variants,
+        )

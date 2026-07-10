@@ -1,6 +1,6 @@
 import discord
 
-from interfaces.discord.images import get_species_gif
+from interfaces.discord.images import get_opportunity_gif
 from interfaces.discord.views.capture_view import CaptureView
 
 
@@ -48,13 +48,15 @@ class OpportunityButton(discord.ui.Button):
 
         selected = session.selected_opportunity
 
-        gif_url = get_species_gif(
-            species_id=selected.species.pokeapi_id,
-            shiny=selected.is_shiny,
-        )
+        gif_url = get_opportunity_gif(selected)
 
         embed = discord.Embed(
-            title=selected.species.name.title(),
+            title=(
+                f"{selected.species.name.title()} "
+                f"{selected.initial_form.name.title()}"
+                if selected.initial_form
+                else selected.species.name.title()
+            ),
             description=f"**{selected.species.spawn_rarity.name.replace('_', ' ')}**",
         )
 

@@ -41,9 +41,9 @@ def generate_spawn_preview(
     assets_path = Path(__file__).parent / "assets" / "regular"
 
     for opportunity in opportunities:
-        sprite = Image.open(assets_path / f"{opportunity.species.id}.png").convert(
-            "RGBA"
-        )
+        sprite = Image.open(
+            assets_path / f"{opportunity.species.pokeapi_id}.png"
+        ).convert("RGBA")
 
         sprite = generate_silhouette(
             sprite,

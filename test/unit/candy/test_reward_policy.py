@@ -17,7 +17,6 @@ def test_stage_1_monotype_reward():
 
     creature = Creature(
         species=species,
-        variant=None,
         trainer_id=1,
         ivs=IVs(
             hp=0,

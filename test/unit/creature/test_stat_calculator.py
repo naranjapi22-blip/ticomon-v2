@@ -27,7 +27,6 @@ def test_calculates_attack_stat_from_base_stats_ivs_and_nature():
     creature = Creature(
         id=1,
         species=species,
-        variant=None,
         trainer_id=1,
         ivs=IVs(
             hp=31,

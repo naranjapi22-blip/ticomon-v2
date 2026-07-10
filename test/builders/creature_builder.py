@@ -39,7 +39,6 @@ class CreatureBuilder:
 
         return Creature(
             species=self._species,
-            variant=None,
             trainer_id=self._trainer_id,
             ivs=IVs(
                 hp=31,

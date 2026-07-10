@@ -2,6 +2,7 @@ from core.rarity import Rarity
 from core.species.species import Species
 from core.species.species_mapper import SpeciesMapper
 from core.species.species_repository import SpeciesRepository
+from core.species.variant import Variant
 from infrastructure.db_config import get_pool
 
 
@@ -12,6 +13,61 @@ class NeonSpeciesRepository(SpeciesRepository):
 
     def __init__(self) -> None:
         self._mapper = SpeciesMapper()
+
+    async def _load_variants(
+        self,
+        connection,
+        species_id: int,
+    ) -> tuple[Variant, ...]:
+        rows = await connection.fetch(
+            """
+            SELECT id, name
+            FROM species_variants
+            WHERE species_id = $1
+            ORDER BY id
+            """,
+            species_id,
+        )
+
+        return tuple(
+            Variant(
+                id=row["id"],
+                name=row["name"],
+            )
+            for row in rows
+        )
+
+    async def _load_all_variants(
+        self,
+        connection,
+    ) -> dict[int, tuple[Variant, ...]]:
+
+        rows = await connection.fetch(
+            """
+            SELECT
+                species_id,
+                id,
+                name
+            FROM species_variants
+            ORDER BY species_id, id
+            """
+        )
+
+        variants: dict[int, list[Variant]] = {}
+
+        for row in rows:
+
+            variants.setdefault(
+                row["species_id"],
+                [],
+            ).append(
+                Variant(
+                    id=row["id"],
+                    name=row["name"],
+                )
+            )
+
+        return {species_id: tuple(values) for species_id, values in variants.items()}
 
     async def get(
         self,
@@ -34,10 +90,18 @@ class NeonSpeciesRepository(SpeciesRepository):
                 species_id,
             )
 
-        if row is None:
-            raise ValueError(f"Species with id {species_id} was not found.")
+            if row is None:
+                raise ValueError(f"Species with id {species_id} was not found.")
 
-        return self._mapper.from_row(row)
+            variants = await self._load_variants(
+                connection,
+                species_id,
+            )
+
+        return self._mapper.from_row(
+            row,
+            variants,
+        )
 
     async def find_by_name(
         self,
@@ -60,10 +124,18 @@ class NeonSpeciesRepository(SpeciesRepository):
                 name,
             )
 
-        if row is None:
-            return None
+            if row is None:
+                return None
 
-        return self._mapper.from_row(row)
+            variants = await self._load_variants(
+                connection,
+                row["id"],
+            )
+
+        return self._mapper.from_row(
+            row,
+            variants,
+        )
 
     async def get_all(self) -> tuple[Species, ...]:
         """
@@ -82,7 +154,25 @@ class NeonSpeciesRepository(SpeciesRepository):
                 """
             )
 
-        return tuple(self._mapper.from_row(row) for row in rows)
+            variants_map = await self._load_all_variants(
+                connection,
+            )
+
+            species = []
+
+            for row in rows:
+
+                species.append(
+                    self._mapper.from_row(
+                        row,
+                        variants_map.get(
+                            row["id"],
+                            (),
+                        ),
+                    )
+                )
+
+        return tuple(species)
 
     async def find_by_spawn_rarity(
         self,
@@ -106,4 +196,22 @@ class NeonSpeciesRepository(SpeciesRepository):
                 rarity.value,
             )
 
-        return tuple(self._mapper.from_row(row) for row in rows)
+            variants_map = await self._load_all_variants(
+                connection,
+            )
+
+            species = []
+
+            for row in rows:
+
+                species.append(
+                    self._mapper.from_row(
+                        row,
+                        variants_map.get(
+                            row["id"],
+                            (),
+                        ),
+                    )
+                )
+
+        return tuple(species)
