@@ -1,4 +1,5 @@
 import asyncio
+from time import perf_counter
 
 import discord
 
@@ -40,7 +41,6 @@ class CaptureButton(discord.ui.Button):
         ).title()
 
         if not result.success:
-
             await interaction.followup.send(
                 content=(
                     f"❌ You failed to catch the Pokémon.\n"
@@ -48,7 +48,6 @@ class CaptureButton(discord.ui.Button):
                 ),
                 ephemeral=True,
             )
-
             return
 
         trainer = await self._core.profile_service.get_selected_trainer(
@@ -59,18 +58,7 @@ class CaptureButton(discord.ui.Button):
             result.creature,
         )
 
-        print("=" * 60)
-        print("Species:", result.creature.species.name)
-        print("Species ID:", result.creature.species.id)
-        print("PokéAPI ID:", result.creature.species.pokeapi_id)
-        print("Current Form:", result.creature.current_form)
-
-        if result.creature.current_form is not None:
-            print("Variant Name:", result.creature.current_form.name)
-
-        print("Shiny:", result.creature.is_shiny)
-        print("Sprite Path:", sprite_path)
-        print("=" * 60)
+        start = perf_counter()
 
         animation = CaptureAnimation(
             sprite_path=sprite_path,
@@ -81,9 +69,15 @@ class CaptureButton(discord.ui.Button):
             tipo=result.creature.species.types[0],
         )
 
+        print(f"[PERF] Create CaptureAnimation: " f"{perf_counter() - start:.3f}s")
+
+        start = perf_counter()
+
         gif = await asyncio.to_thread(
             animation.gif_bytes,
         )
+
+        print(f"[PERF] Generate GIF: " f"{perf_counter() - start:.3f}s")
 
         rewards = "\n".join(
             f"🍬 {candy_type.value.title()}: +{amount}"

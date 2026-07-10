@@ -120,6 +120,8 @@ def cargar_sprite(ruta):
 
 def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
+    from time import perf_counter
+
     if str(ruta).startswith("http"):
 
         from urllib.error import HTTPError
@@ -129,9 +131,18 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
             req = Request(ruta, headers={"User-Agent": "Mozilla/5.0"})
 
-            with urlopen(req) as response:
+            start = perf_counter()
 
-                gif = Image.open(BytesIO(response.read()))
+            with urlopen(req) as response:
+                data = response.read()
+
+            print(f"[PERF] Download GIF: {perf_counter() - start:.3f}s")
+
+            start = perf_counter()
+
+            gif = Image.open(BytesIO(data))
+
+            print(f"[PERF] Decode GIF: {perf_counter() - start:.3f}s")
 
         except HTTPError as e:
 
@@ -142,9 +153,18 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
             req = Request(ruta, headers={"User-Agent": "Mozilla/5.0"})
 
-            with urlopen(req) as response:
+            start = perf_counter()
 
-                gif = Image.open(BytesIO(response.read()))
+            with urlopen(req) as response:
+                data = response.read()
+
+            print(f"[PERF] Download GIF (fallback): {perf_counter() - start:.3f}s")
+
+            start = perf_counter()
+
+            gif = Image.open(BytesIO(data))
+
+            print(f"[PERF] Decode GIF (fallback): {perf_counter() - start:.3f}s")
 
     else:
 
@@ -153,10 +173,16 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
         if not ruta.exists():
             raise FileNotFoundError(ruta)
 
+        start = perf_counter()
+
         gif = Image.open(ruta)
+
+        print(f"[PERF] Open Local GIF: {perf_counter() - start:.3f}s")
 
     frames = []
     duraciones = []
+
+    start = perf_counter()
 
     for frame in ImageSequence.Iterator(gif):
 
@@ -171,11 +197,12 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
         duracion = frame.info.get("duration", 80)
 
-        # Algunos GIF tienen duración 0 ms
         if not duracion or duracion <= 0:
             duracion = 80
 
         duraciones.append(duracion)
+
+    print(f"[PERF] Extract Frames: {perf_counter() - start:.3f}s")
 
     return frames, duraciones
 

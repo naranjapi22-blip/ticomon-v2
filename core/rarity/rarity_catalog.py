@@ -39,13 +39,13 @@ RARITY_CONFIG = {
         capture_cap=0.45,
     ),
     Rarity.LEGENDARY: RarityConfig(
-        spawn_weight=0.8,
+        spawn_weight=0.10,
         base_capture=0.002,
         fatigue_bonus=0.002,
         capture_cap=0.30,
     ),
     Rarity.MYTHICAL: RarityConfig(
-        spawn_weight=0.2,
+        spawn_weight=0.08,
         base_capture=0.005,
         fatigue_bonus=0.003,
         capture_cap=0.30,
