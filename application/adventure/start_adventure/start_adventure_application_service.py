@@ -45,7 +45,8 @@ class StartAdventureApplicationService:
             opportunity=opportunity,
         )
 
-        await self._creature_repository.save(
+        # ← Guardar y recuperar la criatura persistida
+        creature = await self._creature_repository.save(
             creature,
         )
 

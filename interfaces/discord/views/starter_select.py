@@ -29,13 +29,11 @@ class StarterSelect(discord.ui.Select):
         self,
         interaction: discord.Interaction,
     ):
-        view = self.view
-
         species_id = int(
             self.values[0],
         )
 
-        await view.choose_starter(
+        await self.view.select_starter(
             interaction,
             species_id,
         )

@@ -60,6 +60,11 @@ class NeonTrainerRepository(TrainerRepository):
         trainer: Trainer,
     ) -> None:
 
+        print("TRAINER:", trainer)
+        print("STARTED_AT:", trainer.started_at)
+        print("TZINFO:", trainer.started_at.tzinfo)
+        print("TYPE:", type(trainer.started_at))
+
         pool = await get_pool()
 
         async with pool.acquire() as connection:
@@ -75,5 +80,5 @@ class NeonTrainerRepository(TrainerRepository):
                 """,
                 trainer.trainer_id,
                 trainer.starter_creature_id,
-                trainer.started_at,
+                trainer.started_at.replace(tzinfo=None),
             )

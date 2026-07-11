@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from application.adventure.start_adventure.start_adventure_application_service import (
+    StartAdventureApplicationService,
+)
 from application.creature.creature_info_service import (
     CreatureInfoService,
 )
@@ -91,6 +94,7 @@ class CoreServices:
     creature_info_service: CreatureInfoService
     species_info_service: SpeciesInfoService
     pokedex_service: PokedexService
+    start_adventure_application: StartAdventureApplicationService
 
 
 def build_core(
@@ -198,7 +202,11 @@ def build_core(
         species_repository=species_repository,
         creature_repository=creature_repository,
     )
-
+    start_adventure_application = StartAdventureApplicationService(
+        species_repository=species_repository,
+        creature_repository=creature_repository,
+        trainer_repository=trainer_repository,
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
@@ -217,4 +225,5 @@ def build_core(
         creature_info_service=creature_info_service,
         species_info_service=species_info_service,
         pokedex_service=pokedex_service,
+        start_adventure_application=start_adventure_application,
     )

@@ -10,8 +10,11 @@ class TrainerFactory:
         trainer_id: int,
         starter_creature_id: int,
     ) -> Trainer:
+
+        started_at = datetime.now(UTC)
+
         return Trainer(
             trainer_id=trainer_id,
             starter_creature_id=starter_creature_id,
-            started_at=datetime.now(UTC),
+            started_at=started_at,
         )
