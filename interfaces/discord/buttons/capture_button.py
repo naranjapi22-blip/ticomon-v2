@@ -1,5 +1,6 @@
 import asyncio
-from time import perf_counter
+import math
+from time import monotonic, perf_counter
 
 import discord
 
@@ -9,6 +10,9 @@ from rendering.sprites import get_capture_sprite
 
 
 class CaptureButton(discord.ui.Button):
+    COOLDOWN_SECONDS = 10
+    _last_attempt: dict[int, float] = {}
+
     def __init__(self, core):
         super().__init__(
             label="🎯 Capture",
@@ -23,6 +27,23 @@ class CaptureButton(discord.ui.Button):
     ):
         await interaction.response.defer()
 
+        now = monotonic()
+
+        last_attempt = self._last_attempt.get(interaction.user.id)
+
+        if last_attempt is not None:
+            remaining = self.COOLDOWN_SECONDS - (now - last_attempt)
+
+            if remaining > 1:
+                await interaction.followup.send(
+                    (
+                        f"⏳ Please wait "
+                        f"{math.ceil(remaining)} seconds before trying again."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
         try:
             result = await self._core.capture_application.capture(
                 trainer_id=interaction.user.id,
@@ -34,6 +55,9 @@ class CaptureButton(discord.ui.Button):
                 ephemeral=True,
             )
             return
+
+        # El intento fue válido, inicia el cooldown.
+        self._last_attempt[interaction.user.id] = monotonic()
 
         ball_name = result.attempt.capture_ball.name.replace(
             "_",
