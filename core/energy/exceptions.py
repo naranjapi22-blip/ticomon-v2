@@ -1,0 +1,2 @@
+class NotEnoughEnergyException(Exception):
+    pass

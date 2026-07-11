@@ -5,6 +5,7 @@ from application.adventure.start_adventure.start_adventure_result import (
     StartAdventureResult,
 )
 from core.creature.creature_factory import CreatureFactory
+from core.energy.trainer_energy_factory import TrainerEnergyFactory
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.trainer.trainer_factory import TrainerFactory
 
@@ -16,10 +17,12 @@ class StartAdventureApplicationService:
         species_repository,
         creature_repository,
         trainer_repository,
+        energy_repository,
     ):
         self._species_repository = species_repository
         self._creature_repository = creature_repository
         self._trainer_repository = trainer_repository
+        self._energy_repository = energy_repository
 
     async def start(
         self,
@@ -58,7 +61,13 @@ class StartAdventureApplicationService:
         await self._trainer_repository.save(
             trainer,
         )
+        trainer_energy = TrainerEnergyFactory.create(
+            trainer_id=trainer.trainer_id,
+        )
 
+        await self._energy_repository.save(
+            trainer_energy,
+        )
         return StartAdventureResult(
             trainer=trainer,
             starter=creature,

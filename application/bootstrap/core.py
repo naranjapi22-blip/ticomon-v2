@@ -29,6 +29,7 @@ from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
 )
 from core.capture.service import CaptureService
+from core.energy.service import EnergyService
 from core.evolution.evolution_cost_policy import (
     EvolutionCostPolicy,
 )
@@ -60,6 +61,9 @@ from infrastructure.persistence.repositories.neon_creature_repository import (
 )
 from infrastructure.persistence.repositories.neon_profile_repository import (
     NeonProfileRepository,
+)
+from infrastructure.postgres.energy.neon_energy_repository import (
+    NeonEnergyRepository,
 )
 from infrastructure.postgres.trainer.neon_trainer_repository import (
     NeonTrainerRepository,
@@ -95,6 +99,7 @@ class CoreServices:
     species_info_service: SpeciesInfoService
     pokedex_service: PokedexService
     start_adventure_application: StartAdventureApplicationService
+    energy_service: EnergyService
 
 
 def build_core(
@@ -109,6 +114,12 @@ def build_core(
     species_repository = NeonSpeciesRepository()
 
     trainer_repository = NeonTrainerRepository()
+
+    energy_repository = NeonEnergyRepository()
+
+    energy_service = EnergyService(
+        repository=energy_repository,
+    )
 
     creature_repository = NeonCreatureRepository(
         species_repository=species_repository,
@@ -206,6 +217,7 @@ def build_core(
         species_repository=species_repository,
         creature_repository=creature_repository,
         trainer_repository=trainer_repository,
+        energy_repository=energy_repository,
     )
     return CoreServices(
         species_repository=species_repository,
@@ -226,4 +238,5 @@ def build_core(
         species_info_service=species_info_service,
         pokedex_service=pokedex_service,
         start_adventure_application=start_adventure_application,
+        energy_service=energy_service,
     )

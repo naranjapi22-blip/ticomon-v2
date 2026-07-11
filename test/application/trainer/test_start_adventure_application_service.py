@@ -9,6 +9,9 @@ from application.adventure.start_adventure.start_adventure_application_service i
 from core.trainer.trainer_factory import TrainerFactory
 from test.builders.species_builder import SpeciesBuilder
 from test.fakes.fake_creature_repository import FakeCreatureRepository
+from test.fakes.fake_energy_repository import (
+    FakeEnergyRepository,
+)
 from test.fakes.fake_species_repository import FakeSpeciesRepository
 from test.fakes.fake_trainer_repository import FakeTrainerRepository
 
@@ -26,10 +29,13 @@ async def test_start_adventure_creates_trainer_and_starter():
 
     trainer_repository = FakeTrainerRepository()
 
+    energy_repository = FakeEnergyRepository()
+
     service = StartAdventureApplicationService(
         species_repository=species_repository,
         creature_repository=creature_repository,
         trainer_repository=trainer_repository,
+        energy_repository=energy_repository,
     )
 
     result = await service.start(
@@ -46,6 +52,12 @@ async def test_start_adventure_creates_trainer_and_starter():
 
     assert result.starter in creature_repository.saved
 
+    energy = await energy_repository.get(1)
+
+    assert energy is not None
+    assert energy.current_energy == 12
+    assert energy.max_energy == 12
+
 
 @pytest.mark.asyncio
 async def test_start_adventure_raises_when_trainer_already_exists():
@@ -60,6 +72,8 @@ async def test_start_adventure_raises_when_trainer_already_exists():
 
     trainer_repository = FakeTrainerRepository()
 
+    energy_repository = FakeEnergyRepository()
+
     trainer = TrainerFactory.create(
         trainer_id=1,
         starter_creature_id=100,
@@ -73,6 +87,7 @@ async def test_start_adventure_raises_when_trainer_already_exists():
         species_repository=species_repository,
         creature_repository=creature_repository,
         trainer_repository=trainer_repository,
+        energy_repository=energy_repository,
     )
 
     with pytest.raises(

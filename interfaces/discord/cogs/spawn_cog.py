@@ -1,6 +1,9 @@
 import discord
 from discord.ext import commands
 
+from core.energy.exceptions import (
+    NotEnoughEnergyException,
+)
 from core.spawn.application.spawn_application_service import (
     SpawnAlreadyActive,
 )
@@ -36,11 +39,23 @@ class SpawnCog(commands.Cog):
             view.message = message
 
             return
+
         try:
+            await self._core.energy_service.consume(
+                ctx.author.id,
+            )
+
             session = await self._core.spawn_application.spawn(
                 guild_id=ctx.guild.id,
                 owner_id=ctx.author.id,
             )
+
+        except NotEnoughEnergyException:
+            await ctx.send(
+                "You don't have enough energy.",
+            )
+            return
+
         except SpawnAlreadyActive:
             await ctx.send(
                 "Ya existe un !spawn activo en este servidor.",
