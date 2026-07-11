@@ -4,6 +4,7 @@ from discord.ext import commands
 from interfaces.discord.bootstrap import build_discord
 from interfaces.discord.cogs.candy_cog import CandyCog
 from interfaces.discord.cogs.capture_cog import CaptureCog
+from interfaces.discord.cogs.energy_cog import EnergyCog
 from interfaces.discord.cogs.evolution_cog import EvolutionCog
 from interfaces.discord.cogs.info import InfoCog
 from interfaces.discord.cogs.ivs_cog import IVsCog
@@ -29,6 +30,7 @@ class TicoMonBot(commands.Bot):
 
     async def setup_hook(self):
         await self.add_cog(SpawnCog(self.core))
+        await self.add_cog(EnergyCog(self.core))
         await self.add_cog(SelectCog(self.core))
         await self.add_cog(CaptureCog(self.core))
         await self.add_cog(ProfileCog(self.core))

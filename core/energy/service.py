@@ -41,3 +41,25 @@ class EnergyService:
         )
 
         energy.last_regenerated_at += timedelta(hours=hours)
+
+    async def get(
+        self,
+        trainer_id: int,
+    ) -> TrainerEnergy:
+
+        energy = await self._repository.get(
+            trainer_id,
+        )
+
+        if energy is None:
+            raise ValueError(f"Trainer {trainer_id} has no energy.")
+
+        self.regenerate(
+            energy,
+        )
+
+        await self._repository.update(
+            energy,
+        )
+
+        return energy
