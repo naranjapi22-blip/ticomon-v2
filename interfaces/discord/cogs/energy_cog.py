@@ -11,17 +11,9 @@ class EnergyCog(commands.Cog):
     @commands.command(name="energy")
     async def energy(self, ctx):
 
-        try:
-            energy = await self._core.energy_service.get(
-                ctx.author.id,
-            )
-
-        except ValueError:
-            await ctx.send(
-                "🌱 You haven't started your adventure yet.\n"
-                "Choose your starter Pokémon to begin your journey."
-            )
-            return
+        energy = await self._core.energy_service.get(
+            ctx.author.id,
+        )
 
         if energy.current_energy >= energy.max_energy:
 
