@@ -64,11 +64,11 @@ class PokedexRenderer:
 
             if entry.discovered:
                 sprite = self.assets.get_sprite(
-                    entry.species.id,
+                    entry.species.pokeapi_id,
                 ).copy()
             else:
                 sprite = self.assets.get_silhouette(
-                    entry.species.id,
+                    entry.species.pokeapi_id,
                 ).copy()
 
             sprite.thumbnail(
