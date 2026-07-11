@@ -1,0 +1,2 @@
+class TrainerAlreadyExistsError(Exception):
+    pass

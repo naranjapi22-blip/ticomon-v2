@@ -27,3 +27,9 @@ class SpeciesRepository(ABC):
         Returns every species belonging to the given spawn rarity.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def get_many(
+        self,
+        species_ids: list[int] | tuple[int, ...],
+    ) -> list[Species]: ...

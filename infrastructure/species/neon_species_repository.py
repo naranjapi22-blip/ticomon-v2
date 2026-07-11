@@ -137,7 +137,9 @@ class NeonSpeciesRepository(SpeciesRepository):
             variants,
         )
 
-    async def get_all(self) -> tuple[Species, ...]:
+    async def get_all(
+        self,
+    ) -> tuple[Species, ...]:
         """
         Returns all registered species ordered by identifier.
         """
@@ -215,3 +217,45 @@ class NeonSpeciesRepository(SpeciesRepository):
                 )
 
         return tuple(species)
+
+    async def get_many(
+        self,
+        species_ids: list[int] | tuple[int, ...],
+    ) -> list[Species]:
+        """
+        Returns all species matching the given identifiers.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            rows = await connection.fetch(
+                """
+                SELECT *
+                FROM species
+                WHERE id = ANY($1::int[])
+                ORDER BY id
+                """,
+                list(species_ids),
+            )
+
+            variants_map = await self._load_all_variants(
+                connection,
+            )
+
+            species = []
+
+            for row in rows:
+
+                species.append(
+                    self._mapper.from_row(
+                        row,
+                        variants_map.get(
+                            row["id"],
+                            (),
+                        ),
+                    )
+                )
+
+        return species

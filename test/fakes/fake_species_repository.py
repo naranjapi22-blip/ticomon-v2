@@ -45,3 +45,9 @@ class FakeSpeciesRepository(SpeciesRepository):
             for species in self._species.values()
             if species.spawn_rarity == rarity
         ]
+
+    async def get_many(
+        self,
+        species_ids: list[int] | tuple[int, ...],
+    ) -> list[Species]:
+        return [self._species[species_id] for species_id in species_ids]

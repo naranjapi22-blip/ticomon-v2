@@ -58,6 +58,9 @@ from infrastructure.persistence.repositories.neon_creature_repository import (
 from infrastructure.persistence.repositories.neon_profile_repository import (
     NeonProfileRepository,
 )
+from infrastructure.postgres.trainer.neon_trainer_repository import (
+    NeonTrainerRepository,
+)
 from infrastructure.spawn.in_memory_spawn_session_repository import (
     InMemorySpawnSessionRepository,
 )
@@ -70,6 +73,7 @@ from infrastructure.species.neon_species_repository import (
 class CoreServices:
     species_repository: NeonSpeciesRepository
     creature_repository: NeonCreatureRepository
+    trainer_repository: NeonTrainerRepository
     candy_repository: NeonCandyRepository
 
     spawn_session_repository: InMemorySpawnSessionRepository
@@ -100,10 +104,11 @@ def build_core(
 
     species_repository = NeonSpeciesRepository()
 
+    trainer_repository = NeonTrainerRepository()
+
     creature_repository = NeonCreatureRepository(
         species_repository=species_repository,
     )
-
     candy_repository = NeonCandyRepository()
     evolution_repository = NeonEvolutionRepository()
     reward_policy = RewardPolicy()
@@ -197,6 +202,7 @@ def build_core(
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
+        trainer_repository=trainer_repository,
         candy_repository=candy_repository,
         spawn_session_repository=spawn_session_repository,
         stat_calculator=stat_calculator,

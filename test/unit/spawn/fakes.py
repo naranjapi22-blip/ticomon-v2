@@ -5,17 +5,42 @@ from core.species.species_repository import SpeciesRepository
 
 
 class FakeSpeciesRepository(SpeciesRepository):
-    def __init__(self, species: tuple[Species, ...]):
+    def __init__(
+        self,
+        species: tuple[Species, ...],
+    ):
         self._species = species
         self.last_requested_rarity = None
 
-    async def get(self, species_id: int) -> Species:
-        raise NotImplementedError
+    async def get(
+        self,
+        species_id: int,
+    ) -> Species:
+        for species in self._species:
+            if species.id == species_id:
+                return species
 
-    async def find_by_name(self, name: str):
-        raise NotImplementedError
+        raise ValueError(f"Species {species_id} not found.")
 
-    async def get_all(self):
+    async def get_many(
+        self,
+        species_ids: list[int] | tuple[int, ...],
+    ) -> list[Species]:
+        return [species for species in self._species if species.id in species_ids]
+
+    async def find_by_name(
+        self,
+        name: str,
+    ) -> Species | None:
+        for species in self._species:
+            if species.name == name:
+                return species
+
+        return None
+
+    async def get_all(
+        self,
+    ) -> tuple[Species, ...]:
         return self._species
 
     async def find_by_spawn_rarity(
@@ -23,6 +48,9 @@ class FakeSpeciesRepository(SpeciesRepository):
         rarity: Rarity,
     ) -> tuple[Species, ...]:
         self.last_requested_rarity = rarity
+
+        # Este fake NO filtra por rareza.
+        # Solo registra cuál rareza fue solicitada.
         return self._species
 
 
