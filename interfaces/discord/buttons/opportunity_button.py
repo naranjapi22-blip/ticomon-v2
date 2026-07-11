@@ -64,11 +64,13 @@ class OpportunityButton(discord.ui.Button):
             url=gif_url,
         )
 
+        view = CaptureView(self._core)
+
         await interaction.response.edit_message(
             content=None,
             embed=embed,
             attachments=[],
-            view=CaptureView(
-                self._core,
-            ),
+            view=view,
         )
+
+        view.message = await interaction.original_response()

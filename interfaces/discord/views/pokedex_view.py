@@ -191,6 +191,9 @@ class PokedexView(discord.ui.View):
             child.disabled = True
 
         if self.message is not None:
-            await self.message.edit(
-                view=self,
-            )
+            try:
+                await self.message.edit(
+                    view=self,
+                )
+            except discord.HTTPException:
+                pass

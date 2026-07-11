@@ -20,8 +20,12 @@ class CommandsCog(commands.Cog):
         embed.add_field(
             name="📖 Collection",
             value=(
-                "`!pokedex` — View your Pokédex progress.\n"
-                "`!info <pokemon>` — View Pokémon information.\n"
+                "`!pokedex` — View your Pokédex.\n"
+                "`!pokedex caught|missing`\n"
+                "`!pokedex type <type>`\n"
+                "`!pokedex gen <generation>`\n"
+                "`!pokedex legendary|mythical`\n"
+                "`!info <pokemon>` — Pokémon information.\n"
                 "`!ivs [pokemon]` — View your Pokémon IVs.\n"
                 "`!duplicates [pokemon/type]` — Find duplicate Pokémon."
             ),
