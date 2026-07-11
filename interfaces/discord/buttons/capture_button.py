@@ -88,6 +88,7 @@ class CaptureButton(discord.ui.Button):
             content=(
                 f"🎉 {interaction.user.mention} caught "
                 f"{result.creature.species.name.title()} "
+                f"(#{result.creature.collection_number}) "
                 f"using a {ball_name}!\n"
                 f"🎯 Capture Chance: {result.attempt.chance * 100:.2f}%\n\n"
                 f"{rewards}"
