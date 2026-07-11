@@ -92,6 +92,20 @@ class CreatureRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_duplicate_species(
+        self,
+        trainer_id: int,
+    ) -> list[tuple[int, int]]:
+        """
+        Returns species ids with more than one owned creature.
+
+        Returns:
+            List of tuples:
+            (species_id, amount)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_discovered_species(
         self,
         trainer_id: int,

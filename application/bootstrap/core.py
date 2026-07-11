@@ -6,6 +6,9 @@ from application.adventure.start_adventure.start_adventure_application_service i
 from application.creature.creature_info_service import (
     CreatureInfoService,
 )
+from application.duplicates.duplicate_application_service import (
+    DuplicateApplicationService,
+)
 from application.evolution.evolution_application_service import (
     EvolutionApplicationService,
 )
@@ -94,6 +97,7 @@ class CoreServices:
     evolution_application: EvolutionApplicationService
     release_application: ReleaseApplicationService
     preview_release_application: PreviewReleaseApplicationService
+    duplicate_application: DuplicateApplicationService
     profile_service: ProfileService
     creature_info_service: CreatureInfoService
     species_info_service: SpeciesInfoService
@@ -180,6 +184,10 @@ def build_core(
         candy_repository=candy_repository,
         reward_policy=reward_policy,
     )
+    duplicate_application = DuplicateApplicationService(
+        creature_repository=creature_repository,
+        species_repository=species_repository,
+    )
     profile_service = ProfileService(
         creature_repository=creature_repository,
         profile_repository=profile_repository,
@@ -233,6 +241,7 @@ def build_core(
         evolution_application=evolution_application,
         release_application=release_application,
         preview_release_application=preview_release_application,
+        duplicate_application=duplicate_application,
         profile_service=profile_service,
         creature_info_service=creature_info_service,
         species_info_service=species_info_service,

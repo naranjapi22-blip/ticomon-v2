@@ -136,3 +136,9 @@ class FakeCreatureRepository(CreatureRepository):
             )
 
         self.deleted.append(creature)
+
+    async def get_duplicate_species(
+        self,
+        trainer_id: int,
+    ) -> list[tuple[int, int]]:
+        return []

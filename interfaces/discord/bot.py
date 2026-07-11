@@ -4,6 +4,7 @@ from discord.ext import commands
 from interfaces.discord.bootstrap import build_discord
 from interfaces.discord.cogs.candy_cog import CandyCog
 from interfaces.discord.cogs.capture_cog import CaptureCog
+from interfaces.discord.cogs.duplicates_cog import DuplicatesCog
 from interfaces.discord.cogs.energy_cog import EnergyCog
 from interfaces.discord.cogs.evolution_cog import EvolutionCog
 from interfaces.discord.cogs.info import InfoCog
@@ -41,6 +42,7 @@ class TicoMonBot(commands.Bot):
         await self.add_cog(EvolutionCog(self.core))
         await self.add_cog(CandyCog(self.core))
         await self.add_cog(ReleaseCog(self.core))
+        await self.add_cog(DuplicatesCog(self.core))
 
 
 def create_bot() -> TicoMonBot:

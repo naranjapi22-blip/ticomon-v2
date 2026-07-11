@@ -302,6 +302,40 @@ class NeonCreatureRepository(CreatureRepository):
 
         return creatures
 
+    async def get_duplicate_species(
+        self,
+        trainer_id: int,
+    ) -> list[tuple[int, int]]:
+        """
+        Returns species ids with more than one owned creature.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            rows = await connection.fetch(
+                """
+                SELECT
+                    species_id,
+                    COUNT(*) AS amount
+                FROM creatures
+                WHERE trainer_id = $1
+                GROUP BY species_id
+                HAVING COUNT(*) > 1
+                ORDER BY amount DESC
+                """,
+                trainer_id,
+            )
+
+        return [
+            (
+                row["species_id"],
+                row["amount"],
+            )
+            for row in rows
+        ]
+
     async def get_discovered_species(
         self,
         trainer_id: int,

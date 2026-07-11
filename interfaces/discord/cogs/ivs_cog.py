@@ -74,6 +74,7 @@ class IVsCog(commands.Cog):
                 "📝 **Details**",
                 "━━━━━━━━━━━━━━━━━━━━",
                 f"🆔 **Collection:** #{creature.collection_number}",
+                f"📊 **IV Total:** {creature.iv_percentage}%",
                 f"📏 **Size:** {creature.size}",
                 f"🍃 **Nature:** {creature.nature}",
                 f"✨ **Shiny:** {'Yes' if creature.is_shiny else 'No'}",
