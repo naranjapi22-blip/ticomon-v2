@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 
 from core.spawn.session import SpawnSession
@@ -34,4 +35,13 @@ class SpawnSessionRepository(ABC):
     ) -> None:
         """
         Removes the active spawn session for a guild.
+        """
+
+    @abstractmethod
+    def lock(
+        self,
+        guild_id: int,
+    ) -> asyncio.Lock:
+        """
+        Returns the lock protecting the guild spawn session.
         """

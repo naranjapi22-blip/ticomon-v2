@@ -1,3 +1,5 @@
+import asyncio
+
 from core.spawn.session import SpawnSession
 from core.spawn.spawn_session_repository import (
     SpawnSessionRepository,
@@ -13,6 +15,7 @@ class InMemorySpawnSessionRepository(
 
     def __init__(self) -> None:
         self._sessions: dict[int, SpawnSession] = {}
+        self._locks: dict[int, asyncio.Lock] = {}
 
     async def save(
         self,
@@ -32,3 +35,12 @@ class InMemorySpawnSessionRepository(
         guild_id: int,
     ) -> None:
         self._sessions.pop(guild_id, None)
+
+    def lock(
+        self,
+        guild_id: int,
+    ) -> asyncio.Lock:
+        return self._locks.setdefault(
+            guild_id,
+            asyncio.Lock(),
+        )

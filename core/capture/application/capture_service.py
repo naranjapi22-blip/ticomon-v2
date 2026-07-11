@@ -37,59 +37,62 @@ class CaptureApplicationService:
         trainer_id: int,
         guild_id: int,
     ) -> CaptureApplicationResult:
-        session = await self._spawn_session_repository.get_active(
-            guild_id,
-        )
 
-        if session is None:
-            raise NoActiveSpawnSession()
+        async with self._spawn_session_repository.lock(guild_id):
 
-        if session.selected_opportunity is None:
-            raise NoSelectedOpportunity()
-
-        result = self._capture_service.capture(
-            trainer_id=trainer_id,
-            opportunity=session.selected_opportunity,
-        )
-
-        if not result.success:
-            return CaptureApplicationResult(
-                attempt=result.attempt,
-                success=False,
-                creature=None,
-                reward=CandyBundle(),
+            session = await self._spawn_session_repository.get_active(
+                guild_id,
             )
 
-        assert result.creature is not None
+            if session is None:
+                raise NoActiveSpawnSession()
 
-        creature = await self._creature_repository.save(
-            result.creature,
-        )
+            if session.selected_opportunity is None:
+                raise NoSelectedOpportunity()
 
-        reward = self._reward_policy.reward_for(
-            creature,
-        )
+            result = self._capture_service.capture(
+                trainer_id=trainer_id,
+                opportunity=session.selected_opportunity,
+            )
 
-        inventory = await self._candy_repository.get(
-            trainer_id,
-        )
+            if not result.success:
+                return CaptureApplicationResult(
+                    attempt=result.attempt,
+                    success=False,
+                    creature=None,
+                    reward=CandyBundle(),
+                )
 
-        inventory.add(
-            reward,
-        )
+            assert result.creature is not None
 
-        await self._candy_repository.save(
-            trainer_id,
-            inventory,
-        )
+            creature = await self._creature_repository.save(
+                result.creature,
+            )
 
-        await self._spawn_session_repository.clear(
-            guild_id,
-        )
+            reward = self._reward_policy.reward_for(
+                creature,
+            )
 
-        return CaptureApplicationResult(
-            attempt=result.attempt,
-            success=True,
-            creature=creature,
-            reward=reward,
-        )
+            inventory = await self._candy_repository.get(
+                trainer_id,
+            )
+
+            inventory.add(
+                reward,
+            )
+
+            await self._candy_repository.save(
+                trainer_id,
+                inventory,
+            )
+
+            await self._spawn_session_repository.clear(
+                guild_id,
+            )
+
+            return CaptureApplicationResult(
+                attempt=result.attempt,
+                success=True,
+                creature=creature,
+                reward=reward,
+            )
