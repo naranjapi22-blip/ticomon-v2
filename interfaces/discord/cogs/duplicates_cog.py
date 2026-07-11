@@ -2,6 +2,27 @@ from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
 
+POKEMON_TYPES = {
+    "normal",
+    "fire",
+    "water",
+    "electric",
+    "grass",
+    "ice",
+    "fighting",
+    "poison",
+    "ground",
+    "flying",
+    "psychic",
+    "bug",
+    "rock",
+    "ghost",
+    "dragon",
+    "dark",
+    "steel",
+    "fairy",
+}
+
 
 class DuplicatesCog(commands.Cog):
 
@@ -20,7 +41,32 @@ class DuplicatesCog(commands.Cog):
         *,
         filtro: str | None = None,
     ):
+
         if filtro:
+
+            if filtro.lower() in POKEMON_TYPES:
+
+                duplicates = (
+                    await self.core.duplicate_application.get_duplicates_by_type(
+                        trainer_id=ctx.author.id,
+                        pokemon_type=filtro,
+                    )
+                )
+
+                if not duplicates:
+                    await ctx.send(
+                        (f"🎉 You don't have duplicate " f"{filtro.title()} Pokémon.")
+                    )
+                    return
+
+                lines = "\n".join(
+                    (f"• {duplicate.species_name.title()} " f"×{duplicate.amount}")
+                    for duplicate in duplicates
+                )
+
+                await ctx.send((f"## 📦 {filtro.title()} Duplicates\n\n" f"{lines}"))
+
+                return
 
             try:
                 species_info = await self.core.species_info_service.get_species_info(
@@ -59,6 +105,7 @@ class DuplicatesCog(commands.Cog):
                     f"{lines}"
                 )
             )
+
             return
 
         duplicates = await self.core.duplicate_application.get_duplicates(
@@ -70,7 +117,7 @@ class DuplicatesCog(commands.Cog):
             return
 
         lines = "\n".join(
-            f"• {duplicate.species_name.title()} ×{duplicate.amount}"
+            (f"• {duplicate.species_name.title()} " f"×{duplicate.amount}")
             for duplicate in duplicates
         )
 

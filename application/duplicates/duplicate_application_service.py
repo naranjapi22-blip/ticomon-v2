@@ -41,3 +41,28 @@ class DuplicateApplicationService:
             )
 
         return results
+
+    async def get_duplicates_by_type(
+        self,
+        trainer_id: int,
+        pokemon_type: str,
+    ) -> list[DuplicateSpeciesResult]:
+
+        duplicates = await self.get_duplicates(
+            trainer_id,
+        )
+
+        results = []
+
+        for duplicate in duplicates:
+
+            species = await self._species_repository.get(
+                duplicate.species_id,
+            )
+
+            if pokemon_type.lower() in [
+                species_type.lower() for species_type in species.types
+            ]:
+                results.append(duplicate)
+
+        return results
