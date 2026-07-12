@@ -899,5 +899,3 @@ if __name__ == "__main__":
     anim.render()
 
     anim.save_gif()
-
-    print("✅ GIF generado correctamente.")

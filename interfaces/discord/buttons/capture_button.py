@@ -1,6 +1,6 @@
 import asyncio
 import math
-from time import monotonic, perf_counter
+from time import monotonic
 
 import discord
 
@@ -82,8 +82,6 @@ class CaptureButton(discord.ui.Button):
             result.creature,
         )
 
-        start = perf_counter()
-
         animation = CaptureAnimation(
             sprite_path=sprite_path,
             pokemon_name=result.creature.species.name,
@@ -93,15 +91,9 @@ class CaptureButton(discord.ui.Button):
             tipo=result.creature.species.types[0],
         )
 
-        print(f"[PERF] Create CaptureAnimation: " f"{perf_counter() - start:.3f}s")
-
-        start = perf_counter()
-
         gif = await asyncio.to_thread(
             animation.gif_bytes,
         )
-
-        print(f"[PERF] Generate GIF: " f"{perf_counter() - start:.3f}s")
 
         rewards = "\n".join(
             f"🍬 {candy_type.value.title()}: +{amount}"

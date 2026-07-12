@@ -38,16 +38,8 @@ async def main():
         if opportunity.is_shiny:
             shiny_count += 1
 
-    print("=" * 70)
-    print(f"Generated opportunities : {len(opportunities)}")
-    print(f"Unique species          : {len(species_counter)}")
-    print(f"Shiny count             : {shiny_count}")
-    print("=" * 70)
-
-    print("\nTop 25 most generated species:\n")
-
-    for species, count in species_counter.most_common(25):
-        print(f"{species:<30} {count:>4}")
+    assert len(opportunities) > 0
+    assert len(species_counter) > 0
 
 
 if __name__ == "__main__":
