@@ -1,9 +1,16 @@
+import logging
+
 import discord
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
 from core.creature.stat import Stat
-from interfaces.discord.images import get_creature_gif
+from interfaces.discord.images import (
+    download_gif_file,
+    get_creature_gif,
+)
+
+logger = logging.getLogger(__name__)
 
 STAT_LABELS = {
     Stat.HP: ("❤️", "HP"),
@@ -83,6 +90,25 @@ class IVsCog(commands.Cog):
 
         embed.description = "\n".join(lines)
 
-        embed.set_image(url=get_creature_gif(creature))
+        gif_url = get_creature_gif(creature)
 
-        await ctx.send(embed=embed)
+        try:
+            gif_file = await download_gif_file(
+                gif_url,
+                "ivs.gif",
+            )
+        except Exception:
+            logger.warning(
+                "Unable to attach creature GIF command=%s species=%s",
+                "ivs",
+                creature.species.name,
+            )
+            await ctx.send(embed=embed)
+            return
+
+        embed.set_image(url="attachment://ivs.gif")
+
+        await ctx.send(
+            embed=embed,
+            file=gif_file,
+        )

@@ -1,9 +1,16 @@
+import logging
+
 import discord
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
 from core.creature.stat import Stat
-from interfaces.discord.images import get_species_gif
+from interfaces.discord.images import (
+    download_gif_file,
+    get_species_gif,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class InfoCog(commands.Cog):
@@ -37,11 +44,9 @@ class InfoCog(commands.Cog):
             color=discord.Color.green(),
         )
 
-        embed.set_image(
-            url=get_species_gif(
-                species_id=species.pokeapi_id,
-                shiny=False,
-            )
+        gif_url = get_species_gif(
+            species_id=species.pokeapi_id,
+            shiny=False,
         )
 
         types = " / ".join(pokemon_type.title() for pokemon_type in species.types)
@@ -84,4 +89,25 @@ class InfoCog(commands.Cog):
             inline=False,
         )
 
-        await ctx.send(embed=embed)
+        try:
+            gif_file = await download_gif_file(
+                gif_url,
+                "species.gif",
+            )
+        except Exception:
+            logger.warning(
+                "Unable to attach species GIF command=%s species=%s",
+                "info",
+                species.name,
+            )
+            await ctx.send(embed=embed)
+            return
+
+        embed.set_image(
+            url="attachment://species.gif",
+        )
+
+        await ctx.send(
+            embed=embed,
+            file=gif_file,
+        )

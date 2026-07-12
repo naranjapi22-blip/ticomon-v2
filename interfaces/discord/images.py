@@ -1,3 +1,9 @@
+import asyncio
+from io import BytesIO
+
+import discord
+import requests
+
 from core.creature.creature import Creature
 from interfaces.discord.mapeo_pokes import obtener_id_gif
 
@@ -55,4 +61,32 @@ def get_opportunity_gif(opportunity) -> str:
     return get_species_gif(
         species_id=opportunity.species.pokeapi_id,
         shiny=opportunity.is_shiny,
+    )
+
+
+def _download_bytes(url: str) -> bytes:
+    with requests.get(
+        url,
+        timeout=10,
+        stream=True,
+    ) as response:
+        response.raise_for_status()
+        return response.content
+
+
+async def download_gif_file(
+    url: str,
+    filename: str,
+) -> discord.File:
+    data = await asyncio.to_thread(
+        _download_bytes,
+        url,
+    )
+
+    buffer = BytesIO(data)
+    buffer.seek(0)
+
+    return discord.File(
+        buffer,
+        filename=filename,
     )

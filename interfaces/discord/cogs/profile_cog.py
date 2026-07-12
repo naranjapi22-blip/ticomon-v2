@@ -1,8 +1,15 @@
+import logging
+
 import discord
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
-from interfaces.discord.images import get_creature_gif
+from interfaces.discord.images import (
+    download_gif_file,
+    get_creature_gif,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileCog(commands.Cog):
@@ -71,14 +78,34 @@ class ProfileCog(commands.Cog):
                 inline=False,
             )
 
-            embed.set_image(
-                url=get_creature_gif(
-                    profile.featured_creature,
-                )
-            )
-
             if profile.featured_creature.is_shiny:
                 embed.color = discord.Color.gold()
+
+            gif_url = get_creature_gif(
+                profile.featured_creature,
+            )
+
+            try:
+                gif_file = await download_gif_file(
+                    gif_url,
+                    "profile.gif",
+                )
+            except Exception:
+                logger.warning(
+                    "Unable to attach creature GIF command=%s species=%s",
+                    "profile",
+                    profile.featured_creature.species.name,
+                )
+            else:
+                embed.set_image(
+                    url="attachment://profile.gif",
+                )
+
+                await ctx.send(
+                    embed=embed,
+                    file=gif_file,
+                )
+                return
 
         await ctx.send(embed=embed)
 
