@@ -80,7 +80,7 @@ class TradeDisplayService:
             trainer_id=trainer_id,
             creature=TradeCreatureDisplay(
                 creature_id=creature.id,
-                trainer_id=creature.trainer_id,
+                trainer_id=trainer_id,
                 species_name=creature.species.name.title(),
                 collection_number=creature.collection_number,
                 iv_percentage=creature.iv_percentage,

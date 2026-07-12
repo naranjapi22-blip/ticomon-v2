@@ -73,6 +73,40 @@ def make_trade_display(*, status: TradeStatus = TradeStatus.OPEN) -> TradeDispla
     )
 
 
+def make_completed_trade_display() -> TradeDisplay:
+    created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    return TradeDisplay(
+        trade_id=42,
+        initiator_trainer_id=101,
+        counterparty_trainer_id=202,
+        initiator_offer=TradeOfferDisplay(
+            trainer_id=101,
+            creature=_creature(
+                creature_id=11,
+                trainer_id=101,
+                species_name="Woobat",
+                collection_number=14,
+            ),
+            accepted_at=created_at,
+        ),
+        counterparty_offer=TradeOfferDisplay(
+            trainer_id=202,
+            creature=_creature(
+                creature_id=33,
+                trainer_id=202,
+                species_name="Minun",
+                collection_number=7,
+                current_form_name="Rockstar",
+            ),
+            accepted_at=created_at,
+        ),
+        status=TradeStatus.COMPLETED,
+        completed_at=created_at,
+        cancelled_by_trainer_id=None,
+        rejected_by_trainer_id=None,
+    )
+
+
 @pytest.mark.asyncio
 async def test_trade_view_renders_current_offers() -> None:
     view = TradeView(
@@ -107,6 +141,26 @@ async def test_trade_view_renders_current_offers() -> None:
     assert view.children[1].row == 0
     assert view.children[2].row == 1
     assert view.children[3].row == 1
+
+
+@pytest.mark.asyncio
+async def test_trade_view_renders_completed_trade_with_historical_offers() -> None:
+    view = TradeView(
+        SimpleNamespace(
+            trade_display_service=AsyncMock(),
+        ),
+        make_completed_trade_display(),
+    )
+
+    embed = view.build_embed()
+
+    assert embed.fields[3].value.startswith("**Woobat**")
+    assert "Offered by: <@101>" in embed.fields[3].value
+    assert "#14" in embed.fields[3].value
+    assert embed.fields[4].value.startswith("**Minun**")
+    assert "Offered by: <@202>" in embed.fields[4].value
+    assert "#7" in embed.fields[4].value
+    assert embed.fields[5].name == "Completed At"
 
 
 @pytest.mark.asyncio

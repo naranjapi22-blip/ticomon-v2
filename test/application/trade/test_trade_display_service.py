@@ -106,6 +106,59 @@ async def test_get_trade_display_builds_creature_details() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_completed_trade_display_keeps_historical_offer_owners() -> None:
+    initiator_creature = _make_creature(
+        creature_id=11,
+        trainer_id=202,
+        collection_number=14,
+        species_name="woobat",
+    )
+    counterparty_creature = _make_creature(
+        creature_id=22,
+        trainer_id=101,
+        collection_number=7,
+        species_name="minun",
+        current_form_name="Rockstar",
+    )
+    creature_repository = FakeCreatureRepository(
+        initiator_creature,
+        counterparty_creature,
+    )
+    trade_repository = FakeTradeRepository(creature_repository)
+    trade = await trade_repository.save(
+        Trade._reconstitute(
+            trade_id=42,
+            initiator_trainer_id=101,
+            counterparty_trainer_id=202,
+            initiator_offer=TradeOffer.create(101, 11),
+            counterparty_offer=TradeOffer.create(202, 22),
+            created_at=NOW,
+            expires_at=None,
+            status=TradeStatus.COMPLETED,
+            initiator_accepted_at=NOW,
+            counterparty_accepted_at=NOW,
+            completed_at=NOW,
+        )
+    )
+
+    display = await TradeDisplayService(
+        trade_repository=trade_repository,
+        creature_repository=creature_repository,
+    ).get_trade_display(trade.id)
+
+    assert display.status is TradeStatus.COMPLETED
+    assert display.initiator_offer.creature is not None
+    assert display.initiator_offer.creature.species_name == "Woobat"
+    assert display.initiator_offer.creature.trainer_id == 101
+    assert display.initiator_offer.creature.collection_number == 14
+    assert display.counterparty_offer is not None
+    assert display.counterparty_offer.creature is not None
+    assert display.counterparty_offer.creature.species_name == "Minun"
+    assert display.counterparty_offer.creature.trainer_id == 202
+    assert display.counterparty_offer.creature.collection_number == 7
+
+
+@pytest.mark.asyncio
 async def test_get_trade_display_rejects_unknown_trade() -> None:
     creature_repository = FakeCreatureRepository()
     trade_repository = FakeTradeRepository(creature_repository)
