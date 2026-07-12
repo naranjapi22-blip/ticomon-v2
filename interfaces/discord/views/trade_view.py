@@ -145,27 +145,22 @@ class TradeView(discord.ui.View):
                 self.core,
                 trade_id=self.trade.id,
                 trainer_id=interaction.user.id,
+                trade_view=self,
             )
         )
 
-    async def refresh(
+    async def apply_trade_update(
         self,
-        interaction: discord.Interaction,
-        trade: Trade | None = None,
+        trade: Trade,
     ) -> None:
-        if trade is not None:
-            self.trade = trade
-        else:
-            self.trade = await self.core.trade_application.get_trade(
-                self.trade.id,
-            )
-
+        self.trade = trade
         self.build_components()
 
-        await interaction.response.edit_message(
-            embed=self.build_embed(),
-            view=self,
-        )
+        if self.message is not None:
+            await self.message.edit(
+                embed=self.build_embed(),
+                view=self,
+            )
 
     async def interaction_check(
         self,
@@ -262,7 +257,9 @@ class TradeView(discord.ui.View):
             )
 
         if accepted_at is not None:
-            offer_text += f"\n\nAccepted at {accepted_at.isoformat()}"
+            offer_text += f"\n\nAcceptance: Accepted at {accepted_at.isoformat()}"
+        else:
+            offer_text += "\n\nAcceptance: Pending"
 
         return offer_text
 

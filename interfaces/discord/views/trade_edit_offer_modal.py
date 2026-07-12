@@ -17,12 +17,14 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
         core,
         trade_id: int,
         trainer_id: int,
+        trade_view,
     ) -> None:
         super().__init__()
 
         self._core = core
         self._trade_id = trade_id
         self._trainer_id = trainer_id
+        self._trade_view = trade_view
 
         self.collection_numbers = discord.ui.TextInput(
             label="Collection numbers",
@@ -48,11 +50,15 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
             return
 
         try:
-            await self._core.trade_application.set_offer_from_collection_numbers(
-                trade_id=self._trade_id,
-                trainer_id=self._trainer_id,
-                collection_numbers=collection_numbers,
-                at=datetime.now(UTC),
+            trade = (
+                await (
+                    self._core.trade_application.set_offer_from_collection_numbers(
+                        trade_id=self._trade_id,
+                        trainer_id=self._trainer_id,
+                        collection_numbers=collection_numbers,
+                        at=datetime.now(UTC),
+                    )
+                )
             )
         except (TradeApplicationError, TradeError) as error:
             await interaction.response.send_message(
@@ -60,6 +66,10 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
                 ephemeral=True,
             )
             return
+
+        await self._trade_view.apply_trade_update(
+            trade,
+        )
 
         await interaction.response.send_message(
             "✅ Offer updated.",

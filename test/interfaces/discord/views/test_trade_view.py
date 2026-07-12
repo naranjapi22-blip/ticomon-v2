@@ -43,8 +43,10 @@ async def test_trade_view_renders_current_offers() -> None:
     assert embed.title == "⚖️ Trade #42"
     assert embed.fields[3].name == "Initiator Offer"
     assert "Creature #11" in embed.fields[3].value
+    assert "Acceptance: Pending" in embed.fields[3].value
     assert embed.fields[4].name == "Counterparty Offer"
     assert "Creature #33" in embed.fields[4].value
+    assert "Acceptance: Pending" in embed.fields[4].value
     assert isinstance(view.children[0], AcceptButton)
     assert isinstance(view.children[1], RejectButton)
     assert isinstance(view.children[2], EditOfferButton)
@@ -53,6 +55,34 @@ async def test_trade_view_renders_current_offers() -> None:
     assert view.children[1].row == 0
     assert view.children[2].row == 1
     assert view.children[3].row == 1
+
+
+@pytest.mark.asyncio
+async def test_trade_view_apply_trade_update_edits_message() -> None:
+    trade = make_trade()
+    updated_trade = Trade._reconstitute(
+        trade_id=42,
+        initiator_trainer_id=101,
+        counterparty_trainer_id=202,
+        initiator_offer=TradeOffer.create(101, [11, 22]),
+        counterparty_offer=TradeOffer.create(202, [44]),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        expires_at=None,
+        status=TradeStatus.OPEN,
+        initiator_accepted_at=None,
+        counterparty_accepted_at=None,
+        completed_at=None,
+    )
+    view = TradeView(SimpleNamespace(), trade)
+    view.message = AsyncMock()
+
+    await view.apply_trade_update(updated_trade)
+
+    view.message.edit.assert_awaited_once()
+    embed = view.message.edit.await_args.kwargs["embed"]
+    assert "Creature #44" in embed.fields[4].value
+    assert "Acceptance: Pending" in embed.fields[3].value
+    assert "Acceptance: Pending" in embed.fields[4].value
 
 
 @pytest.mark.asyncio
@@ -159,3 +189,17 @@ async def test_terminal_trade_disables_all_buttons() -> None:
     )
 
     assert all(child.disabled for child in view.children)
+
+
+@pytest.mark.asyncio
+async def test_timeout_disables_and_edits_message() -> None:
+    view = TradeView(
+        SimpleNamespace(),
+        make_trade(),
+    )
+    view.message = AsyncMock()
+
+    await view.on_timeout()
+
+    assert all(child.disabled for child in view.children)
+    view.message.edit.assert_awaited_once_with(view=view)
