@@ -17,11 +17,11 @@ async def create_trade_schema() -> None:
                     initiator_trainer_id BIGINT NOT NULL,
                     counterparty_trainer_id BIGINT NOT NULL,
                     status VARCHAR(20) NOT NULL,
-                    initiator_accepted_at TIMESTAMP NULL,
-                    counterparty_accepted_at TIMESTAMP NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    expires_at TIMESTAMP NULL,
-                    completed_at TIMESTAMP NULL,
+                    initiator_accepted_at TIMESTAMPTZ NULL,
+                    counterparty_accepted_at TIMESTAMPTZ NULL,
+                    created_at TIMESTAMPTZ NOT NULL,
+                    expires_at TIMESTAMPTZ NULL,
+                    completed_at TIMESTAMPTZ NULL,
                     cancelled_by_trainer_id BIGINT NULL,
                     rejected_by_trainer_id BIGINT NULL,
                     CONSTRAINT trades_distinct_participants
@@ -68,6 +68,35 @@ async def create_trade_schema() -> None:
                 ON trades (completed_at)
                 """
             )
+            for column in (
+                "initiator_accepted_at",
+                "counterparty_accepted_at",
+                "created_at",
+                "expires_at",
+                "completed_at",
+            ):
+                await connection.execute(
+                    f"""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_name = 'trades'
+                              AND column_name = '{column}'
+                              AND data_type = 'timestamp without time zone'
+                        ) THEN
+                            EXECUTE '
+                                ALTER TABLE trades
+                                ALTER COLUMN {column}
+                                TYPE TIMESTAMPTZ
+                                USING {column} AT TIME ZONE ''UTC''
+                            ';
+                        END IF;
+                    END
+                    $$;
+                    """
+                )
             await connection.execute(
                 """
                 ALTER TABLE creatures
@@ -94,6 +123,8 @@ async def create_trade_schema() -> None:
                 $$
                 """
             )
+
+    await close_pool()
 
 
 async def main() -> None:

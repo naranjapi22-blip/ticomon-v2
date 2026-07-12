@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -14,7 +14,7 @@ from infrastructure.persistence.repositories.neon_trade_repository import (
 )
 from scripts.create_trade_schema import create_trade_schema
 
-NOW = datetime(2026, 7, 12, 12, 0, 0)
+NOW = datetime(2026, 7, 12, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest_asyncio.fixture
@@ -113,6 +113,8 @@ async def test_saves_and_reloads_trade_with_offers(trade_data_factory):
     assert reloaded.counterparty_offer.creature_ids == (
         data["counterparty_creature_id"],
     )
+    assert reloaded.created_at.tzinfo is UTC
+    assert reloaded.created_at.utcoffset().total_seconds() == 0
 
 
 @pytest.mark.asyncio
@@ -163,6 +165,7 @@ async def test_executes_atomic_trade_and_preserves_intrinsic_state(
 
     assert completed.status is TradeStatus.COMPLETED
     assert completed.completed_at == NOW
+    assert completed.completed_at.tzinfo is UTC
 
     expected_owner = {
         data["initiator_creature_id"]: data["counterparty_id"],
