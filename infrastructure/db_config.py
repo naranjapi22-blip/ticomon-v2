@@ -28,6 +28,7 @@ async def get_pool() -> asyncpg.Pool:
             dsn=database_url,
             min_size=1,
             max_size=10,
+            statement_cache_size=0,
         )
 
     return _pool
