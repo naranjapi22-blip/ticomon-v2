@@ -3,7 +3,7 @@ from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
 from core.creature.stat import Stat
-from interfaces.discord.images import get_species_gif
+from interfaces.discord.images import get_creature_gif
 
 STAT_LABELS = {
     Stat.HP: ("❤️", "HP"),
@@ -83,11 +83,6 @@ class IVsCog(commands.Cog):
 
         embed.description = "\n".join(lines)
 
-        embed.set_image(
-            url=get_species_gif(
-                species_id=creature.species.pokeapi_id,
-                shiny=creature.is_shiny,
-            )
-        )
+        embed.set_image(url=get_creature_gif(creature))
 
         await ctx.send(embed=embed)
