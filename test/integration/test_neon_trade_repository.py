@@ -344,13 +344,13 @@ async def _create_open_trade(repository, data) -> Trade:
     trade = Trade.create(
         initiator_trainer_id=data["initiator_id"],
         counterparty_trainer_id=data["counterparty_id"],
-        initiator_creature_ids=[data["initiator_creature_id"]],
+        initiator_creature_id=data["initiator_creature_id"],
         created_at=NOW,
     )
     trade = await repository.save(trade)
     trade.set_offer(
         actor_trainer_id=data["counterparty_id"],
-        creature_ids=[data["counterparty_creature_id"]],
+        creature_id=data["counterparty_creature_id"],
         at=NOW,
     )
     return await repository.save(trade)

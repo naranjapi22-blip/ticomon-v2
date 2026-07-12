@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from core.trade.exceptions import DuplicateTradeCreature, EmptyTradeOffer
+from core.trade.exceptions import TradeOfferMustContainExactlyOneCreature
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,17 +14,16 @@ class TradeOffer:
     def create(
         cls,
         trainer_id: int,
-        creature_ids: list[int] | tuple[int, ...],
+        creature_id: int,
     ) -> "TradeOffer":
-        ids = tuple(creature_ids)
-
-        if not ids:
-            raise EmptyTradeOffer()
-
-        if len(ids) != len(set(ids)):
-            raise DuplicateTradeCreature()
+        if not isinstance(creature_id, int):
+            raise TradeOfferMustContainExactlyOneCreature()
 
         return cls(
             trainer_id=trainer_id,
-            creature_ids=ids,
+            creature_ids=(creature_id,),
         )
+
+    @property
+    def creature_id(self) -> int:
+        return self.creature_ids[0]

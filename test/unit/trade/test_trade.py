@@ -22,7 +22,7 @@ def create_trade(**overrides) -> Trade:
     values = {
         "initiator_trainer_id": INITIATOR_ID,
         "counterparty_trainer_id": COUNTERPARTY_ID,
-        "initiator_creature_ids": [101],
+        "initiator_creature_id": 101,
         "created_at": NOW,
     }
     values.update(overrides)
@@ -33,7 +33,7 @@ def open_trade() -> Trade:
     trade = create_trade()
     trade.set_offer(
         actor_trainer_id=COUNTERPARTY_ID,
-        creature_ids=[202],
+        creature_id=202,
         at=NOW,
     )
     return trade
@@ -67,7 +67,7 @@ def test_counterparty_offer_opens_trade():
 
     assert trade.status is TradeStatus.OPEN
     assert trade.counterparty_offer is not None
-    assert trade.counterparty_offer.creature_ids == (202,)
+    assert trade.counterparty_offer.creature_id == 202
 
 
 def test_offer_for_rejects_non_participant():
@@ -89,7 +89,7 @@ def test_rejects_creature_present_in_both_offers():
     with pytest.raises(DuplicateTradeCreature):
         trade.set_offer(
             actor_trainer_id=COUNTERPARTY_ID,
-            creature_ids=[101],
+            creature_id=101,
             at=NOW,
         )
 
@@ -125,7 +125,7 @@ def test_changing_offer_clears_both_acceptances():
 
     trade.set_offer(
         actor_trainer_id=COUNTERPARTY_ID,
-        creature_ids=[203],
+        creature_id=203,
         at=NOW,
     )
 
@@ -141,7 +141,7 @@ def test_setting_the_same_offer_does_not_clear_existing_acceptance():
 
     trade.set_offer(
         actor_trainer_id=COUNTERPARTY_ID,
-        creature_ids=[202],
+        creature_id=202,
         at=NOW,
     )
 
@@ -178,7 +178,7 @@ def test_cancelled_trade_is_terminal():
     assert trade.cancelled_by_trainer_id == INITIATOR_ID
 
     with pytest.raises(InvalidTradeState):
-        trade.set_offer(COUNTERPARTY_ID, [202], NOW)
+        trade.set_offer(COUNTERPARTY_ID, 202, NOW)
 
 
 def test_expire_transitions_an_active_trade_to_expired():
@@ -215,7 +215,7 @@ def test_assert_ready_to_execute_does_not_complete_trade():
 
 def test_assert_ready_to_execute_rejects_an_expired_trade_without_mutation():
     trade = create_trade(expires_at=NOW + timedelta(minutes=5))
-    trade.set_offer(COUNTERPARTY_ID, [202], NOW)
+    trade.set_offer(COUNTERPARTY_ID, 202, NOW)
     trade.accept(INITIATOR_ID, NOW)
     trade.accept(COUNTERPARTY_ID, NOW)
 

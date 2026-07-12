@@ -21,13 +21,13 @@ class TradeMapper:
 
         initiator_offer = TradeOffer.create(
             initiator_id,
-            offers_by_trainer[initiator_id],
+            offers_by_trainer[initiator_id][0],
         )
         counterparty_creature_ids = offers_by_trainer.get(counterparty_id)
         counterparty_offer = (
             TradeOffer.create(
                 counterparty_id,
-                counterparty_creature_ids,
+                counterparty_creature_ids[0],
             )
             if counterparty_creature_ids
             else None

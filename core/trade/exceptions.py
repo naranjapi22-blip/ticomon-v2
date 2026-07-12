@@ -26,6 +26,10 @@ class EmptyTradeOffer(TradeError):
     """Raised when an offer contains no creatures."""
 
 
+class TradeOfferMustContainExactlyOneCreature(TradeError):
+    """Raised when an offer does not contain exactly one creature."""
+
+
 class InvalidTradeExpiry(TradeError):
     """Raised when a trade expiry is not later than its creation time."""
 

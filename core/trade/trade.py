@@ -50,7 +50,7 @@ class Trade:
         cls,
         initiator_trainer_id: int,
         counterparty_trainer_id: int,
-        initiator_creature_ids: list[int] | tuple[int, ...],
+        initiator_creature_id: int,
         created_at: datetime,
         expires_at: datetime | None = None,
     ) -> "Trade":
@@ -65,7 +65,7 @@ class Trade:
             counterparty_trainer_id=counterparty_trainer_id,
             initiator_offer=TradeOffer.create(
                 initiator_trainer_id,
-                initiator_creature_ids,
+                initiator_creature_id,
             ),
             created_at=created_at,
             expires_at=expires_at,
@@ -196,7 +196,7 @@ class Trade:
     def set_offer(
         self,
         actor_trainer_id: int,
-        creature_ids: list[int] | tuple[int, ...],
+        creature_id: int,
         at: datetime,
     ) -> None:
         self._ensure_mutable(at)
@@ -204,7 +204,7 @@ class Trade:
 
         offer = TradeOffer.create(
             actor_trainer_id,
-            creature_ids,
+            creature_id,
         )
 
         other_offer = (
@@ -213,9 +213,7 @@ class Trade:
             else self._initiator_offer
         )
 
-        if other_offer is not None and set(offer.creature_ids) & set(
-            other_offer.creature_ids
-        ):
+        if other_offer is not None and offer.creature_id == other_offer.creature_id:
             raise DuplicateTradeCreature()
 
         if self.offer_for(actor_trainer_id) == offer:

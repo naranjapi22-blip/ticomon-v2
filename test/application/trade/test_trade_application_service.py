@@ -9,6 +9,7 @@ from application.trade.exceptions import (
     TradeTrainerNotFound,
 )
 from application.trade.trade_application_service import TradeApplicationService
+from core.trade.exceptions import TradeOfferMustContainExactlyOneCreature
 from core.trade.trade_status import TradeStatus
 from core.trainer.trainer import Trainer
 from test.builders.creature_builder import CreatureBuilder
@@ -81,10 +82,10 @@ async def add_trainers(trainer_repository):
 async def test_creates_persisted_trade_for_existing_owner(service_context):
     await add_trainers(service_context["trainer_repository"])
 
-    trade = await service_context["service"].create_trade(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_creature_ids=[101],
+        initiator_collection_number=7,
         created_at=NOW,
     )
 
@@ -97,15 +98,30 @@ async def test_creates_persisted_trade_for_existing_owner(service_context):
 async def test_creates_trade_from_collection_numbers(service_context):
     await add_trainers(service_context["trainer_repository"])
 
-    trade = await service_context["service"].create_trade_from_collection_numbers(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_collection_numbers=[7],
+        initiator_collection_number=7,
         created_at=NOW,
     )
 
     assert trade.id == 1
     assert trade.initiator_offer.creature_ids == (101,)
+
+
+@pytest.mark.asyncio
+async def test_create_trade_from_collection_numbers_rejects_multiple_numbers(
+    service_context,
+):
+    await add_trainers(service_context["trainer_repository"])
+
+    with pytest.raises(TradeOfferMustContainExactlyOneCreature):
+        await service_context["service"].create_trade_from_collection_numbers(
+            initiator_trainer_id=INITIATOR_ID,
+            counterparty_trainer_id=COUNTERPARTY_ID,
+            initiator_collection_numbers=[7, 14],
+            created_at=NOW,
+        )
 
 
 @pytest.mark.asyncio
@@ -119,10 +135,10 @@ async def test_rejects_missing_trade_participant(service_context):
     )
 
     with pytest.raises(TradeTrainerNotFound) as error:
-        await service_context["service"].create_trade(
+        await service_context["service"].create_trade_from_collection_number(
             initiator_trainer_id=INITIATOR_ID,
             counterparty_trainer_id=COUNTERPARTY_ID,
-            initiator_creature_ids=[101],
+            initiator_collection_number=7,
             created_at=NOW,
         )
 
@@ -134,10 +150,10 @@ async def test_rejects_missing_offered_creature(service_context):
     await add_trainers(service_context["trainer_repository"])
 
     with pytest.raises(TradeCreatureNotFound) as error:
-        await service_context["service"].create_trade(
+        await service_context["service"].create_trade_from_collection_number(
             initiator_trainer_id=INITIATOR_ID,
             counterparty_trainer_id=COUNTERPARTY_ID,
-            initiator_creature_ids=[999],
+            initiator_collection_number=999,
             created_at=NOW,
         )
 
@@ -149,10 +165,10 @@ async def test_rejects_creature_not_owned_by_offering_trainer(service_context):
     await add_trainers(service_context["trainer_repository"])
 
     with pytest.raises(TradeCreatureNotOwned):
-        await service_context["service"].create_trade(
+        await service_context["service"].create_trade_from_collection_number(
             initiator_trainer_id=INITIATOR_ID,
             counterparty_trainer_id=COUNTERPARTY_ID,
-            initiator_creature_ids=[202],
+            initiator_collection_number=14,
             created_at=NOW,
         )
 
@@ -160,18 +176,18 @@ async def test_rejects_creature_not_owned_by_offering_trainer(service_context):
 @pytest.mark.asyncio
 async def test_set_offer_prevalidates_current_ownership(service_context):
     await add_trainers(service_context["trainer_repository"])
-    trade = await service_context["service"].create_trade(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_creature_ids=[101],
+        initiator_collection_number=7,
         created_at=NOW,
     )
 
     with pytest.raises(TradeCreatureNotOwned):
-        await service_context["service"].set_offer(
+        await service_context["service"].set_offer_from_collection_number(
             trade_id=trade.id,
             trainer_id=COUNTERPARTY_ID,
-            creature_ids=[101],
+            collection_number=7,
             at=NOW,
         )
 
@@ -191,16 +207,16 @@ async def test_set_offer_from_collection_numbers_resets_acceptances(
     await service_context["creature_repository"].save(
         extra_counterparty_creature,
     )
-    trade = await service_context["service"].create_trade(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_creature_ids=[101],
+        initiator_collection_number=7,
         created_at=NOW,
     )
-    trade = await service_context["service"].set_offer(
+    trade = await service_context["service"].set_offer_from_collection_number(
         trade_id=trade.id,
         trainer_id=COUNTERPARTY_ID,
-        creature_ids=[202],
+        collection_number=14,
         at=NOW,
     )
     accepted = await service_context["service"].accept_trade(
@@ -212,10 +228,10 @@ async def test_set_offer_from_collection_numbers_resets_acceptances(
     assert accepted.initiator_accepted_at == NOW
     assert accepted.counterparty_accepted_at is None
 
-    updated = await service_context["service"].set_offer_from_collection_numbers(
+    updated = await service_context["service"].set_offer_from_collection_number(
         trade_id=trade.id,
         trainer_id=COUNTERPARTY_ID,
-        collection_numbers=[15],
+        collection_number=15,
         at=NOW,
     )
 
@@ -230,18 +246,39 @@ async def test_set_offer_from_collection_numbers_rejects_missing_collection(
     service_context,
 ):
     await add_trainers(service_context["trainer_repository"])
-    trade = await service_context["service"].create_trade(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_creature_ids=[101],
+        initiator_collection_number=7,
         created_at=NOW,
     )
 
     with pytest.raises(TradeCreatureNotFound):
+        await service_context["service"].set_offer_from_collection_number(
+            trade_id=trade.id,
+            trainer_id=COUNTERPARTY_ID,
+            collection_number=999,
+            at=NOW,
+        )
+
+
+@pytest.mark.asyncio
+async def test_set_offer_from_collection_numbers_rejects_multiple_numbers(
+    service_context,
+):
+    await add_trainers(service_context["trainer_repository"])
+    trade = await service_context["service"].create_trade_from_collection_number(
+        initiator_trainer_id=INITIATOR_ID,
+        counterparty_trainer_id=COUNTERPARTY_ID,
+        initiator_collection_number=7,
+        created_at=NOW,
+    )
+
+    with pytest.raises(TradeOfferMustContainExactlyOneCreature):
         await service_context["service"].set_offer_from_collection_numbers(
             trade_id=trade.id,
             trainer_id=COUNTERPARTY_ID,
-            collection_numbers=[999],
+            collection_numbers=[14, 15],
             at=NOW,
         )
 
@@ -249,16 +286,16 @@ async def test_set_offer_from_collection_numbers_rejects_missing_collection(
 @pytest.mark.asyncio
 async def test_first_acceptance_persists_without_executing_trade(service_context):
     await add_trainers(service_context["trainer_repository"])
-    trade = await service_context["service"].create_trade(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_creature_ids=[101],
+        initiator_collection_number=7,
         created_at=NOW,
     )
-    await service_context["service"].set_offer(
+    await service_context["service"].set_offer_from_collection_number(
         trade_id=trade.id,
         trainer_id=COUNTERPARTY_ID,
-        creature_ids=[202],
+        collection_number=14,
         at=NOW,
     )
 
@@ -301,16 +338,16 @@ async def test_second_acceptance_executes_exchange_and_returns_committed_trade(
         counterparty_creature.current_form,
     )
 
-    trade = await service_context["service"].create_trade(
+    trade = await service_context["service"].create_trade_from_collection_number(
         initiator_trainer_id=INITIATOR_ID,
         counterparty_trainer_id=COUNTERPARTY_ID,
-        initiator_creature_ids=[101],
+        initiator_collection_number=7,
         created_at=NOW,
     )
-    await service_context["service"].set_offer(
+    await service_context["service"].set_offer_from_collection_number(
         trade_id=trade.id,
         trainer_id=COUNTERPARTY_ID,
-        creature_ids=[202],
+        collection_number=14,
         at=NOW,
     )
     await service_context["service"].accept_trade(

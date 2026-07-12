@@ -7,6 +7,7 @@ from application.trade.exceptions import (
     TradeTrainerNotFound,
 )
 from core.creature.creature_repository import CreatureRepository
+from core.trade.exceptions import TradeOfferMustContainExactlyOneCreature
 from core.trade.trade import Trade
 from core.trade.trade_repository import TradeRepository
 from core.trainer.repository import TrainerRepository
@@ -29,7 +30,7 @@ class TradeApplicationService:
         self,
         initiator_trainer_id: int,
         counterparty_trainer_id: int,
-        initiator_creature_ids: list[int] | tuple[int, ...],
+        initiator_creature_id: int,
         created_at: datetime,
         expires_at: datetime | None = None,
     ) -> Trade:
@@ -39,18 +40,41 @@ class TradeApplicationService:
         )
         await self._prevalidate_offer_ownership(
             initiator_trainer_id,
-            initiator_creature_ids,
+            [initiator_creature_id],
         )
 
         trade = Trade.create(
             initiator_trainer_id=initiator_trainer_id,
             counterparty_trainer_id=counterparty_trainer_id,
-            initiator_creature_ids=initiator_creature_ids,
+            initiator_creature_id=initiator_creature_id,
             created_at=created_at,
             expires_at=expires_at,
         )
 
         return await self._trade_repository.save(trade)
+
+    async def create_trade_from_collection_number(
+        self,
+        initiator_trainer_id: int,
+        counterparty_trainer_id: int,
+        initiator_collection_number: int,
+        created_at: datetime,
+        expires_at: datetime | None = None,
+    ) -> Trade:
+        initiator_creature_id = (
+            await self._resolve_collection_numbers(
+                initiator_trainer_id,
+                [initiator_collection_number],
+            )
+        )[0]
+
+        return await self.create_trade(
+            initiator_trainer_id=initiator_trainer_id,
+            counterparty_trainer_id=counterparty_trainer_id,
+            initiator_creature_id=initiator_creature_id,
+            created_at=created_at,
+            expires_at=expires_at,
+        )
 
     async def create_trade_from_collection_numbers(
         self,
@@ -60,15 +84,13 @@ class TradeApplicationService:
         created_at: datetime,
         expires_at: datetime | None = None,
     ) -> Trade:
-        initiator_creature_ids = await self._resolve_collection_numbers(
-            initiator_trainer_id,
-            initiator_collection_numbers,
-        )
+        if len(initiator_collection_numbers) != 1:
+            raise TradeOfferMustContainExactlyOneCreature()
 
-        return await self.create_trade(
+        return await self.create_trade_from_collection_number(
             initiator_trainer_id=initiator_trainer_id,
             counterparty_trainer_id=counterparty_trainer_id,
-            initiator_creature_ids=initiator_creature_ids,
+            initiator_collection_number=initiator_collection_numbers[0],
             created_at=created_at,
             expires_at=expires_at,
         )
@@ -77,22 +99,43 @@ class TradeApplicationService:
         self,
         trade_id: int,
         trainer_id: int,
-        creature_ids: list[int] | tuple[int, ...],
+        creature_id: int,
         at: datetime,
     ) -> Trade:
         trade = await self._get_trade(trade_id)
         await self._prevalidate_offer_ownership(
             trainer_id,
-            creature_ids,
+            [creature_id],
         )
 
         trade.set_offer(
             actor_trainer_id=trainer_id,
-            creature_ids=creature_ids,
+            creature_id=creature_id,
             at=at,
         )
 
         return await self._trade_repository.save(trade)
+
+    async def set_offer_from_collection_number(
+        self,
+        trade_id: int,
+        trainer_id: int,
+        collection_number: int,
+        at: datetime,
+    ) -> Trade:
+        creature_id = (
+            await self._resolve_collection_numbers(
+                trainer_id,
+                [collection_number],
+            )
+        )[0]
+
+        return await self.set_offer(
+            trade_id=trade_id,
+            trainer_id=trainer_id,
+            creature_id=creature_id,
+            at=at,
+        )
 
     async def set_offer_from_collection_numbers(
         self,
@@ -101,15 +144,13 @@ class TradeApplicationService:
         collection_numbers: list[int] | tuple[int, ...],
         at: datetime,
     ) -> Trade:
-        creature_ids = await self._resolve_collection_numbers(
-            trainer_id,
-            collection_numbers,
-        )
+        if len(collection_numbers) != 1:
+            raise TradeOfferMustContainExactlyOneCreature()
 
-        return await self.set_offer(
+        return await self.set_offer_from_collection_number(
             trade_id=trade_id,
             trainer_id=trainer_id,
-            creature_ids=creature_ids,
+            collection_number=collection_numbers[0],
             at=at,
         )
 
@@ -222,8 +263,10 @@ class TradeApplicationService:
                     trainer_id,
                     collection_number,
                 )
-            except (KeyError, ValueError) as error:
+            except KeyError as error:
                 raise TradeCreatureNotFound(collection_number) from error
+            except ValueError as error:
+                raise TradeCreatureNotOwned(trainer_id, collection_number) from error
 
             creature_ids.append(creature.id)
 

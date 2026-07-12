@@ -19,7 +19,7 @@ def _trade() -> Trade:
         trade_id=42,
         initiator_trainer_id=101,
         counterparty_trainer_id=202,
-        initiator_offer=TradeOffer.create(101, [11, 22]),
+        initiator_offer=TradeOffer.create(101, 11),
         counterparty_offer=None,
         created_at=created_at,
         expires_at=None,
