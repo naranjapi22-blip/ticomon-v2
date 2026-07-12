@@ -191,38 +191,53 @@ class NeonTradeRepository(TradeRepository):
                         """
                     )
 
-                    initiator_ids = list(
-                        trade.initiator_offer.creature_ids,
-                    )
                     assert trade.counterparty_offer is not None
-                    counterparty_ids = list(
-                        trade.counterparty_offer.creature_ids,
-                    )
-                    all_ids = sorted(
-                        [
-                            *initiator_ids,
-                            *counterparty_ids,
-                        ]
-                    )
+                    if len(creature_rows) != 2:
+                        raise TradeExecutionConflict()
+
+                    creature_rows_by_id = {row["id"]: row for row in creature_rows}
+                    initiator_creature_id = trade.initiator_offer.creature_id
+                    counterparty_creature_id = trade.counterparty_offer.creature_id
+
+                    if (
+                        initiator_creature_id not in creature_rows_by_id
+                        or counterparty_creature_id not in creature_rows_by_id
+                    ):
+                        raise TradeExecutionConflict()
+
+                    initiator_row = creature_rows_by_id[initiator_creature_id]
+                    counterparty_row = creature_rows_by_id[counterparty_creature_id]
+
                     updated_creatures = await connection.fetch(
                         """
                         UPDATE creatures
-                        SET trainer_id = CASE
-                            WHEN id = ANY($1::bigint[]) THEN $2
-                            WHEN id = ANY($3::bigint[]) THEN $4
-                            ELSE trainer_id
-                        END
-                        WHERE id = ANY($5::bigint[])
+                        SET
+                            trainer_id = CASE
+                                WHEN id = $1::bigint THEN $2::bigint
+                                WHEN id = $3::bigint THEN $4::bigint
+                            END,
+                            collection_number = CASE
+                                WHEN id = $1::bigint THEN $5::integer
+                                WHEN id = $3::bigint THEN $6::integer
+                            END
+                        WHERE id = ANY($7::bigint[])
                         RETURNING id
                         """,
-                        initiator_ids,
+                        initiator_creature_id,
                         trade.counterparty_trainer_id,
-                        counterparty_ids,
+                        counterparty_creature_id,
                         trade.initiator_trainer_id,
-                        all_ids,
+                        counterparty_row["collection_number"],
+                        initiator_row["collection_number"],
+                        sorted(
+                            [
+                                initiator_creature_id,
+                                counterparty_creature_id,
+                            ]
+                        ),
                     )
 
-                    if len(updated_creatures) != len(all_ids):
+                    if len(updated_creatures) != 2:
                         raise TradeExecutionConflict()
 
                     completed_row = await connection.fetchrow(
@@ -326,40 +341,16 @@ class NeonTradeRepository(TradeRepository):
         offer_rows,
     ):
         offered_ids = sorted(row["creature_id"] for row in offer_rows)
-        incoming_trainer_ids = []
-        incoming_collection_numbers = []
-
-        for row in offer_rows:
-            target_trainer_id = self._target_trainer_id(
-                trade,
-                row["offering_trainer_id"],
-            )
-            incoming_trainer_ids.append(target_trainer_id)
-            incoming_collection_numbers.append(
-                row["collection_number_at_offer"],
-            )
 
         return await connection.fetch(
             """
-            WITH incoming(trainer_id, collection_number) AS (
-                SELECT *
-                FROM unnest($2::bigint[], $3::integer[])
-            )
             SELECT c.id, c.trainer_id, c.collection_number
             FROM creatures c
             WHERE c.id = ANY($1::bigint[])
-               OR EXISTS (
-                    SELECT 1
-                    FROM incoming i
-                    WHERE i.trainer_id = c.trainer_id
-                      AND i.collection_number = c.collection_number
-               )
             ORDER BY c.id
             FOR UPDATE
             """,
             offered_ids,
-            incoming_trainer_ids,
-            incoming_collection_numbers,
         )
 
     @staticmethod
@@ -414,14 +405,10 @@ class NeonTradeRepository(TradeRepository):
         offer_rows,
         creature_rows,
     ) -> None:
-        offered_ids = {row["creature_id"] for row in offer_rows}
-        creatures_by_id = {row["id"]: row for row in creature_rows}
-
-        if not offered_ids.issubset(creatures_by_id):
+        if len(offer_rows) != 2 or len(creature_rows) != 2:
             raise TradeExecutionConflict()
 
-        outgoing_by_trainer: dict[int, set[int]] = {}
-        incoming_pairs: set[tuple[int, int]] = set()
+        creatures_by_id = {row["id"]: row for row in creature_rows}
 
         for offer_row in offer_rows:
             creature = creatures_by_id[offer_row["creature_id"]]
@@ -431,40 +418,6 @@ class NeonTradeRepository(TradeRepository):
                 or creature["collection_number"]
                 != offer_row["collection_number_at_offer"]
             ):
-                raise TradeExecutionConflict()
-
-            outgoing_by_trainer.setdefault(
-                offer_row["offering_trainer_id"],
-                set(),
-            ).add(offer_row["creature_id"])
-            incoming_pair = (
-                NeonTradeRepository._target_trainer_id(
-                    trade,
-                    offer_row["offering_trainer_id"],
-                ),
-                offer_row["collection_number_at_offer"],
-            )
-
-            if incoming_pair in incoming_pairs:
-                raise TradeExecutionConflict()
-
-            incoming_pairs.add(incoming_pair)
-
-        for creature in creature_rows:
-            pair = (
-                creature["trainer_id"],
-                creature["collection_number"],
-            )
-
-            if pair not in incoming_pairs:
-                continue
-
-            outgoing_ids = outgoing_by_trainer.get(
-                creature["trainer_id"],
-                set(),
-            )
-
-            if creature["id"] not in outgoing_ids:
                 raise TradeExecutionConflict()
 
     @staticmethod

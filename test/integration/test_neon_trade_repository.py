@@ -26,7 +26,6 @@ async def trade_data_factory():
 
     async def create(
         *,
-        with_collection_conflict: bool = False,
         same_collection_number: bool = False,
     ):
         initiator_id = uuid.uuid4().int & 0x7FFFFFFFFFFFFFFF
@@ -57,15 +56,6 @@ async def trade_data_factory():
                     counterparty_creature_id,
                 ]
             )
-
-            if with_collection_conflict:
-                conflict_id = await _insert_creature(
-                    connection,
-                    trainer_id=counterparty_id,
-                    collection_number=7,
-                    is_shiny=False,
-                )
-                created_creature_ids.append(conflict_id)
 
         return {
             "initiator_id": initiator_id,
@@ -118,7 +108,7 @@ async def test_saves_and_reloads_trade_with_offers(trade_data_factory):
 
 
 @pytest.mark.asyncio
-async def test_executes_atomic_trade_and_preserves_intrinsic_state(
+async def test_executes_atomic_trade_and_swaps_collection_numbers(
     trade_data_factory,
 ):
     data = await trade_data_factory()
@@ -171,13 +161,17 @@ async def test_executes_atomic_trade_and_preserves_intrinsic_state(
         data["initiator_creature_id"]: data["counterparty_id"],
         data["counterparty_creature_id"]: data["initiator_id"],
     }
+    expected_collection_number = {
+        data["initiator_creature_id"]: before_rows[1]["collection_number"],
+        data["counterparty_creature_id"]: before_rows[0]["collection_number"],
+    }
 
     for before, after in zip(before_rows, after_rows, strict=True):
         assert after["trainer_id"] == expected_owner[after["id"]]
+        assert after["collection_number"] == expected_collection_number[after["id"]]
 
         for field in (
             "id",
-            "collection_number",
             "species_id",
             "current_form_id",
             "is_shiny",
@@ -241,11 +235,22 @@ async def test_rolls_back_when_live_ownership_changed(trade_data_factory):
 
 
 @pytest.mark.asyncio
-async def test_rolls_back_on_collection_number_conflict(trade_data_factory):
-    data = await trade_data_factory(with_collection_conflict=True)
+async def test_rolls_back_on_stale_collection_number_snapshot(trade_data_factory):
+    data = await trade_data_factory()
     repository = NeonTradeRepository()
     trade = await _create_ready_trade(repository, data)
     pool = await get_pool()
+
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            UPDATE creatures
+            SET collection_number = $1
+            WHERE id = $2
+            """,
+            99,
+            data["initiator_creature_id"],
+        )
 
     with pytest.raises(TradeExecutionConflict):
         await repository.execute_completed_trade(
@@ -256,7 +261,7 @@ async def test_rolls_back_on_collection_number_conflict(trade_data_factory):
     async with pool.acquire() as connection:
         rows = await connection.fetch(
             """
-            SELECT id, trainer_id
+            SELECT id, trainer_id, collection_number
             FROM creatures
             WHERE id = ANY($1::bigint[])
             ORDER BY id
@@ -275,9 +280,16 @@ async def test_rolls_back_on_collection_number_conflict(trade_data_factory):
             trade.id,
         )
 
-    owners = {row["id"]: row["trainer_id"] for row in rows}
-    assert owners[data["initiator_creature_id"]] == data["initiator_id"]
-    assert owners[data["counterparty_creature_id"]] == data["counterparty_id"]
+    rows_by_id = {row["id"]: row for row in rows}
+    assert (
+        rows_by_id[data["initiator_creature_id"]]["trainer_id"] == data["initiator_id"]
+    )
+    assert rows_by_id[data["initiator_creature_id"]]["collection_number"] == 99
+    assert (
+        rows_by_id[data["counterparty_creature_id"]]["trainer_id"]
+        == data["counterparty_id"]
+    )
+    assert rows_by_id[data["counterparty_creature_id"]]["collection_number"] == 14
     assert status == TradeStatus.OPEN.value
 
 

@@ -367,24 +367,38 @@ async def test_second_acceptance_executes_exchange_and_returns_committed_trade(
     assert service_context["trade_repository"].execute_calls == 1
     assert initiator_creature.trainer_id == COUNTERPARTY_ID
     assert counterparty_creature.trainer_id == INITIATOR_ID
+    assert initiator_creature.collection_number == counterparty_snapshot[1]
+    assert counterparty_creature.collection_number == initiator_snapshot[1]
     assert (
         initiator_creature.id,
-        initiator_creature.collection_number,
         initiator_creature.ivs,
         initiator_creature.nature,
         initiator_creature.size,
         initiator_creature.is_shiny,
         initiator_creature.current_form,
-    ) == initiator_snapshot
+    ) == (
+        initiator_snapshot[0],
+        initiator_snapshot[2],
+        initiator_snapshot[3],
+        initiator_snapshot[4],
+        initiator_snapshot[5],
+        initiator_snapshot[6],
+    )
     assert (
         counterparty_creature.id,
-        counterparty_creature.collection_number,
         counterparty_creature.ivs,
         counterparty_creature.nature,
         counterparty_creature.size,
         counterparty_creature.is_shiny,
         counterparty_creature.current_form,
-    ) == counterparty_snapshot
+    ) == (
+        counterparty_snapshot[0],
+        counterparty_snapshot[2],
+        counterparty_snapshot[3],
+        counterparty_snapshot[4],
+        counterparty_snapshot[5],
+        counterparty_snapshot[6],
+    )
 
 
 @pytest.mark.asyncio

@@ -62,6 +62,22 @@ class FakeTradeRepository(TradeRepository):
 
                 creatures.append((creature, receiving_trainer_id))
 
+        if len(creatures) != 2:
+            raise TradeExecutionConflict()
+
+        initiator_creature, initiator_receiving_trainer_id = creatures[0]
+        counterparty_creature, counterparty_receiving_trainer_id = creatures[1]
+
+        initiator_creature.trainer_id = initiator_receiving_trainer_id
+        counterparty_creature.trainer_id = counterparty_receiving_trainer_id
+        (
+            initiator_creature.collection_number,
+            counterparty_creature.collection_number,
+        ) = (
+            counterparty_creature.collection_number,
+            initiator_creature.collection_number,
+        )
+
         for creature, receiving_trainer_id in creatures:
             creature.trainer_id = receiving_trainer_id
             await self._creature_repository.update(creature)
