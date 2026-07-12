@@ -73,6 +73,14 @@ class PokedexView(discord.ui.View):
                 entry for entry in entries if entry.species.metadata.is_mythical
             )
 
+        # 👇 Agregar aquí
+        if (
+            self.filter.pokemon_type is not None
+            or self.filter.legendary
+            or self.filter.mythical
+        ):
+            entries = tuple(entry for entry in entries if entry.discovered)
+
         # TODO:
         # Implement shiny filter once PokedexEntryDTO
         # exposes has_shiny.
