@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from infrastructure.db_config import close_pool, get_pool
@@ -15,6 +16,8 @@ SPECIES_NAME_MAP = {
     "squawkabilly": "squawkabilly-green-plumage",
     "tatsugiri": "tatsugiri-curly",
 }
+
+logger = logging.getLogger(__name__)
 
 
 async def main():
@@ -47,7 +50,7 @@ async def main():
             )
 
             if species is None:
-                print(f"Species not found: {species_name}")
+                logger.warning("Species not found: %s", species_name)
                 missing_species += 1
                 continue
 
@@ -61,7 +64,7 @@ async def main():
                 stem = file.stem
 
                 if "-" not in stem:
-                    print(f"Skipping invalid filename: {file.name}")
+                    logger.warning("Skipping invalid filename: %s", file.name)
                     continue
 
                 variant_name = stem.split("-", 1)[1]
@@ -89,15 +92,18 @@ async def main():
 
     await close_pool()
 
-    print()
-    print("=" * 40)
-    print(f"Imported variants : {imported}")
-    print(f"Duplicates        : {duplicates}")
-    print(f"Missing species   : {missing_species}")
-    print("=" * 40)
+    logger.info("%s", "=" * 40)
+    logger.info("Imported variants : %s", imported)
+    logger.info("Duplicates        : %s", duplicates)
+    logger.info("Missing species   : %s", missing_species)
+    logger.info("%s", "=" * 40)
 
 
 if __name__ == "__main__":
     import asyncio
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     asyncio.run(main())

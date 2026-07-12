@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import logging
 
 from infrastructure.db_config import close_pool, get_pool
 
@@ -9,6 +10,8 @@ CSV_FILE = "pokemon_data.csv"
 
 START_ID = 1026
 END_ID = 1077
+
+logger = logging.getLogger(__name__)
 
 
 def get_base_name(name: str) -> str:
@@ -97,12 +100,24 @@ async def main():
 
                     imported += 1
 
-                    print(f"[{species_id}/{END_ID}] ✔ {species['name']}")
+                    logger.info(
+                        "[%s/%s] ✔ %s",
+                        species_id,
+                        END_ID,
+                        species["name"],
+                    )
 
     await close_pool()
 
-    print(f"\n🎉 Importación finalizada." f"\n{imported} formas regionales importadas.")
+    logger.info(
+        "\n🎉 Importación finalizada.\n%s formas regionales importadas.",
+        imported,
+    )
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     asyncio.run(main())

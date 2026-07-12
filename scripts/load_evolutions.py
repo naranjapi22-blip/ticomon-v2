@@ -1,9 +1,12 @@
 import csv
+import logging
 from pathlib import Path
 
 from infrastructure.db_config import get_pool
 
 CSV_PATH = Path("pokemon_evolutions(1).csv")
+
+logger = logging.getLogger(__name__)
 
 
 async def load_evolutions():
@@ -50,12 +53,7 @@ async def load_evolutions():
                 )
 
                 if from_species is None or to_species is None:
-                    print(
-                        "Missing:",
-                        from_name,
-                        "->",
-                        to_name,
-                    )
+                    logger.warning("Missing: %s -> %s", from_name, to_name)
 
                     skipped += 1
                     continue
@@ -85,13 +83,16 @@ async def load_evolutions():
 
                 inserted += 1
 
-        print(f"Inserted: {inserted}")
-
-        print(f"Skipped: {skipped}")
+        logger.info("Inserted: %s", inserted)
+        logger.info("Skipped: %s", skipped)
 
 
 if __name__ == "__main__":
 
     import asyncio
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     asyncio.run(load_evolutions())
