@@ -1,8 +1,9 @@
 from types import SimpleNamespace
-from unittest.mock import ANY, AsyncMock
+from unittest.mock import AsyncMock
 
 import pytest
 
+from application.trade.exceptions import TradeApplicationError
 from application.trade.trade_display import (
     TradeCreatureDisplay,
     TradeDisplay,
@@ -79,9 +80,20 @@ async def test_edit_offer_button_opens_modal() -> None:
 
 @pytest.mark.asyncio
 async def test_modal_submits_collection_number_to_application() -> None:
+    events: list[str] = []
+
+    async def defer(*, ephemeral: bool, thinking: bool) -> None:
+        events.append("defer")
+
+    async def set_offer_from_collection_number(**kwargs) -> None:
+        events.append("set_offer")
+        assert kwargs["trade_id"] == 42
+        assert kwargs["trainer_id"] == 101
+        assert kwargs["collection_number"] == 7
+
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
-            set_offer_from_collection_number=AsyncMock(),
+            set_offer_from_collection_number=set_offer_from_collection_number,
         ),
     )
     trade_view = SimpleNamespace(refresh=AsyncMock())
@@ -93,19 +105,22 @@ async def test_modal_submits_collection_number_to_application() -> None:
     )
     modal.collection_number._value = "7"
     interaction = SimpleNamespace(
-        response=SimpleNamespace(send_message=AsyncMock()),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=defer),
+            send_message=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
     )
 
     await modal.on_submit(interaction)
 
-    core.trade_application.set_offer_from_collection_number.assert_awaited_once_with(
-        trade_id=42,
-        trainer_id=101,
-        collection_number=7,
-        at=ANY,
+    assert events == ["defer", "set_offer"]
+    interaction.response.defer.assert_awaited_once_with(
+        ephemeral=True,
+        thinking=True,
     )
     trade_view.refresh.assert_awaited_once()
-    interaction.response.send_message.assert_awaited_once_with(
+    interaction.followup.send.assert_awaited_once_with(
         "✅ Offer updated.",
         ephemeral=True,
     )
@@ -127,6 +142,7 @@ async def test_modal_rejects_invalid_collection_number() -> None:
     modal.collection_number._value = "abc"
     interaction = SimpleNamespace(
         response=SimpleNamespace(send_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock()),
     )
 
     await modal.on_submit(interaction)
@@ -135,3 +151,46 @@ async def test_modal_rejects_invalid_collection_number() -> None:
         "❌ Collection number must be an integer.",
         ephemeral=True,
     )
+    interaction.followup.send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_modal_errors_use_followup_after_defer() -> None:
+    events: list[str] = []
+
+    async def defer(*, ephemeral: bool, thinking: bool) -> None:
+        events.append("defer")
+
+    async def fail_set_offer(**kwargs) -> None:
+        events.append("set_offer")
+        raise TradeApplicationError("boom")
+
+    core = SimpleNamespace(
+        trade_application=SimpleNamespace(
+            set_offer_from_collection_number=fail_set_offer,
+        ),
+    )
+    trade_view = SimpleNamespace(refresh=AsyncMock())
+    modal = TradeEditOfferModal(
+        core,
+        trade_id=42,
+        trainer_id=101,
+        trade_view=trade_view,
+    )
+    modal.collection_number._value = "7"
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=defer),
+            send_message=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+
+    await modal.on_submit(interaction)
+
+    assert events == ["defer", "set_offer"]
+    interaction.followup.send.assert_awaited_once_with(
+        "❌ boom",
+        ephemeral=True,
+    )
+    trade_view.refresh.assert_not_awaited()

@@ -1,8 +1,10 @@
+import inspect
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock
 
 import pytest
+from discord.ext import commands
 
 from application.trade.exceptions import TradeCreatureNotOwned
 from application.trade.trade_display import (
@@ -106,6 +108,31 @@ async def test_trade_creates_trade_and_opens_view() -> None:
     kwargs = ctx.send.await_args.kwargs
     assert isinstance(kwargs["view"], TradeView)
     assert kwargs["embed"].title == "⚖️ Trade #42"
+
+
+@pytest.mark.asyncio
+async def test_trade_missing_collection_number_reports_usage() -> None:
+    core = SimpleNamespace(
+        trade_application=SimpleNamespace(
+            create_trade_from_collection_number=AsyncMock(),
+        ),
+        trade_display_service=SimpleNamespace(
+            get_trade_display=AsyncMock(),
+        ),
+    )
+    cog = TradeCog(core)
+    ctx = SimpleNamespace(send=AsyncMock())
+    error = commands.MissingRequiredArgument.__new__(
+        commands.MissingRequiredArgument,
+    )
+    error.param = inspect.Parameter(
+        "collection_number",
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+
+    await cog.trade_error(ctx, error)
+
+    ctx.send.assert_awaited_once_with("Usage: !trade @trainer <collection number>")
 
 
 @pytest.mark.asyncio

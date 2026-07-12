@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import ANY, AsyncMock
+from unittest.mock import AsyncMock
 
 import pytest
 
+from application.trade.exceptions import TradeApplicationError
 from application.trade.trade_display import (
     TradeCreatureDisplay,
     TradeDisplay,
@@ -165,7 +166,16 @@ async def test_trade_view_refresh_edits_message() -> None:
 async def test_accept_button_calls_application_service() -> None:
     trade_display = make_trade_display()
     updated_display = make_trade_display()
-    accept_trade = AsyncMock(return_value=SimpleNamespace())
+    events: list[str] = []
+
+    async def defer() -> None:
+        events.append("defer")
+
+    async def accept_trade(**kwargs) -> None:
+        events.append("accept")
+        assert kwargs["trade_id"] == 42
+        assert kwargs["trainer_id"] == 101
+
     trade_display_service = AsyncMock(
         get_trade_display=AsyncMock(return_value=updated_display),
     )
@@ -183,18 +193,22 @@ async def test_accept_button_calls_application_service() -> None:
     )
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=101),
-        response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=defer),
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
     )
+    view.message = AsyncMock()
 
     await view.children[0].callback(interaction)
 
-    accept_trade.assert_awaited_once_with(
-        trade_id=42,
-        trainer_id=101,
-        at=ANY,
-    )
+    assert events == ["defer", "accept"]
+    interaction.response.defer.assert_awaited_once()
     trade_display_service.get_trade_display.assert_awaited_once_with(42)
-    interaction.response.edit_message.assert_awaited_once()
+    view.message.edit.assert_awaited_once()
+    interaction.followup.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -205,7 +219,16 @@ async def test_reject_button_calls_application_service() -> None:
             return_value=make_trade_display(status=TradeStatus.REJECTED)
         ),
     )
-    reject_trade = AsyncMock(return_value=SimpleNamespace())
+    events: list[str] = []
+
+    async def defer() -> None:
+        events.append("defer")
+
+    async def reject_trade(**kwargs) -> None:
+        events.append("reject")
+        assert kwargs["trade_id"] == 42
+        assert kwargs["trainer_id"] == 202
+
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
             accept_trade=AsyncMock(),
@@ -220,17 +243,22 @@ async def test_reject_button_calls_application_service() -> None:
     )
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=202),
-        response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=defer),
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
     )
+    view.message = AsyncMock()
 
     await view.children[1].callback(interaction)
 
-    reject_trade.assert_awaited_once_with(
-        trade_id=42,
-        trainer_id=202,
-        at=ANY,
-    )
-    interaction.response.edit_message.assert_awaited_once()
+    assert events == ["defer", "reject"]
+    interaction.response.defer.assert_awaited_once()
+    trade_display_service.get_trade_display.assert_awaited_once_with(42)
+    view.message.edit.assert_awaited_once()
+    interaction.followup.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -241,7 +269,16 @@ async def test_cancel_button_calls_application_service() -> None:
             return_value=make_trade_display(status=TradeStatus.CANCELLED)
         ),
     )
-    cancel_trade = AsyncMock(return_value=SimpleNamespace())
+    events: list[str] = []
+
+    async def defer() -> None:
+        events.append("defer")
+
+    async def cancel_trade(**kwargs) -> None:
+        events.append("cancel")
+        assert kwargs["trade_id"] == 42
+        assert kwargs["trainer_id"] == 101
+
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
             accept_trade=AsyncMock(),
@@ -256,17 +293,63 @@ async def test_cancel_button_calls_application_service() -> None:
     )
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=101),
-        response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=defer),
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
     )
+    view.message = AsyncMock()
 
     await view.children[3].callback(interaction)
 
-    cancel_trade.assert_awaited_once_with(
-        trade_id=42,
-        trainer_id=101,
-        at=ANY,
+    assert events == ["defer", "cancel"]
+    interaction.response.defer.assert_awaited_once()
+    trade_display_service.get_trade_display.assert_awaited_once_with(42)
+    view.message.edit.assert_awaited_once()
+    interaction.followup.send.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_trade_action_errors_use_followup_after_defer() -> None:
+    async def defer() -> None:
+        return None
+
+    async def fail_trade(**kwargs) -> None:
+        raise TradeApplicationError("boom")
+
+    trade_display_service = AsyncMock(
+        get_trade_display=AsyncMock(return_value=make_trade_display()),
     )
-    interaction.response.edit_message.assert_awaited_once()
+    core = SimpleNamespace(
+        trade_application=SimpleNamespace(
+            accept_trade=fail_trade,
+            reject_trade=AsyncMock(),
+            cancel_trade=AsyncMock(),
+        ),
+        trade_display_service=trade_display_service,
+    )
+    view = TradeView(core, make_trade_display())
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=101),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=defer),
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+        ),
+        followup=SimpleNamespace(send=AsyncMock()),
+    )
+    view.message = AsyncMock()
+
+    await view._apply_trade_action(
+        interaction,
+        core.trade_application.accept_trade,
+    )
+
+    interaction.response.defer.assert_awaited_once()
+    interaction.followup.send.assert_awaited_once_with("❌ boom", ephemeral=True)
+    view.message.edit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

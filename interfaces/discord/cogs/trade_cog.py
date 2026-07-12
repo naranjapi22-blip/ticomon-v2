@@ -80,3 +80,18 @@ class TradeCog(commands.Cog):
         )
 
         view.message = message
+
+    @trade.error
+    async def trade_error(
+        self,
+        ctx: commands.Context,
+        error: commands.CommandError,
+    ) -> None:
+        if (
+            isinstance(error, commands.MissingRequiredArgument)
+            and error.param.name == "collection_number"
+        ):
+            await ctx.send("Usage: !trade @trainer <collection number>")
+            return
+
+        raise error

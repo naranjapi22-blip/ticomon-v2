@@ -47,6 +47,11 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
             )
             return
 
+        await interaction.response.defer(
+            ephemeral=True,
+            thinking=True,
+        )
+
         try:
             await self._core.trade_application.set_offer_from_collection_number(
                 trade_id=self._trade_id,
@@ -54,16 +59,15 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
                 collection_number=collection_number,
                 at=datetime.now(UTC),
             )
+            await self._trade_view.refresh()
         except (TradeApplicationError, TradeError) as error:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"❌ {error}",
                 ephemeral=True,
             )
             return
 
-        await self._trade_view.refresh()
-
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "✅ Offer updated.",
             ephemeral=True,
         )

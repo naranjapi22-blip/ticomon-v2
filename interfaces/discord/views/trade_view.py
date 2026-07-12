@@ -188,6 +188,8 @@ class TradeView(discord.ui.View):
         interaction: discord.Interaction,
         action,
     ) -> None:
+        await interaction.response.defer()
+
         try:
             await action(
                 trade_id=self.trade_id,
@@ -195,54 +197,33 @@ class TradeView(discord.ui.View):
                 at=datetime.now(UTC),
             )
         except (TradeNotFound, InvalidTradeState, TradeNotParticipant) as error:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"❌ {error}",
                 ephemeral=True,
             )
             return
         except TradeApplicationError as error:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"❌ {error}",
                 ephemeral=True,
             )
             return
 
         await self._reload_trade_display()
-
-        if self.trade_display.status is TradeStatus.COMPLETED:
-            await interaction.response.edit_message(
-                content="✅ Trade completed.",
-                embed=self.build_embed(),
-                view=self,
-            )
-            return
-
-        if self.trade_display.status is TradeStatus.CANCELLED:
-            await interaction.response.edit_message(
-                content="❌ Trade cancelled.",
-                embed=self.build_embed(),
-                view=self,
-            )
-            return
-
-        if self.trade_display.status is TradeStatus.REJECTED:
-            await interaction.response.edit_message(
-                content="❌ Trade rejected.",
-                embed=self.build_embed(),
-                view=self,
-            )
-            return
-
-        await interaction.response.edit_message(
-            embed=self.build_embed(),
-            view=self,
-        )
+        await self._edit_message()
 
     async def _reload_trade_display(self) -> None:
         self.trade_display = await self.core.trade_display_service.get_trade_display(
             self.trade_id,
         )
         self.build_components()
+
+    async def _edit_message(self) -> None:
+        if self.message is not None:
+            await self.message.edit(
+                embed=self.build_embed(),
+                view=self,
+            )
 
     @staticmethod
     def _format_offer(
