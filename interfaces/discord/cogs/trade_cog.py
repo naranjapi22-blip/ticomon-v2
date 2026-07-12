@@ -30,18 +30,14 @@ class TradeCog(commands.Cog):
         self,
         ctx: commands.Context,
         counterparty: discord.Member,
-        *collection_numbers: int,
-    ):
-        if not collection_numbers:
-            await ctx.send("You must provide at least one collection number.")
-            return
-
+        collection_number: int,
+    ) -> None:
         try:
             trade = (
-                await self._core.trade_application.create_trade_from_collection_numbers(
+                await self._core.trade_application.create_trade_from_collection_number(
                     initiator_trainer_id=ctx.author.id,
                     counterparty_trainer_id=counterparty.id,
-                    initiator_collection_numbers=list(collection_numbers),
+                    initiator_collection_number=collection_number,
                     created_at=datetime.now(UTC),
                 )
             )
@@ -69,9 +65,13 @@ class TradeCog(commands.Cog):
             await ctx.send("Trade could not be created.")
             return
 
+        trade_display = await self._core.trade_display_service.get_trade_display(
+            trade.id,
+        )
+
         view = TradeView(
             self._core,
-            trade,
+            trade_display,
         )
 
         message = await ctx.send(

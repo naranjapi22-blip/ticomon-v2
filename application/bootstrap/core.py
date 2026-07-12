@@ -26,6 +26,9 @@ from application.species_info.species_info_service import (
 from application.trade.trade_application_service import (
     TradeApplicationService,
 )
+from application.trade.trade_display_service import (
+    TradeDisplayService,
+)
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_service import (
     CaptureApplicationService,
@@ -112,6 +115,7 @@ class CoreServices:
     energy_service: EnergyService
     trade_repository: NeonTradeRepository
     trade_application: TradeApplicationService
+    trade_display_service: TradeDisplayService
 
 
 def build_core(
@@ -241,6 +245,10 @@ def build_core(
         trainer_repository=trainer_repository,
         creature_repository=creature_repository,
     )
+    trade_display_service = TradeDisplayService(
+        trade_repository=trade_repository,
+        creature_repository=creature_repository,
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
@@ -264,4 +272,5 @@ def build_core(
         energy_service=energy_service,
         trade_repository=trade_repository,
         trade_application=trade_application,
+        trade_display_service=trade_display_service,
     )

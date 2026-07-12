@@ -5,9 +5,7 @@ from datetime import UTC, datetime
 
 import discord
 
-from application.trade.exceptions import (
-    TradeApplicationError,
-)
+from application.trade.exceptions import TradeApplicationError
 from core.trade.exceptions import TradeError
 
 
@@ -26,39 +24,35 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
         self._trainer_id = trainer_id
         self._trade_view = trade_view
 
-        self.collection_numbers = discord.ui.TextInput(
-            label="Collection numbers",
-            placeholder="12, 34, 57",
+        self.collection_number = discord.ui.TextInput(
+            label="Collection number",
+            placeholder="12",
             required=True,
-            max_length=500,
+            max_length=32,
         )
-        self.add_item(self.collection_numbers)
+        self.add_item(self.collection_number)
 
     async def on_submit(
         self,
         interaction: discord.Interaction,
     ) -> None:
         try:
-            collection_numbers = self._parse_collection_numbers(
-                self.collection_numbers.value,
+            collection_number = self._parse_collection_number(
+                self.collection_number.value,
             )
         except ValueError:
             await interaction.response.send_message(
-                "❌ Collection numbers must be a comma-separated list of integers.",
+                "❌ Collection number must be an integer.",
                 ephemeral=True,
             )
             return
 
         try:
-            trade = (
-                await (
-                    self._core.trade_application.set_offer_from_collection_numbers(
-                        trade_id=self._trade_id,
-                        trainer_id=self._trainer_id,
-                        collection_numbers=collection_numbers,
-                        at=datetime.now(UTC),
-                    )
-                )
+            await self._core.trade_application.set_offer_from_collection_number(
+                trade_id=self._trade_id,
+                trainer_id=self._trainer_id,
+                collection_number=collection_number,
+                at=datetime.now(UTC),
             )
         except (TradeApplicationError, TradeError) as error:
             await interaction.response.send_message(
@@ -67,9 +61,7 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
             )
             return
 
-        await self._trade_view.apply_trade_update(
-            trade,
-        )
+        await self._trade_view.refresh()
 
         await interaction.response.send_message(
             "✅ Offer updated.",
@@ -77,10 +69,13 @@ class TradeEditOfferModal(discord.ui.Modal, title="Edit Trade Offer"):
         )
 
     @staticmethod
-    def _parse_collection_numbers(value: str) -> list[int]:
-        parts = [token for token in re.split(r"[,\s]+", value.strip()) if token]
+    def _parse_collection_number(value: str) -> int:
+        normalized = value.strip()
 
-        if not parts:
-            raise ValueError("No collection numbers were provided.")
+        if not normalized:
+            raise ValueError("No collection number was provided.")
 
-        return [int(part) for part in parts]
+        if re.search(r"[,\s]", normalized):
+            raise ValueError("Collection number must be singular.")
+
+        return int(normalized)

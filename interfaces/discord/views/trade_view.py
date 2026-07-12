@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 
 import discord
@@ -7,11 +9,15 @@ from application.trade.exceptions import (
     TradeApplicationError,
     TradeNotFound,
 )
+from application.trade.trade_display import (
+    TradeCreatureDisplay,
+    TradeDisplay,
+    TradeOfferDisplay,
+)
 from core.trade.exceptions import (
     InvalidTradeState,
     TradeNotParticipant,
 )
-from core.trade.trade import Trade
 from core.trade.trade_status import TradeStatus
 from interfaces.discord.buttons.trade_accept_button import AcceptButton
 from interfaces.discord.buttons.trade_cancel_button import CancelButton
@@ -24,12 +30,13 @@ class TradeView(discord.ui.View):
     def __init__(
         self,
         core: CoreServices,
-        trade: Trade,
+        trade_display: TradeDisplay,
     ) -> None:
         super().__init__(timeout=300)
 
         self.core = core
-        self.trade = trade
+        self.trade_display = trade_display
+        self.trade_id = trade_display.trade_id
         self.message: discord.Message | None = None
 
         self.build_components()
@@ -50,60 +57,53 @@ class TradeView(discord.ui.View):
             CancelButton(),
         )
 
-        if self.trade.is_terminal:
+        if self.trade_display.status in {
+            TradeStatus.COMPLETED,
+            TradeStatus.CANCELLED,
+            TradeStatus.REJECTED,
+            TradeStatus.EXPIRED,
+        }:
             for child in self.children:
                 child.disabled = True
 
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title=f"⚖️ Trade #{self.trade.id}",
-            description=(
-                "Current trade negotiation.\n" "Use the buttons below to respond."
-            ),
+            title=f"⚖️ Trade #{self.trade_display.trade_id}",
+            description="Current trade negotiation.\nUse the buttons below to respond.",
             color=self._color(),
         )
 
         embed.add_field(
             name="Initiator",
-            value=f"<@{self.trade.initiator_trainer_id}>",
+            value=f"<@{self.trade_display.initiator_trainer_id}>",
             inline=True,
         )
         embed.add_field(
             name="Counterparty",
-            value=f"<@{self.trade.counterparty_trainer_id}>",
+            value=f"<@{self.trade_display.counterparty_trainer_id}>",
             inline=True,
         )
         embed.add_field(
             name="Status",
-            value=self.trade.status.value.title(),
+            value=self.trade_display.status.value.title(),
             inline=True,
         )
 
         embed.add_field(
             name="Initiator Offer",
-            value=self._format_offer(
-                self.trade.initiator_offer.creature_ids,
-                accepted_at=self.trade.initiator_accepted_at,
-            ),
+            value=self._format_offer(self.trade_display.initiator_offer),
             inline=False,
         )
         embed.add_field(
             name="Counterparty Offer",
-            value=self._format_offer(
-                (
-                    self.trade.counterparty_offer.creature_ids
-                    if self.trade.counterparty_offer is not None
-                    else None
-                ),
-                accepted_at=self.trade.counterparty_accepted_at,
-            ),
+            value=self._format_offer(self.trade_display.counterparty_offer),
             inline=False,
         )
 
-        if self.trade.completed_at is not None:
+        if self.trade_display.completed_at is not None:
             embed.add_field(
                 name="Completed At",
-                value=self.trade.completed_at.isoformat(),
+                value=self.trade_display.completed_at.isoformat(),
                 inline=False,
             )
 
@@ -143,18 +143,14 @@ class TradeView(discord.ui.View):
         await interaction.response.send_modal(
             TradeEditOfferModal(
                 self.core,
-                trade_id=self.trade.id,
+                trade_id=self.trade_id,
                 trainer_id=interaction.user.id,
                 trade_view=self,
             )
         )
 
-    async def apply_trade_update(
-        self,
-        trade: Trade,
-    ) -> None:
-        self.trade = trade
-        self.build_components()
+    async def refresh(self) -> None:
+        await self._reload_trade_display()
 
         if self.message is not None:
             await self.message.edit(
@@ -167,8 +163,8 @@ class TradeView(discord.ui.View):
         interaction: discord.Interaction,
     ) -> bool:
         if interaction.user.id not in {
-            self.trade.initiator_trainer_id,
-            self.trade.counterparty_trainer_id,
+            self.trade_display.initiator_trainer_id,
+            self.trade_display.counterparty_trainer_id,
         }:
             await interaction.response.send_message(
                 "❌ Only the trade participants can use these controls.",
@@ -193,8 +189,8 @@ class TradeView(discord.ui.View):
         action,
     ) -> None:
         try:
-            trade = await action(
-                trade_id=self.trade.id,
+            await action(
+                trade_id=self.trade_id,
                 trainer_id=interaction.user.id,
                 at=datetime.now(UTC),
             )
@@ -211,10 +207,9 @@ class TradeView(discord.ui.View):
             )
             return
 
-        self.trade = trade
-        self.build_components()
+        await self._reload_trade_display()
 
-        if trade.status is TradeStatus.COMPLETED:
+        if self.trade_display.status is TradeStatus.COMPLETED:
             await interaction.response.edit_message(
                 content="✅ Trade completed.",
                 embed=self.build_embed(),
@@ -222,7 +217,7 @@ class TradeView(discord.ui.View):
             )
             return
 
-        if trade.status is TradeStatus.CANCELLED:
+        if self.trade_display.status is TradeStatus.CANCELLED:
             await interaction.response.edit_message(
                 content="❌ Trade cancelled.",
                 embed=self.build_embed(),
@@ -230,7 +225,7 @@ class TradeView(discord.ui.View):
             )
             return
 
-        if trade.status is TradeStatus.REJECTED:
+        if self.trade_display.status is TradeStatus.REJECTED:
             await interaction.response.edit_message(
                 content="❌ Trade rejected.",
                 embed=self.build_embed(),
@@ -243,31 +238,50 @@ class TradeView(discord.ui.View):
             view=self,
         )
 
+    async def _reload_trade_display(self) -> None:
+        self.trade_display = await self.core.trade_display_service.get_trade_display(
+            self.trade_id,
+        )
+        self.build_components()
+
     @staticmethod
     def _format_offer(
-        creature_ids: tuple[int, ...] | None,
-        *,
-        accepted_at: datetime | None,
+        offer: TradeOfferDisplay | None,
     ) -> str:
-        if not creature_ids:
-            offer_text = "No creatures offered yet."
+        if offer is None or offer.creature is None:
+            offer_text = "No creature offered yet."
         else:
-            offer_text = "\n".join(
-                f"• Creature #{creature_id}" for creature_id in creature_ids
-            )
+            offer_text = TradeView._format_creature(offer.creature)
 
-        if accepted_at is not None:
-            offer_text += f"\n\nAcceptance: Accepted at {accepted_at.isoformat()}"
+        if offer is not None and offer.accepted_at is not None:
+            offer_text += f"\n\nAcceptance: Accepted at {offer.accepted_at.isoformat()}"
         else:
             offer_text += "\n\nAcceptance: Pending"
 
         return offer_text
 
+    @staticmethod
+    def _format_creature(creature: TradeCreatureDisplay) -> str:
+        lines = [
+            f"**{creature.species_name}** • #{creature.collection_number}",
+            (
+                f"IVs: {creature.iv_percentage}% • "
+                f"Shiny: {'Yes' if creature.is_shiny else 'No'}"
+            ),
+            f"Nature: {creature.nature} • Size: {creature.size}",
+            f"Offered by: <@{creature.trainer_id}>",
+        ]
+
+        if creature.current_form_name is not None:
+            lines.insert(3, f"Form: {creature.current_form_name}")
+
+        return "\n".join(lines)
+
     def _color(self) -> discord.Color:
-        if self.trade.status is TradeStatus.COMPLETED:
+        if self.trade_display.status is TradeStatus.COMPLETED:
             return discord.Color.green()
 
-        if self.trade.status in {
+        if self.trade_display.status in {
             TradeStatus.CANCELLED,
             TradeStatus.REJECTED,
             TradeStatus.EXPIRED,
