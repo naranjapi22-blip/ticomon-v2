@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import discord
 from discord.ext import commands
@@ -64,6 +65,77 @@ class TicoMonBot(commands.Bot):
             loaded_count += 1
 
         logger.info("Discord cogs loaded: %s", loaded_count)
+
+    async def on_command_error(
+        self,
+        ctx: commands.Context,
+        error: commands.CommandError,
+    ) -> None:
+        command = getattr(ctx, "command", None)
+
+        if command is not None and command.has_error_handler():
+            return
+
+        cog = getattr(ctx, "cog", None)
+
+        if cog is not None and cog.has_error_handler():
+            return
+
+        if isinstance(
+            error,
+            (
+                commands.CommandNotFound,
+                commands.MissingRequiredArgument,
+                commands.BadArgument,
+                commands.CheckFailure,
+            ),
+        ):
+            return
+
+        command_name = command.qualified_name if command is not None else "<unknown>"
+        guild_id = ctx.guild.id if getattr(ctx, "guild", None) is not None else None
+        channel_id = (
+            ctx.channel.id if getattr(ctx, "channel", None) is not None else None
+        )
+        user_id = ctx.author.id if getattr(ctx, "author", None) is not None else None
+
+        if isinstance(error, commands.CommandInvokeError):
+            original = error.original
+
+            logger.error(
+                "Unhandled command error command=%s guild=%s channel=%s user=%s",
+                command_name,
+                guild_id,
+                channel_id,
+                user_id,
+                exc_info=(type(original), original, original.__traceback__),
+            )
+            return
+
+        logger.error(
+            (
+                "Unhandled command framework error command=%s guild=%s "
+                "channel=%s user=%s error_type=%s"
+            ),
+            command_name,
+            guild_id,
+            channel_id,
+            user_id,
+            type(error).__name__,
+            exc_info=(type(error), error, error.__traceback__),
+        )
+
+    async def on_error(
+        self,
+        event_method: str,
+        *args,
+        **kwargs,
+    ) -> None:
+        logger.error(
+            "Unhandled Discord event error event=%s",
+            event_method,
+            exc_info=sys.exc_info(),
+        )
 
 
 def create_bot() -> TicoMonBot:
