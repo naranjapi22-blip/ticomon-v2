@@ -18,6 +18,7 @@ from core.trade.exceptions import (
     SameTradeParticipant,
     TradeError,
 )
+from interfaces.discord.views.trade_view import TradeView
 
 
 class TradeCog(commands.Cog):
@@ -66,4 +67,14 @@ class TradeCog(commands.Cog):
             await ctx.send("Trade could not be created.")
             return
 
-        await ctx.send(f"Trade #{trade.id} created with {counterparty.mention}.")
+        view = TradeView(
+            self._core,
+            trade,
+        )
+
+        message = await ctx.send(
+            embed=view.build_embed(),
+            view=view,
+        )
+
+        view.message = message

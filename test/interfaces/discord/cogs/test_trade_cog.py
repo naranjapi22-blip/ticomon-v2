@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock
 
@@ -5,14 +6,33 @@ import pytest
 
 from application.trade.exceptions import TradeCreatureNotOwned
 from core.trade.exceptions import SameTradeParticipant
+from core.trade.trade import Trade
+from core.trade.trade_offer import TradeOffer
+from core.trade.trade_status import TradeStatus
 from interfaces.discord.cogs.trade_cog import TradeCog
+from interfaces.discord.views.trade_view import TradeView
+
+
+def _trade() -> Trade:
+    created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    return Trade._reconstitute(
+        trade_id=42,
+        initiator_trainer_id=101,
+        counterparty_trainer_id=202,
+        initiator_offer=TradeOffer.create(101, [11, 22]),
+        counterparty_offer=None,
+        created_at=created_at,
+        expires_at=None,
+        status=TradeStatus.OPEN,
+        initiator_accepted_at=None,
+        counterparty_accepted_at=None,
+    )
 
 
 @pytest.mark.asyncio
-async def test_trade_creates_trade_and_confirms() -> None:
-    create_trade = AsyncMock(
-        return_value=SimpleNamespace(id=42),
-    )
+async def test_trade_creates_trade_and_opens_view() -> None:
+    trade = _trade()
+    create_trade = AsyncMock(return_value=trade)
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
             create_trade=create_trade,
@@ -42,7 +62,10 @@ async def test_trade_creates_trade_and_confirms() -> None:
         initiator_creature_ids=[11, 22],
         created_at=ANY,
     )
-    ctx.send.assert_awaited_once_with("Trade #42 created with <@202>.")
+    ctx.send.assert_awaited_once()
+    kwargs = ctx.send.await_args.kwargs
+    assert isinstance(kwargs["view"], TradeView)
+    assert kwargs["embed"].title == "⚖️ Trade #42"
 
 
 @pytest.mark.asyncio
