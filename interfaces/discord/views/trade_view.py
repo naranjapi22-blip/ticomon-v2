@@ -15,7 +15,9 @@ from core.trade.trade import Trade
 from core.trade.trade_status import TradeStatus
 from interfaces.discord.buttons.trade_accept_button import AcceptButton
 from interfaces.discord.buttons.trade_cancel_button import CancelButton
+from interfaces.discord.buttons.trade_edit_offer_button import EditOfferButton
 from interfaces.discord.buttons.trade_reject_button import RejectButton
+from interfaces.discord.views.trade_edit_offer_modal import TradeEditOfferModal
 
 
 class TradeView(discord.ui.View):
@@ -40,6 +42,9 @@ class TradeView(discord.ui.View):
         )
         self.add_item(
             RejectButton(),
+        )
+        self.add_item(
+            EditOfferButton(),
         )
         self.add_item(
             CancelButton(),
@@ -129,6 +134,18 @@ class TradeView(discord.ui.View):
         await self._apply_trade_action(
             interaction,
             self.core.trade_application.cancel_trade,
+        )
+
+    async def edit_offer(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        await interaction.response.send_modal(
+            TradeEditOfferModal(
+                self.core,
+                trade_id=self.trade.id,
+                trainer_id=interaction.user.id,
+            )
         )
 
     async def refresh(

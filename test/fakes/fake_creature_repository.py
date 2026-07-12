@@ -13,9 +13,13 @@ class FakeCreatureRepository(CreatureRepository):
     ) -> None:
         self._creatures = {creature.id: creature for creature in creatures}
 
-        self._collection_numbers = {
-            index + 1: creature for index, creature in enumerate(creatures)
-        }
+        self._collection_numbers = {}
+
+        for index, creature in enumerate(creatures, start=1):
+            self._collection_numbers[index] = creature
+
+            if creature.collection_number is not None:
+                self._collection_numbers[creature.collection_number] = creature
 
         self.saved: list[Creature] = []
         self.updated: list[Creature] = []
@@ -32,6 +36,16 @@ class FakeCreatureRepository(CreatureRepository):
         creature: Creature,
     ) -> Creature:
         self._creatures[creature.id] = creature
+
+        if creature.collection_number is None:
+            next_collection_number = (
+                max(self._collection_numbers, default=0) + 1
+            )
+            self._collection_numbers[next_collection_number] = creature
+
+        if creature.collection_number is not None:
+            self._collection_numbers[creature.collection_number] = creature
+
         self.saved.append(creature)
 
         return creature
@@ -100,7 +114,12 @@ class FakeCreatureRepository(CreatureRepository):
         trainer_id: int,
         collection_number: int,
     ) -> Creature:
-        return self._collection_numbers[collection_number]
+        creature = self._collection_numbers[collection_number]
+
+        if creature.trainer_id != trainer_id:
+            raise ValueError(f"Creature #{collection_number} was not found.")
+
+        return creature
 
     async def get_by_species(
         self,

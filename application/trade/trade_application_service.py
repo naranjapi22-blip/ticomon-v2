@@ -73,6 +73,25 @@ class TradeApplicationService:
 
         return await self._trade_repository.save(trade)
 
+    async def set_offer_from_collection_numbers(
+        self,
+        trade_id: int,
+        trainer_id: int,
+        collection_numbers: list[int] | tuple[int, ...],
+        at: datetime,
+    ) -> Trade:
+        creature_ids = await self._resolve_collection_numbers(
+            trainer_id,
+            collection_numbers,
+        )
+
+        return await self.set_offer(
+            trade_id=trade_id,
+            trainer_id=trainer_id,
+            creature_ids=creature_ids,
+            at=at,
+        )
+
     async def accept_trade(
         self,
         trade_id: int,
@@ -168,3 +187,23 @@ class TradeApplicationService:
                     trainer_id,
                     creature_id,
                 )
+
+    async def _resolve_collection_numbers(
+        self,
+        trainer_id: int,
+        collection_numbers: list[int] | tuple[int, ...],
+    ) -> list[int]:
+        creature_ids: list[int] = []
+
+        for collection_number in collection_numbers:
+            try:
+                creature = await self._creature_repository.get_by_collection_number(
+                    trainer_id,
+                    collection_number,
+                )
+            except (KeyError, ValueError) as error:
+                raise TradeCreatureNotFound(collection_number) from error
+
+            creature_ids.append(creature.id)
+
+        return creature_ids

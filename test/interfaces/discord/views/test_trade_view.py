@@ -7,15 +7,16 @@ import pytest
 from core.trade.trade import Trade
 from core.trade.trade_offer import TradeOffer
 from core.trade.trade_status import TradeStatus
+from interfaces.discord.buttons.trade_accept_button import AcceptButton
+from interfaces.discord.buttons.trade_cancel_button import CancelButton
+from interfaces.discord.buttons.trade_edit_offer_button import EditOfferButton
+from interfaces.discord.buttons.trade_reject_button import RejectButton
 from interfaces.discord.views.trade_view import TradeView
 
 
-def make_trade(
-    *,
-    status: TradeStatus = TradeStatus.OPEN,
-) -> Trade:
+def make_trade(*, status: TradeStatus = TradeStatus.OPEN) -> Trade:
     created_at = datetime(2026, 1, 1, tzinfo=UTC)
-    trade = Trade._reconstitute(
+    return Trade._reconstitute(
         trade_id=42,
         initiator_trainer_id=101,
         counterparty_trainer_id=202,
@@ -28,14 +29,12 @@ def make_trade(
         counterparty_accepted_at=None,
         completed_at=None,
     )
-    return trade
 
 
 @pytest.mark.asyncio
 async def test_trade_view_renders_current_offers() -> None:
-    core = SimpleNamespace()
     view = TradeView(
-        core,
+        SimpleNamespace(),
         make_trade(),
     )
 
@@ -46,6 +45,14 @@ async def test_trade_view_renders_current_offers() -> None:
     assert "Creature #11" in embed.fields[3].value
     assert embed.fields[4].name == "Counterparty Offer"
     assert "Creature #33" in embed.fields[4].value
+    assert isinstance(view.children[0], AcceptButton)
+    assert isinstance(view.children[1], RejectButton)
+    assert isinstance(view.children[2], EditOfferButton)
+    assert isinstance(view.children[3], CancelButton)
+    assert view.children[0].row == 0
+    assert view.children[1].row == 0
+    assert view.children[2].row == 1
+    assert view.children[3].row == 1
 
 
 @pytest.mark.asyncio
@@ -134,7 +141,7 @@ async def test_cancel_button_calls_application_service() -> None:
         response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()),
     )
 
-    await view.children[2].callback(interaction)
+    await view.children[3].callback(interaction)
 
     cancel_trade.assert_awaited_once_with(
         trade_id=42,
@@ -142,3 +149,13 @@ async def test_cancel_button_calls_application_service() -> None:
         at=ANY,
     )
     interaction.response.edit_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_terminal_trade_disables_all_buttons() -> None:
+    view = TradeView(
+        SimpleNamespace(),
+        make_trade(status=TradeStatus.CANCELLED),
+    )
+
+    assert all(child.disabled for child in view.children)
