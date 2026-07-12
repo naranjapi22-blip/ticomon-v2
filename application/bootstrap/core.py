@@ -23,6 +23,9 @@ from application.release.release_application_service import (
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
+from application.trade.trade_application_service import (
+    TradeApplicationService,
+)
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_service import (
     CaptureApplicationService,
@@ -65,6 +68,9 @@ from infrastructure.persistence.repositories.neon_creature_repository import (
 from infrastructure.persistence.repositories.neon_profile_repository import (
     NeonProfileRepository,
 )
+from infrastructure.persistence.repositories.neon_trade_repository import (
+    NeonTradeRepository,
+)
 from infrastructure.postgres.energy.neon_energy_repository import (
     NeonEnergyRepository,
 )
@@ -104,6 +110,8 @@ class CoreServices:
     pokedex_service: PokedexService
     start_adventure_application: StartAdventureApplicationService
     energy_service: EnergyService
+    trade_repository: NeonTradeRepository
+    trade_application: TradeApplicationService
 
 
 def build_core(
@@ -142,6 +150,7 @@ def build_core(
     )
 
     profile_repository = NeonProfileRepository()
+    trade_repository = NeonTradeRepository()
 
     spawn_session_repository = InMemorySpawnSessionRepository()
 
@@ -227,6 +236,11 @@ def build_core(
         trainer_repository=trainer_repository,
         energy_repository=energy_repository,
     )
+    trade_application = TradeApplicationService(
+        trade_repository=trade_repository,
+        trainer_repository=trainer_repository,
+        creature_repository=creature_repository,
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
@@ -248,4 +262,6 @@ def build_core(
         pokedex_service=pokedex_service,
         start_adventure_application=start_adventure_application,
         energy_service=energy_service,
+        trade_repository=trade_repository,
+        trade_application=trade_application,
     )
