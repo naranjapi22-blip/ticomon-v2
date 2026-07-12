@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -8,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 _pool: asyncpg.Pool | None = None
+logger = logging.getLogger(__name__)
 
 
 async def get_pool() -> asyncpg.Pool:
@@ -30,6 +32,7 @@ async def get_pool() -> asyncpg.Pool:
             max_size=10,
             statement_cache_size=0,
         )
+        logger.info("PostgreSQL pool created")
 
     return _pool
 
@@ -44,3 +47,4 @@ async def close_pool() -> None:
     if _pool is not None:
         await _pool.close()
         _pool = None
+        logger.info("PostgreSQL pool closed")

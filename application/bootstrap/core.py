@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 from application.adventure.start_adventure.start_adventure_application_service import (
@@ -86,6 +87,8 @@ from infrastructure.spawn.in_memory_spawn_session_repository import (
 from infrastructure.species.neon_species_repository import (
     NeonSpeciesRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +252,7 @@ def build_core(
         trade_repository=trade_repository,
         creature_repository=creature_repository,
     )
+    logger.info("Application services initialized")
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
