@@ -15,6 +15,7 @@ from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.cogs.release_cog import ReleaseCog
 from interfaces.discord.cogs.select_cog import SelectCog
 from interfaces.discord.cogs.spawn_cog import SpawnCog
+from interfaces.discord.cogs.trade_cog import TradeCog
 from interfaces.discord.cogs.trainer_cog import TrainerCog
 
 
@@ -44,6 +45,7 @@ class TicoMonBot(commands.Bot):
         await self.add_cog(CandyCog(self.core))
         await self.add_cog(ReleaseCog(self.core))
         await self.add_cog(DuplicatesCog(self.core))
+        await self.add_cog(TradeCog(self.core))
         await self.add_cog(CommandsCog())
 
 
