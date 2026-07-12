@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
+from interfaces.discord import images as images_module
 from interfaces.discord.cogs import info as info_module
 from interfaces.discord.cogs import ivs_cog as ivs_module
 from interfaces.discord.cogs import profile_cog as profile_module
@@ -12,6 +13,13 @@ from interfaces.discord.cogs.info import InfoCog
 from interfaces.discord.cogs.ivs_cog import IVsCog
 from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.images import download_gif_file
+
+
+@pytest.fixture(autouse=True)
+def clear_gif_cache():
+    images_module._GIF_CACHE.clear()
+    yield
+    images_module._GIF_CACHE.clear()
 
 
 class _DummyNature:
@@ -159,6 +167,131 @@ async def test_download_gif_file_seeks_buffer_before_building_discord_file(
     assert gif_file.fp.tell() == 0
     assert gif_file.fp.read() == b"gif-bytes"
     assert response.closed is True
+    assert images_module._GIF_CACHE == {
+        "https://example.invalid/pikachu.gif": b"gif-bytes",
+    }
+
+
+@pytest.mark.asyncio
+async def test_download_gif_file_uses_cache_on_second_call(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class _Response:
+        def __init__(self):
+            self.content = b"gif-bytes"
+
+        def raise_for_status(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def fake_get(url, timeout, stream):
+        calls.append(url)
+        return _Response()
+
+    monkeypatch.setattr("interfaces.discord.images.requests.get", fake_get)
+
+    first = await download_gif_file(
+        "https://example.invalid/pikachu.gif",
+        "first.gif",
+    )
+    second = await download_gif_file(
+        "https://example.invalid/pikachu.gif",
+        "second.gif",
+    )
+
+    assert calls == ["https://example.invalid/pikachu.gif"]
+    assert first.filename == "first.gif"
+    assert second.filename == "second.gif"
+    assert first.fp.tell() == 0
+    assert second.fp.tell() == 0
+    assert first.fp.read() == b"gif-bytes"
+    assert second.fp.read() == b"gif-bytes"
+
+
+@pytest.mark.asyncio
+async def test_download_gif_file_reuses_bytes_for_distinct_filenames(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    class _Response:
+        def __init__(self):
+            self.content = b"gif-bytes"
+
+        def raise_for_status(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def fake_get(url, timeout, stream):
+        calls.append(url)
+        return _Response()
+
+    monkeypatch.setattr("interfaces.discord.images.requests.get", fake_get)
+
+    first = await download_gif_file(
+        "https://example.invalid/pikachu.gif",
+        "ivs.gif",
+    )
+    second = await download_gif_file(
+        "https://example.invalid/pikachu.gif",
+        "species.gif",
+    )
+
+    assert calls == ["https://example.invalid/pikachu.gif"]
+    assert first.filename == "ivs.gif"
+    assert second.filename == "species.gif"
+    assert first.fp.read() == b"gif-bytes"
+    assert second.fp.read() == b"gif-bytes"
+
+
+@pytest.mark.asyncio
+async def test_download_gif_file_evicts_oldest_when_cache_reaches_limit(
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    class _Response:
+        def __init__(self, content: bytes):
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def fake_get(url, timeout, stream):
+        calls.append(url)
+        return _Response(url.encode())
+
+    monkeypatch.setattr("interfaces.discord.images.requests.get", fake_get)
+
+    for index in range(images_module._GIF_CACHE_MAX_SIZE + 1):
+        await download_gif_file(
+            f"https://example.invalid/{index}.gif",
+            f"{index}.gif",
+        )
+
+    assert len(images_module._GIF_CACHE) == images_module._GIF_CACHE_MAX_SIZE
+    assert "https://example.invalid/0.gif" not in images_module._GIF_CACHE
+    assert "https://example.invalid/1.gif" in images_module._GIF_CACHE
+    assert f"https://example.invalid/{images_module._GIF_CACHE_MAX_SIZE}.gif" in (
+        images_module._GIF_CACHE
+    )
+    assert len(calls) == images_module._GIF_CACHE_MAX_SIZE + 1
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,9 @@ from interfaces.discord.mapeo_pokes import obtener_id_gif
 
 BASE_GIF_URL = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
+_GIF_CACHE: dict[str, bytes] = {}
+_GIF_CACHE_MAX_SIZE = 100
+
 
 def get_species_gif(
     species_id: int,
@@ -78,10 +81,18 @@ async def download_gif_file(
     url: str,
     filename: str,
 ) -> discord.File:
-    data = await asyncio.to_thread(
-        _download_bytes,
-        url,
-    )
+    data = _GIF_CACHE.get(url)
+
+    if data is None:
+        data = await asyncio.to_thread(
+            _download_bytes,
+            url,
+        )
+
+        if len(_GIF_CACHE) >= _GIF_CACHE_MAX_SIZE:
+            _GIF_CACHE.pop(next(iter(_GIF_CACHE)))
+
+        _GIF_CACHE[url] = data
 
     buffer = BytesIO(data)
     buffer.seek(0)
