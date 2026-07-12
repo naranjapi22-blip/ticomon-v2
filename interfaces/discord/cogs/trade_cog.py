@@ -30,18 +30,20 @@ class TradeCog(commands.Cog):
         self,
         ctx: commands.Context,
         counterparty: discord.Member,
-        *creature_ids: int,
+        *collection_numbers: int,
     ):
-        if not creature_ids:
-            await ctx.send("You must provide at least one creature ID.")
+        if not collection_numbers:
+            await ctx.send("You must provide at least one collection number.")
             return
 
         try:
-            trade = await self._core.trade_application.create_trade(
-                initiator_trainer_id=ctx.author.id,
-                counterparty_trainer_id=counterparty.id,
-                initiator_creature_ids=list(creature_ids),
-                created_at=datetime.now(UTC),
+            trade = (
+                await self._core.trade_application.create_trade_from_collection_numbers(
+                    initiator_trainer_id=ctx.author.id,
+                    counterparty_trainer_id=counterparty.id,
+                    initiator_collection_numbers=list(collection_numbers),
+                    created_at=datetime.now(UTC),
+                )
             )
         except (
             TradeTrainerNotFound,

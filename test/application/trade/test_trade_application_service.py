@@ -94,6 +94,21 @@ async def test_creates_persisted_trade_for_existing_owner(service_context):
 
 
 @pytest.mark.asyncio
+async def test_creates_trade_from_collection_numbers(service_context):
+    await add_trainers(service_context["trainer_repository"])
+
+    trade = await service_context["service"].create_trade_from_collection_numbers(
+        initiator_trainer_id=INITIATOR_ID,
+        counterparty_trainer_id=COUNTERPARTY_ID,
+        initiator_collection_numbers=[7],
+        created_at=NOW,
+    )
+
+    assert trade.id == 1
+    assert trade.initiator_offer.creature_ids == (101,)
+
+
+@pytest.mark.asyncio
 async def test_rejects_missing_trade_participant(service_context):
     await service_context["trainer_repository"].save(
         Trainer(

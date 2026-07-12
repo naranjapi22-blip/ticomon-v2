@@ -35,7 +35,7 @@ async def test_trade_creates_trade_and_opens_view() -> None:
     create_trade = AsyncMock(return_value=trade)
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
-            create_trade=create_trade,
+            create_trade_from_collection_numbers=create_trade,
         ),
     )
     cog = TradeCog(core)
@@ -59,7 +59,7 @@ async def test_trade_creates_trade_and_opens_view() -> None:
     create_trade.assert_awaited_once_with(
         initiator_trainer_id=101,
         counterparty_trainer_id=202,
-        initiator_creature_ids=[11, 22],
+        initiator_collection_numbers=[11, 22],
         created_at=ANY,
     )
     ctx.send.assert_awaited_once()
@@ -75,7 +75,7 @@ async def test_trade_reports_application_errors() -> None:
     )
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
-            create_trade=create_trade,
+            create_trade_from_collection_numbers=create_trade,
         ),
     )
     cog = TradeCog(core)
@@ -107,7 +107,7 @@ async def test_trade_reports_domain_errors() -> None:
     )
     core = SimpleNamespace(
         trade_application=SimpleNamespace(
-            create_trade=create_trade,
+            create_trade_from_collection_numbers=create_trade,
         ),
     )
     cog = TradeCog(core)

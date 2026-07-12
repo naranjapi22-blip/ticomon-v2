@@ -52,6 +52,27 @@ class TradeApplicationService:
 
         return await self._trade_repository.save(trade)
 
+    async def create_trade_from_collection_numbers(
+        self,
+        initiator_trainer_id: int,
+        counterparty_trainer_id: int,
+        initiator_collection_numbers: list[int] | tuple[int, ...],
+        created_at: datetime,
+        expires_at: datetime | None = None,
+    ) -> Trade:
+        initiator_creature_ids = await self._resolve_collection_numbers(
+            initiator_trainer_id,
+            initiator_collection_numbers,
+        )
+
+        return await self.create_trade(
+            initiator_trainer_id=initiator_trainer_id,
+            counterparty_trainer_id=counterparty_trainer_id,
+            initiator_creature_ids=initiator_creature_ids,
+            created_at=created_at,
+            expires_at=expires_at,
+        )
+
     async def set_offer(
         self,
         trade_id: int,
