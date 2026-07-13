@@ -9,6 +9,7 @@ from core.safari.domain import (
     SAFARI_ZONE_DEFINITION_BY_ZONE,
     SafariMap,
     SafariPhase,
+    SafariThematicEvent,
     SafariTimeOfDay,
     SafariWeather,
     SafariZone,
@@ -38,6 +39,7 @@ class SafariEncounterContext:
     zone_type_weight_modifiers: Mapping[str, float]
     route_type_weight_modifiers: Mapping[str, float]
     seen_species_ids: frozenset[int]
+    route_allowed_events: frozenset[SafariThematicEvent] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.safari_map, SafariMap):
@@ -59,6 +61,21 @@ class SafariEncounterContext:
         if any(species_id <= 0 for species_id in seen_species_ids):
             raise ValueError("seen species IDs must be positive.")
 
+        route_allowed_events = self.route_allowed_events
+        if route_allowed_events is None:
+            route_allowed_events = frozenset(
+                SAFARI_ZONE_DEFINITION_BY_ZONE[self.zone].allowed_events
+            )
+        else:
+            route_allowed_events = frozenset(route_allowed_events)
+            if any(
+                not isinstance(event, SafariThematicEvent)
+                for event in route_allowed_events
+            ):
+                raise ValueError("route events must be SafariThematicEvent values.")
+            if SafariThematicEvent.NONE not in route_allowed_events:
+                raise ValueError("route events must include NONE.")
+
         object.__setattr__(
             self,
             "map_type_weight_modifiers",
@@ -75,3 +92,4 @@ class SafariEncounterContext:
             _freeze_type_modifiers(self.route_type_weight_modifiers),
         )
         object.__setattr__(self, "seen_species_ids", seen_species_ids)
+        object.__setattr__(self, "route_allowed_events", route_allowed_events)

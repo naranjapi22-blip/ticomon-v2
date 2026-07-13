@@ -43,6 +43,17 @@ from .encounter_generator import (
     SafariEncounterGenerationError,
     SafariEncounterGenerator,
 )
+from .event_catalog import (
+    COMMON_SAFARI_COMPOSITIONS,
+    EVENT_COMPOSITION_COMPATIBILITY,
+    EVENT_REQUIRED_TYPES,
+    EVENT_TYPE_MODIFIERS,
+    EVENT_WEIGHTS,
+    EVENTS_BY_PHASE,
+    EVENTS_BY_ZONE,
+    available_events_for,
+)
+from .generated_encounter import SafariGeneratedEncounter
 from .map_selector import SafariMapSelector
 from .participant import NotEnoughSafariBalls, SafariParticipant
 from .progress_result import SafariWorldProgressResult
@@ -81,6 +92,13 @@ __all__ = [
     "TIME_OF_DAY_WEIGHTS",
     "WEATHER_WEIGHTS",
     "SAFARI_ROUTE_SEGMENT_SCHEDULES",
+    "COMMON_SAFARI_COMPOSITIONS",
+    "EVENTS_BY_PHASE",
+    "EVENTS_BY_ZONE",
+    "EVENT_COMPOSITION_COMPATIBILITY",
+    "EVENT_REQUIRED_TYPES",
+    "EVENT_TYPE_MODIFIERS",
+    "EVENT_WEIGHTS",
     "NotEnoughSafariBalls",
     "SafariCaptureSelection",
     "SafariComposition",
@@ -93,6 +111,7 @@ __all__ = [
     "SafariEncounterStatus",
     "SafariExtraordinaryFlags",
     "SafariFinishReason",
+    "SafariGeneratedEncounter",
     "SafariLevelConfiguration",
     "SafariMap",
     "SafariMapInfluence",
@@ -136,4 +155,5 @@ __all__ = [
     "SafariWorldProgressResult",
     "SafariWorldProgressService",
     "SAFARI_UNLOCK_THRESHOLD",
+    "available_events_for",
 ]

@@ -6,9 +6,16 @@ from uuid import uuid4
 
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG
-from core.safari.domain import SafariComposition
+from core.safari.domain import SafariComposition, SafariThematicEvent
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.encounter_context import SafariEncounterContext
+from core.safari.event_catalog import (
+    EVENT_REQUIRED_TYPES,
+    EVENT_TYPE_MODIFIERS,
+    EVENT_WEIGHTS,
+    available_events_for,
+)
+from core.safari.generated_encounter import SafariGeneratedEncounter
 from core.species.regional_species import is_regional_species
 from core.species.species import Species
 from core.species.species_repository import SpeciesRepository
@@ -47,7 +54,12 @@ class SafariEncounterGenerator:
     ) -> SafariEncounter:
         self._validate_composition(composition)
         catalog = await self._species_repository.get_all()
-        return self._generate_from_catalog(context, composition, catalog)
+        return self._generate_from_catalog(
+            context,
+            composition,
+            catalog,
+            SafariThematicEvent.NONE,
+        )
 
     async def generate_from_compositions(
         self,
@@ -67,7 +79,12 @@ class SafariEncounterGenerator:
                 normal_attempted or composition == SafariComposition.NORMAL
             )
             try:
-                return self._generate_from_catalog(context, composition, catalog)
+                return self._generate_from_catalog(
+                    context,
+                    composition,
+                    catalog,
+                    SafariThematicEvent.NONE,
+                )
             except SafariEncounterGenerationError as error:
                 last_error = error
 
@@ -77,6 +94,7 @@ class SafariEncounterGenerator:
                     context,
                     SafariComposition.NORMAL,
                     catalog,
+                    SafariThematicEvent.NONE,
                 )
             except SafariEncounterGenerationError as error:
                 last_error = error
@@ -85,16 +103,64 @@ class SafariEncounterGenerator:
             "no common Safari composition can be generated."
         ) from last_error
 
+    async def generate_with_events(
+        self,
+        context: SafariEncounterContext,
+        compositions: tuple[SafariComposition, ...],
+    ) -> SafariGeneratedEncounter:
+        ordered_compositions = tuple(dict.fromkeys(compositions))
+        for composition in ordered_compositions:
+            self._validate_composition(composition)
+
+        catalog = await self._species_repository.get_all()
+        attempted: set[tuple[SafariComposition, SafariThematicEvent]] = set()
+        last_error: SafariEncounterGenerationError | None = None
+
+        for composition in ordered_compositions:
+            events = self._event_attempt_order(
+                available_events_for(context, composition)
+            )
+            for event in events:
+                attempted.add((composition, event))
+                try:
+                    encounter = self._generate_from_catalog(
+                        context,
+                        composition,
+                        catalog,
+                        event,
+                    )
+                    return SafariGeneratedEncounter(encounter, event)
+                except SafariEncounterGenerationError as error:
+                    last_error = error
+
+        fallback = (SafariComposition.NORMAL, SafariThematicEvent.NONE)
+        if fallback not in attempted:
+            try:
+                encounter = self._generate_from_catalog(
+                    context,
+                    SafariComposition.NORMAL,
+                    catalog,
+                    SafariThematicEvent.NONE,
+                )
+                return SafariGeneratedEncounter(encounter, SafariThematicEvent.NONE)
+            except SafariEncounterGenerationError as error:
+                last_error = error
+
+        raise SafariEncounterGenerationError(
+            "no Safari event and composition combination can be generated."
+        ) from last_error
+
     def _generate_from_catalog(
         self,
         context: SafariEncounterContext,
         composition: SafariComposition,
         catalog: tuple[Species, ...],
+        event: SafariThematicEvent,
     ) -> SafariEncounter:
         weighted_candidates = [
-            (species, self._weight_for(species, context))
+            (species, self._weight_for(species, context, event))
             for species in catalog
-            if self._is_candidate(species, context)
+            if self._is_candidate(species, context, event)
             and (composition != SafariComposition.BABY_NEST or species.metadata.is_baby)
         ]
         selectable_candidates = [
@@ -166,24 +232,28 @@ class SafariEncounterGenerator:
         self,
         species: Species,
         context: SafariEncounterContext,
+        event: SafariThematicEvent,
     ) -> bool:
-        return (
+        passes_base_filters = (
             species.id not in context.seen_species_ids
             and not is_regional_species(species)
             and not species.metadata.is_legendary
             and not species.metadata.is_mythical
+        )
+        required_types = EVENT_REQUIRED_TYPES[event]
+        return passes_base_filters and (
+            not required_types or not required_types.isdisjoint(species.types)
         )
 
     def _weight_for(
         self,
         species: Species,
         context: SafariEncounterContext,
+        event: SafariThematicEvent,
     ) -> float:
         rarity_weight = RARITY_CONFIG[species.spawn_rarity].spawn_weight
         if rarity_weight < 0:
-            raise SafariEncounterGenerationError(
-                "Safari rarity weights cannot be negative."
-            )
+            raise ValueError("Safari rarity weights cannot be negative.")
 
         return (
             rarity_weight
@@ -199,7 +269,32 @@ class SafariEncounterGenerator:
                 species,
                 context.route_type_weight_modifiers,
             )
+            * self._modifier_for(
+                species,
+                EVENT_TYPE_MODIFIERS[event],
+            )
         )
+
+    def _event_attempt_order(
+        self,
+        events: frozenset[SafariThematicEvent],
+    ) -> tuple[SafariThematicEvent, ...]:
+        available = sorted(events, key=lambda event: event.value)
+        ordered: list[SafariThematicEvent] = []
+
+        while available:
+            weights = [EVENT_WEIGHTS[event] for event in available]
+            if any(weight <= 0 for weight in weights):
+                raise ValueError("Safari event weights must be positive.")
+            selected = self._random_source.choices(
+                available,
+                weights=weights,
+                k=1,
+            )[0]
+            ordered.append(selected)
+            available.remove(selected)
+
+        return tuple(ordered)
 
     def _select_without_replacement(
         self,
