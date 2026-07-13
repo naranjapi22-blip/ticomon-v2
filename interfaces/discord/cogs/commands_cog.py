@@ -3,7 +3,6 @@ from discord.ext import commands
 
 
 class CommandsCog(commands.Cog):
-
     @commands.command(name="commands")
     async def commands_command(self, ctx: commands.Context):
         """Displays the available commands."""
@@ -41,6 +40,7 @@ class CommandsCog(commands.Cog):
                 "`!energy` — Check your Energy.\n"
                 "`!evolve` — Evolve your Pokémon.\n"
                 "`!release` — Release Pokémon for rewards.\n"
+                "`!safari` — Start or join a Safari expedition.\n"
                 "`!trade @trainer <collection_number>` — "
                 "Trade one Pokémon with another trainer."
             ),
@@ -58,7 +58,7 @@ class CommandsCog(commands.Cog):
         )
 
         embed.add_field(
-            name="🎒 Inventory",
+            name="🎲 Inventory",
             value="`!candies` — View your Candy inventory.",
             inline=False,
         )

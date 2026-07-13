@@ -49,6 +49,10 @@ class SafariCaptureSelectionState(str, Enum):
 @dataclass(frozen=True, slots=True)
 class OpenSafariRegistrationResult:
     registration: SafariRegistration
+    unlock: SafariUnlock
+    level: int
+    encounter_count: int
+    balls_per_participant: int
     capacity: int
 
 

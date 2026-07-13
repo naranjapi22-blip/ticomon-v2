@@ -21,18 +21,25 @@ from core.capture.application.capture_unit_of_work import (
 )
 from core.capture.attempt_service import CaptureAttemptService
 from core.capture.domain.capture_ball import CaptureBall
+from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
     SafariCaptureResolver,
+    SafariComposition,
+    SafariEncounter,
+    SafariEncounterSlot,
     SafariEncounterStatus,
+    SafariGeneratedEncounter,
     SafariParticipant,
     SafariSelectionAlreadyConfirmed,
     SafariSession,
     SafariSessionStatus,
+    SafariThematicEvent,
 )
 from core.safari.participant import NotEnoughSafariBalls
 from infrastructure.safari.in_memory_safari_activity_repository import (
     InMemorySafariActivityRepository,
 )
+from test.factories import create_species
 from test.unit.safari.test_session import make_encounter, make_session
 
 
@@ -48,6 +55,22 @@ class _DeterministicRandom:
 
     def random(self) -> float:
         return 0.0
+
+
+class _EncounterGenerator:
+    def __init__(self) -> None:
+        self.context = None
+
+    async def generate_with_events(self, context, compositions):
+        self.context = context
+        assert compositions == (SafariComposition.NORMAL,)
+        opportunity = OpportunityFactory.create(create_species(id=999))
+        encounter = SafariEncounter(
+            uuid4(),
+            SafariComposition.NORMAL,
+            (SafariEncounterSlot(uuid4(), opportunity),),
+        )
+        return SafariGeneratedEncounter(encounter, SafariThematicEvent.NONE)
 
 
 class _Transaction(CaptureTransaction):
@@ -135,11 +158,14 @@ def _capture_service(
         CaptureAttemptService(_AlwaysSuccessChanceCalculator()),
         _DeterministicRandom(),
     )
+    generator = _EncounterGenerator()
     return SafariCaptureApplicationService(
         activity_repository=activity,
         capture_resolver=resolver,
         unit_of_work=unit_of_work,
         reward_policy=RewardPolicy(),
+        encounter_generator=generator,
+        random_source=_DeterministicRandom(),
     )
 
 
@@ -307,6 +333,31 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
     assert session.current_encounter is None
     assert session.status is SafariSessionStatus.ROUTE_DECISION
     assert session.participants_by_trainer[1].captured_creature_ids == (101,)
+
+
+@pytest.mark.asyncio
+async def test_resolve_capture_publishes_followup_encounter_when_segment_continues():
+    activity = _TrackingActivityRepository()
+    session = _published_session((SafariParticipant(1, 3, 3),))
+    session._route_segments[0].remaining_encounters = 2
+    await activity.save_session(session)
+    transaction = _Transaction()
+    service = _capture_service(activity=activity, unit_of_work=_UnitOfWork(transaction))
+
+    await service.select_capture(
+        session.guild_id, 1, session.current_encounter.slots[0].id, 1
+    )
+    await service.confirm_capture_selection(session.guild_id, 1)
+    await service.close_capture_selection(session.guild_id)
+
+    result = await service.resolve_capture(session.guild_id)
+
+    assert result.next_session_status is SafariSessionStatus.ENCOUNTER
+    assert session.status is SafariSessionStatus.ENCOUNTER
+    assert session.current_encounter is not None
+    assert session.current_encounter.status is SafariEncounterStatus.OPEN
+    assert len(session.current_encounter.slots) == 1
+    assert session.current_segment.remaining_encounters == 1
 
 
 @pytest.mark.asyncio

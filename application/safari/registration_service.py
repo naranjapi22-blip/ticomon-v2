@@ -55,6 +55,10 @@ class SafariRegistrationApplicationService:
             await self._activity_repository.save_registration(registration)
             return OpenSafariRegistrationResult(
                 registration=registration,
+                unlock=unlock,
+                level=unlock.level,
+                encounter_count=unlock.encounter_count,
+                balls_per_participant=unlock.balls_per_participant,
                 capacity=SAFARI_MAX_PARTICIPANTS,
             )
 

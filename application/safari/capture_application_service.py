@@ -36,11 +36,16 @@ from core.safari.capture_resolution import (
     SafariSlotOutcome,
 )
 from core.safari.domain import (
+    SAFARI_ZONE_DEFINITION_BY_ZONE,
+    SafariComposition,
     SafariEncounterStatus,
     SafariSessionStatus,
     SafariSlotStatus,
 )
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
+from core.safari.encounter_context import SafariEncounterContext
+from core.safari.encounter_generator import SafariEncounterGenerator
+from core.safari.generated_encounter import SafariGeneratedEncounter
 from core.safari.history import (
     SafariCapturedCreatureSnapshot,
     SafariEncounterHistoryEntry,
@@ -57,12 +62,16 @@ class SafariCaptureApplicationService:
         unit_of_work: CaptureUnitOfWork,
         reward_policy: RewardPolicy,
         creature_factory: type[CreatureFactory] = CreatureFactory,
+        encounter_generator: SafariEncounterGenerator | None = None,
+        random_source: object | None = None,
     ) -> None:
         self._activity_repository = activity_repository
         self._capture_resolver = capture_resolver
         self._unit_of_work = unit_of_work
         self._reward_policy = reward_policy
         self._creature_factory = creature_factory
+        self._encounter_generator = encounter_generator
+        self._random_source = random_source
 
     async def select_capture(
         self,
@@ -181,6 +190,7 @@ class SafariCaptureApplicationService:
         async with self._activity_repository.lock(guild_id):
             session = await self._require_session(guild_id)
             encounter = self._require_resolving_encounter(session)
+            next_encounter = await self._next_encounter_if_needed(session)
 
             resolution = self._capture_resolver.resolve(encounter)
             slot_application_results, persisted_result, rewards_by_trainer = (
@@ -195,6 +205,11 @@ class SafariCaptureApplicationService:
                 persisted_result,
                 history_entry=history_entry,
             )
+            if (
+                next_encounter is not None
+                and session.status is SafariSessionStatus.ENCOUNTER
+            ):
+                session.publish_encounter(next_encounter.encounter)
             await self._activity_repository.save_session(session)
 
             return ResolveSafariCaptureResult(
@@ -341,6 +356,48 @@ class SafariCaptureApplicationService:
             resolution=resolution,
             captured_creatures=captured_creatures,
             eligible_participant_ids=encounter.eligible_participant_ids,
+        )
+
+    async def _next_encounter_if_needed(
+        self,
+        session: SafariSession,
+    ) -> SafariGeneratedEncounter | None:
+        if self._encounter_generator is None or self._random_source is None:
+            return None
+        if session.current_segment.remaining_encounters <= 1:
+            return None
+        if not any(
+            participant.can_capture
+            for participant in session.participants_by_trainer.values()
+        ):
+            return None
+        return await self._generate_next_encounter(session)
+
+    async def _generate_next_encounter(
+        self,
+        session: SafariSession,
+    ) -> SafariGeneratedEncounter:
+        assert self._encounter_generator is not None
+        assert self._random_source is not None
+
+        current_segment = session.current_segment
+        definition = SAFARI_ZONE_DEFINITION_BY_ZONE[current_segment.zone]
+        context = SafariEncounterContext(
+            safari_map=session.safari_map,
+            zone=current_segment.zone,
+            weather=session.weather,
+            time_of_day=session.time_of_day,
+            phase=session.phase,
+            map_type_weight_modifiers={},
+            zone_type_weight_modifiers=definition.base_type_weights,
+            route_type_weight_modifiers=current_segment.type_weight_modifiers,
+            seen_species_ids=session.seen_species_ids,
+            route_allowed_events=frozenset(current_segment.allowed_events),
+            extraordinary_flags=session.extraordinary_flags,
+        )
+        return await self._encounter_generator.generate_with_events(
+            context,
+            (SafariComposition.NORMAL,),
         )
 
     async def _require_session(self, guild_id: int) -> SafariSession:

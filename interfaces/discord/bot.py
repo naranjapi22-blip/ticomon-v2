@@ -17,6 +17,7 @@ from interfaces.discord.cogs.ivs_cog import IVsCog
 from interfaces.discord.cogs.pokedex_cog import PokedexCog
 from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.cogs.release_cog import ReleaseCog
+from interfaces.discord.cogs.safari_cog import SafariCog
 from interfaces.discord.cogs.select_cog import SelectCog
 from interfaces.discord.cogs.spawn_cog import SpawnCog
 from interfaces.discord.cogs.top_cog import TopCog
@@ -58,6 +59,7 @@ class TicoMonBot(commands.Bot):
             (ReleaseCog, (self.core,)),
             (DuplicatesCog, (self.core,)),
             (TradeCog, (self.core,)),
+            (SafariCog, (self.core,)),
             (CommandsCog, ()),
         ]
 

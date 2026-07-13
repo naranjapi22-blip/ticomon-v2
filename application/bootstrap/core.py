@@ -221,6 +221,11 @@ def build_core(
     )
 
     safari_random = random.Random()
+    safari_encounter_generator = SafariEncounterGenerator(
+        species_repository=species_repository,
+        opportunity_factory=OpportunityFactory(),
+        random_source=safari_random,
+    )
     safari_registration_application = SafariRegistrationApplicationService(
         activity_repository=safari_activity_repository,
         unlock_repository=safari_unlock_repository,
@@ -228,11 +233,7 @@ def build_core(
     safari_route_application = SafariRouteApplicationService(
         activity_repository=safari_activity_repository,
         route_option_factory=SafariRouteOptionFactory(),
-        encounter_generator=SafariEncounterGenerator(
-            species_repository=species_repository,
-            opportunity_factory=OpportunityFactory(),
-            random_source=safari_random,
-        ),
+        encounter_generator=safari_encounter_generator,
         random_source=safari_random,
     )
     safari_capture_application = SafariCaptureApplicationService(
@@ -243,6 +244,8 @@ def build_core(
         ),
         unit_of_work=NeonCaptureUnitOfWork(),
         reward_policy=reward_policy,
+        encounter_generator=safari_encounter_generator,
+        random_source=safari_random,
     )
     safari_finish_application = FinishSafariApplicationService(
         activity_repository=safari_activity_repository,
@@ -253,11 +256,7 @@ def build_core(
         map_selector=SafariMapSelector(),
         weather_selector=SafariWeatherSelector(),
         time_of_day_selector=SafariTimeOfDaySelector(),
-        encounter_generator=SafariEncounterGenerator(
-            species_repository=species_repository,
-            opportunity_factory=OpportunityFactory(),
-            random_source=safari_random,
-        ),
+        encounter_generator=safari_encounter_generator,
         random_source=safari_random,
     )
 
