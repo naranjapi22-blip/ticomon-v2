@@ -4,6 +4,10 @@ import pytest
 
 from application.bootstrap.core import build_core
 from core.capture.domain.capture_ball import CaptureBall
+from infrastructure.safari.neon_safari_world_repository import (
+    NeonSafariWorldRepository,
+)
+from scripts.create_safari_schema import create_safari_schema
 
 
 class AlwaysMasterBallSelector:
@@ -18,11 +22,13 @@ class AlwaysMasterBallSelector:
 @pytest.mark.asyncio
 async def test_complete_gameplay_loop():
     # Arrange
+    await create_safari_schema()
     services = build_core(
         ball_selector=AlwaysMasterBallSelector(),
     )
 
     trainer_id = uuid.uuid4().int & 0x7FFFFFFF
+    guild_id = uuid.uuid4().int & 0x7FFFFFFF
 
     inventory_before = await services.candy_repository.get(
         trainer_id,
@@ -30,20 +36,20 @@ async def test_complete_gameplay_loop():
 
     # Act
     session = await services.spawn_application.spawn(
-        guild_id=1,
+        guild_id=guild_id,
         owner_id=trainer_id,
     )
 
     assert len(session.opportunities) == 3
 
     selected = await services.select_opportunity_application.select_opportunity(
-        guild_id=1,
+        guild_id=guild_id,
         opportunity_index=1,
     )
 
     result = await services.capture_application.capture(
         trainer_id=trainer_id,
-        guild_id=1,
+        guild_id=guild_id,
     )
 
     # Assert
@@ -77,3 +83,10 @@ async def test_complete_gameplay_loop():
             inventory_after.get_amount(candy_type)
             == inventory_before.get_amount(candy_type) + amount
         )
+
+    world = await NeonSafariWorldRepository().get_by_guild_id(guild_id)
+    assert world is not None
+    assert world.current_progress == 1
+    assert dict(world.current_influence.amounts) == {
+        type_name: 1 for type_name in selected.species.types
+    }

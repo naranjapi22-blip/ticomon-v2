@@ -1,11 +1,14 @@
+from collections.abc import Callable
+from datetime import UTC, datetime
+
 from core.candy.candy_bundle import CandyBundle
-from core.candy.candy_repository import CandyRepository
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_application_result import (
     CaptureApplicationResult,
 )
+from core.capture.application.capture_unit_of_work import CaptureUnitOfWork
 from core.capture.service import CaptureService
-from core.creature.creature_repository import CreatureRepository
+from core.safari.progress_service import SafariWorldProgressService
 from core.spawn.exceptions import (
     NoActiveSpawnSession,
     NoSelectedOpportunity,
@@ -21,16 +24,18 @@ class CaptureApplicationService:
     def __init__(
         self,
         capture_service: CaptureService,
-        creature_repository: CreatureRepository,
-        candy_repository: CandyRepository,
+        unit_of_work: CaptureUnitOfWork,
         reward_policy: RewardPolicy,
+        world_progress_service: SafariWorldProgressService,
         spawn_session_repository: SpawnSessionRepository,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._capture_service = capture_service
-        self._creature_repository = creature_repository
-        self._candy_repository = candy_repository
+        self._unit_of_work = unit_of_work
         self._reward_policy = reward_policy
+        self._world_progress_service = world_progress_service
         self._spawn_session_repository = spawn_session_repository
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def capture(
         self,
@@ -65,26 +70,30 @@ class CaptureApplicationService:
 
             assert result.creature is not None
 
-            creature = await self._creature_repository.save(
+            reward = self._reward_policy.reward_for(
                 result.creature,
             )
+            captured_at = self._clock()
 
-            reward = self._reward_policy.reward_for(
-                creature,
-            )
+            async with self._unit_of_work.transaction() as transaction:
+                creature = await transaction.save_creature(result.creature)
+                inventory = await transaction.get_candy_inventory(trainer_id)
+                inventory.add(reward)
+                await transaction.save_candy_inventory(trainer_id, inventory)
 
-            inventory = await self._candy_repository.get(
-                trainer_id,
-            )
+                world = await transaction.get_or_create_world(
+                    guild_id,
+                    captured_at.date(),
+                )
+                progress = self._world_progress_service.register_capture(
+                    world=world,
+                    species_types=creature.species.types,
+                    captured_at=captured_at,
+                )
+                await transaction.save_world(world)
 
-            inventory.add(
-                reward,
-            )
-
-            await self._candy_repository.save(
-                trainer_id,
-                inventory,
-            )
+                for unlock in progress.created_unlocks:
+                    await transaction.save_unlock(unlock)
 
             await self._spawn_session_repository.clear(
                 guild_id,

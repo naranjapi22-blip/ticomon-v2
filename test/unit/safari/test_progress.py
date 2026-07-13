@@ -71,6 +71,16 @@ def test_world_can_be_created_and_rejects_invalid_values():
         )
 
 
+def test_world_factory_creates_empty_state_for_capture_date():
+    world = SafariWorld.create(123, date(2026, 7, 13))
+
+    assert world.guild_id == 123
+    assert world.current_progress == 0
+    assert world.daily_unlock_count == 0
+    assert world.current_influence.is_empty()
+    assert world.last_daily_reset_date == date(2026, 7, 13)
+
+
 def test_capture_with_single_type_adds_progress_and_influence():
     world = make_world()
     service = SafariWorldProgressService()

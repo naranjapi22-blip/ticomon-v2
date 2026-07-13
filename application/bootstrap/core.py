@@ -48,6 +48,7 @@ from core.evolution.evolution_cost_policy import (
 )
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
+from core.safari.progress_service import SafariWorldProgressService
 from core.spawn.application.get_current_spawn_application_service import (
     GetCurrentSpawnApplicationService,
 )
@@ -68,6 +69,9 @@ from infrastructure.evolution.neon_evolution_repository import (
 )
 from infrastructure.persistence.repositories.neon_candy_repository import (
     NeonCandyRepository,
+)
+from infrastructure.persistence.repositories.neon_capture_unit_of_work import (
+    NeonCaptureUnitOfWork,
 )
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
@@ -181,9 +185,9 @@ def build_core(
             chance_calculator=chance_calculator,
             ball_selector=ball_selector,
         ),
-        creature_repository=creature_repository,
-        candy_repository=candy_repository,
+        unit_of_work=NeonCaptureUnitOfWork(),
         reward_policy=reward_policy,
+        world_progress_service=SafariWorldProgressService(),
         spawn_session_repository=spawn_session_repository,
     )
 

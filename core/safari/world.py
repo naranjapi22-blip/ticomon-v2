@@ -14,6 +14,16 @@ class SafariWorld:
     current_influence: SafariMapInfluence = field(default_factory=SafariMapInfluence)
     last_daily_reset_date: date | None = None
 
+    @classmethod
+    def create(cls, guild_id: int, reset_date: date) -> "SafariWorld":
+        return cls(
+            guild_id=guild_id,
+            current_progress=0,
+            daily_unlock_count=0,
+            current_influence=SafariMapInfluence(),
+            last_daily_reset_date=reset_date,
+        )
+
     def __post_init__(self) -> None:
         if self.guild_id <= 0:
             raise ValueError("guild_id must be positive.")
