@@ -27,6 +27,7 @@ from application.release.release_application_service import (
 )
 from application.safari import (
     SafariRegistrationApplicationService,
+    SafariRouteApplicationService,
     StartSafariApplicationService,
 )
 from application.species_info.species_info_service import (
@@ -57,6 +58,7 @@ from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari.encounter_generator import SafariEncounterGenerator
 from core.safari.map_selector import SafariMapSelector
 from core.safari.progress_service import SafariWorldProgressService
+from core.safari.route_option_factory import SafariRouteOptionFactory
 from core.safari.time_of_day_selector import SafariTimeOfDaySelector
 from core.safari.weather_selector import SafariWeatherSelector
 from core.spawn.application.get_current_spawn_application_service import (
@@ -130,6 +132,7 @@ class CoreServices:
     get_current_spawn_application: GetCurrentSpawnApplicationService
     capture_application: CaptureApplicationService
     safari_registration_application: SafariRegistrationApplicationService
+    safari_route_application: SafariRouteApplicationService
     start_safari_application: StartSafariApplicationService
     evolution_application: EvolutionApplicationService
     release_application: ReleaseApplicationService
@@ -215,6 +218,16 @@ def build_core(
     safari_registration_application = SafariRegistrationApplicationService(
         activity_repository=safari_activity_repository,
         unlock_repository=safari_unlock_repository,
+    )
+    safari_route_application = SafariRouteApplicationService(
+        activity_repository=safari_activity_repository,
+        route_option_factory=SafariRouteOptionFactory(),
+        encounter_generator=SafariEncounterGenerator(
+            species_repository=species_repository,
+            opportunity_factory=OpportunityFactory(),
+            random_source=safari_random,
+        ),
+        random_source=safari_random,
     )
     start_safari_application = StartSafariApplicationService(
         activity_repository=safari_activity_repository,
@@ -317,6 +330,7 @@ def build_core(
         get_current_spawn_application=get_current_spawn_application,
         capture_application=capture_application,
         safari_registration_application=safari_registration_application,
+        safari_route_application=safari_route_application,
         start_safari_application=start_safari_application,
         evolution_application=evolution_application,
         release_application=release_application,
