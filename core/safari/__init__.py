@@ -5,6 +5,12 @@ from .capture import (
     SafariPersistedEncounterResult,
     SafariPersistedSlotResult,
 )
+from .capture_resolution import (
+    SafariCaptureAttempt,
+    SafariCaptureResolver,
+    SafariEncounterResolution,
+    SafariSlotOutcome,
+)
 from .domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
@@ -107,6 +113,8 @@ __all__ = [
     "EVENT_WEIGHTS",
     "NotEnoughSafariBalls",
     "SafariCaptureSelection",
+    "SafariCaptureAttempt",
+    "SafariCaptureResolver",
     "SafariComposition",
     "SafariEncounter",
     "SafariEncounterClosed",
@@ -115,6 +123,7 @@ __all__ = [
     "SafariEncounterGenerator",
     "SafariEncounterSlot",
     "SafariEncounterStatus",
+    "SafariEncounterResolution",
     "SafariExtraordinaryFlags",
     "SafariFinishReason",
     "SafariGeneratedEncounter",
@@ -149,6 +158,7 @@ __all__ = [
     "SafariInvalidSessionState",
     "SafariSelectionAlreadyConfirmed",
     "SafariSlotStatus",
+    "SafariSlotOutcome",
     "SafariThematicEvent",
     "SafariTimeOfDay",
     "SafariTimeOfDaySelector",
