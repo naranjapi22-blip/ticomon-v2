@@ -218,3 +218,14 @@ def available_events_for(
         if composition in EVENT_COMPOSITION_COMPATIBILITY[event]
     )
     return compatible or frozenset({SafariThematicEvent.NONE})
+
+
+def available_regional_events_for(
+    context: SafariEncounterContext,
+) -> frozenset[SafariThematicEvent]:
+    available = (
+        EVENTS_BY_ZONE[context.zone]
+        & context.route_allowed_events
+        & EVENTS_BY_PHASE[context.phase]
+    )
+    return available or frozenset({SafariThematicEvent.NONE})

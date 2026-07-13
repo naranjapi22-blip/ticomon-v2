@@ -122,6 +122,12 @@ class SafariComposition(str, Enum):
     MYTHICAL = "MYTHICAL"
 
 
+class SafariRegionalEncounterForm(str, Enum):
+    MIXED = "MIXED"
+    SOLITARY = "SOLITARY"
+    HERD = "HERD"
+
+
 class SafariThematicEvent(str, Enum):
     NONE = "NONE"
     VOLCANIC_ACTIVITY = "VOLCANIC_ACTIVITY"

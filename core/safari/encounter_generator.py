@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG
-from core.safari.domain import SafariComposition, SafariThematicEvent
+from core.safari.domain import (
+    SafariComposition,
+    SafariPhase,
+    SafariRegionalEncounterForm,
+    SafariThematicEvent,
+)
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.encounter_context import SafariEncounterContext
 from core.safari.event_catalog import (
@@ -14,8 +19,10 @@ from core.safari.event_catalog import (
     EVENT_TYPE_MODIFIERS,
     EVENT_WEIGHTS,
     available_events_for,
+    available_regional_events_for,
 )
 from core.safari.generated_encounter import SafariGeneratedEncounter
+from core.safari.regional_encounter import SafariGeneratedRegionalEncounter
 from core.species.regional_species import is_regional_species
 from core.species.species import Species
 from core.species.species_repository import SpeciesRepository
@@ -150,6 +157,64 @@ class SafariEncounterGenerator:
             "no Safari event and composition combination can be generated."
         ) from last_error
 
+    async def generate_regional(
+        self,
+        context: SafariEncounterContext,
+        regional_form: SafariRegionalEncounterForm,
+        event: SafariThematicEvent = SafariThematicEvent.NONE,
+    ) -> SafariGeneratedRegionalEncounter:
+        self._validate_regional_request(context, regional_form)
+        if event not in available_regional_events_for(context):
+            raise SafariEncounterGenerationError(
+                "Safari event is not available for this regional encounter."
+            )
+
+        catalog = await self._species_repository.get_all()
+        encounter = self._generate_regional_from_catalog(
+            context,
+            regional_form,
+            catalog,
+            event,
+        )
+        return SafariGeneratedRegionalEncounter(encounter, event, regional_form)
+
+    async def generate_regional_with_events(
+        self,
+        context: SafariEncounterContext,
+        regional_forms: tuple[SafariRegionalEncounterForm, ...],
+    ) -> SafariGeneratedRegionalEncounter:
+        ordered_forms = tuple(dict.fromkeys(regional_forms))
+        if not ordered_forms:
+            raise SafariEncounterGenerationError(
+                "at least one regional encounter form is required."
+            )
+        for regional_form in ordered_forms:
+            self._validate_regional_request(context, regional_form)
+
+        catalog = await self._species_repository.get_all()
+        last_error: SafariEncounterGenerationError | None = None
+        for regional_form in ordered_forms:
+            events = self._event_attempt_order(available_regional_events_for(context))
+            for event in events:
+                try:
+                    encounter = self._generate_regional_from_catalog(
+                        context,
+                        regional_form,
+                        catalog,
+                        event,
+                    )
+                    return SafariGeneratedRegionalEncounter(
+                        encounter,
+                        event,
+                        regional_form,
+                    )
+                except SafariEncounterGenerationError as error:
+                    last_error = error
+
+        raise SafariEncounterGenerationError(
+            "no regional Safari encounter can be generated."
+        ) from last_error
+
     def _generate_from_catalog(
         self,
         context: SafariEncounterContext,
@@ -170,6 +235,69 @@ class SafariEncounterGenerator:
             composition,
             selectable_candidates,
         )
+        return self._build_encounter(
+            selected_species,
+            composition,
+            is_regional_herd=False,
+        )
+
+    def _generate_regional_from_catalog(
+        self,
+        context: SafariEncounterContext,
+        regional_form: SafariRegionalEncounterForm,
+        catalog: tuple[Species, ...],
+        event: SafariThematicEvent,
+    ) -> SafariEncounter:
+        regional_candidates = [
+            (species, self._weight_for(species, context, event))
+            for species in catalog
+            if self._is_regional_candidate(species, context, event)
+        ]
+        selectable_regional = [
+            (species, weight) for species, weight in regional_candidates if weight > 0
+        ]
+        self._require_regional_candidates(selectable_regional)
+        regional = self._select_without_replacement(selectable_regional, 1)[0]
+
+        if regional_form == SafariRegionalEncounterForm.MIXED:
+            ordinary_candidates = [
+                (species, self._weight_for(species, context, event))
+                for species in catalog
+                if self._is_candidate(species, context, event)
+                and species.id != regional.id
+            ]
+            selectable_ordinary = [
+                (species, weight)
+                for species, weight in ordinary_candidates
+                if weight > 0
+            ]
+            if not selectable_ordinary:
+                raise SafariEncounterGenerationError(
+                    "regional mixed encounter requires an ordinary Species."
+                )
+            ordinary = self._select_without_replacement(
+                selectable_ordinary,
+                min(2, len(selectable_ordinary)),
+            )
+            selected_species = (regional, *ordinary)
+        elif regional_form == SafariRegionalEncounterForm.HERD:
+            selected_species = (regional, regional, regional)
+        else:
+            selected_species = (regional,)
+
+        return self._build_encounter(
+            selected_species,
+            SafariComposition.REGIONAL,
+            is_regional_herd=regional_form == SafariRegionalEncounterForm.HERD,
+        )
+
+    def _build_encounter(
+        self,
+        selected_species: tuple[Species, ...],
+        composition: SafariComposition,
+        *,
+        is_regional_herd: bool,
+    ) -> SafariEncounter:
         slots = tuple(
             SafariEncounterSlot(
                 id=uuid4(),
@@ -181,7 +309,7 @@ class SafariEncounterGenerator:
             id=uuid4(),
             composition=composition,
             slots=slots,
-            is_regional_herd=False,
+            is_regional_herd=is_regional_herd,
         )
 
     def _select_species(
@@ -228,22 +356,69 @@ class SafariEncounterGenerator:
                 f"unsupported Safari composition: {composition.value}."
             )
 
+    @staticmethod
+    def _validate_regional_request(
+        context: SafariEncounterContext,
+        regional_form: SafariRegionalEncounterForm,
+    ) -> None:
+        if context.phase == SafariPhase.START:
+            raise SafariEncounterGenerationError(
+                "regional encounters are not available during START."
+            )
+        if not isinstance(regional_form, SafariRegionalEncounterForm):
+            raise ValueError("regional_form must be a SafariRegionalEncounterForm.")
+
+    @staticmethod
+    def _require_regional_candidates(
+        candidates: list[tuple[Species, float]],
+    ) -> None:
+        if not candidates:
+            raise SafariEncounterGenerationError(
+                "no valid regional Species are available."
+            )
+
     def _is_candidate(
         self,
         species: Species,
         context: SafariEncounterContext,
         event: SafariThematicEvent,
     ) -> bool:
-        passes_base_filters = (
-            species.id not in context.seen_species_ids
+        return (
+            self._passes_base_filters(species, context)
             and not is_regional_species(species)
+            and self._event_allows_species(species, event)
+        )
+
+    def _is_regional_candidate(
+        self,
+        species: Species,
+        context: SafariEncounterContext,
+        event: SafariThematicEvent,
+    ) -> bool:
+        return (
+            self._passes_base_filters(species, context)
+            and is_regional_species(species)
+            and self._event_allows_species(species, event)
+        )
+
+    @staticmethod
+    def _passes_base_filters(
+        species: Species,
+        context: SafariEncounterContext,
+    ) -> bool:
+        return (
+            species.id not in context.seen_species_ids
             and not species.metadata.is_legendary
             and not species.metadata.is_mythical
         )
+
+    @staticmethod
+    def _event_allows_species(
+        species: Species,
+        event: SafariThematicEvent,
+    ) -> bool:
         required_types = EVENT_REQUIRED_TYPES[event]
-        return passes_base_filters and (
-            not required_types or not required_types.isdisjoint(species.types)
-        )
+        return not required_types or not required_types.isdisjoint(species.types)
 
     def _weight_for(
         self,
