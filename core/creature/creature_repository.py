@@ -92,6 +92,16 @@ class CreatureRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_by_trainer(
+        self,
+        trainer_id: int,
+    ) -> list[Creature]:
+        """
+        Returns every creature owned by the trainer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_duplicate_species(
         self,
         trainer_id: int,

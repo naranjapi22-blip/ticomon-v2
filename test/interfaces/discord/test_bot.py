@@ -6,6 +6,8 @@ import pytest
 from discord.ext import commands
 
 from interfaces.discord.bot import TicoMonBot
+from interfaces.discord.cogs.inventory_cog import InventoryCog
+from interfaces.discord.cogs.top_cog import TopCog
 from interfaces.discord.cogs.trade_cog import TradeCog
 
 
@@ -18,6 +20,10 @@ async def test_setup_hook_registers_trade_cog() -> None:
 
     assert any(
         isinstance(call.args[0], TradeCog) for call in bot.add_cog.await_args_list
+    )
+    assert any(isinstance(call.args[0], TopCog) for call in bot.add_cog.await_args_list)
+    assert any(
+        isinstance(call.args[0], InventoryCog) for call in bot.add_cog.await_args_list
     )
 
 

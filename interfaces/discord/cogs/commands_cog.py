@@ -27,6 +27,8 @@ class CommandsCog(commands.Cog):
                 "`!pokedex legendary|mythical`\n"
                 "`!info <pokemon>` — Pokémon information.\n"
                 "`!ivs [pokemon]` — View your Pokémon IVs.\n"
+                "`!top [type]` — View your top Pokémon.\n"
+                "`!inventory [type|shiny]` — View recent Pokémon.\n"
                 "`!duplicates [pokemon/type]` — Find duplicate Pokémon."
             ),
             inline=False,
@@ -38,7 +40,9 @@ class CommandsCog(commands.Cog):
                 "`!spawn` — Encounter wild Pokémon.\n"
                 "`!energy` — Check your Energy.\n"
                 "`!evolve` — Evolve your Pokémon.\n"
-                "`!release` — Release Pokémon for rewards."
+                "`!release` — Release Pokémon for rewards.\n"
+                "`!trade @trainer <collection_number>` — "
+                "Trade one Pokémon with another trainer."
             ),
             inline=False,
         )

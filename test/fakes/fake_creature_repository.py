@@ -38,9 +38,7 @@ class FakeCreatureRepository(CreatureRepository):
         self._creatures[creature.id] = creature
 
         if creature.collection_number is None:
-            next_collection_number = (
-                max(self._collection_numbers, default=0) + 1
-            )
+            next_collection_number = max(self._collection_numbers, default=0) + 1
             self._collection_numbers[next_collection_number] = creature
 
         if creature.collection_number is not None:
@@ -131,6 +129,26 @@ class FakeCreatureRepository(CreatureRepository):
             for creature in self._creatures.values()
             if creature.trainer_id == trainer_id and creature.species.id == species_id
         ]
+
+    async def get_by_trainer(
+        self,
+        trainer_id: int,
+    ) -> list[Creature]:
+        return sorted(
+            [
+                creature
+                for creature in self._creatures.values()
+                if creature.trainer_id == trainer_id
+            ],
+            key=lambda creature: (
+                (
+                    creature.collection_number
+                    if creature.collection_number is not None
+                    else 0
+                ),
+                creature.id if creature.id is not None else 0,
+            ),
+        )
 
     async def get_discovered_species(
         self,

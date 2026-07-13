@@ -12,12 +12,14 @@ from interfaces.discord.cogs.duplicates_cog import DuplicatesCog
 from interfaces.discord.cogs.energy_cog import EnergyCog
 from interfaces.discord.cogs.evolution_cog import EvolutionCog
 from interfaces.discord.cogs.info import InfoCog
+from interfaces.discord.cogs.inventory_cog import InventoryCog
 from interfaces.discord.cogs.ivs_cog import IVsCog
 from interfaces.discord.cogs.pokedex_cog import PokedexCog
 from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.cogs.release_cog import ReleaseCog
 from interfaces.discord.cogs.select_cog import SelectCog
 from interfaces.discord.cogs.spawn_cog import SpawnCog
+from interfaces.discord.cogs.top_cog import TopCog
 from interfaces.discord.cogs.trade_cog import TradeCog
 from interfaces.discord.cogs.trainer_cog import TrainerCog
 
@@ -48,6 +50,8 @@ class TicoMonBot(commands.Bot):
             (TrainerCog, (self.core,)),
             (IVsCog, (self.core,)),
             (InfoCog, (self.core,)),
+            (TopCog, (self.core,)),
+            (InventoryCog, (self.core,)),
             (PokedexCog, (self.core,)),
             (EvolutionCog, (self.core,)),
             (CandyCog, (self.core,)),

@@ -302,6 +302,57 @@ class NeonCreatureRepository(CreatureRepository):
 
         return creatures
 
+    async def get_by_trainer(
+        self,
+        trainer_id: int,
+    ) -> list[Creature]:
+        """
+        Returns every creature owned by the trainer.
+        """
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+
+            rows = await connection.fetch(
+                """
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.trainer_id = $1
+                ORDER BY c.collection_number
+                """,
+                trainer_id,
+            )
+
+        creatures: list[Creature] = []
+
+        species_ids = list(
+            dict.fromkeys(row["species_id"] for row in rows),
+        )
+
+        species_list = await self._species_repository.get_many(
+            species_ids,
+        )
+
+        species_by_id = {species.id: species for species in species_list}
+
+        for row in rows:
+            species = species_by_id[row["species_id"]]
+
+            creatures.append(
+                self._mapper.from_row(
+                    row=row,
+                    species=species,
+                )
+            )
+
+        return creatures
+
     async def get_duplicate_species(
         self,
         trainer_id: int,
