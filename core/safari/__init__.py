@@ -1,4 +1,10 @@
 from .activity_repository import SafariActivityRepository
+from .capture import (
+    SafariCaptureSelection,
+    SafariPersistedCapture,
+    SafariPersistedEncounterResult,
+    SafariPersistedSlotResult,
+)
 from .domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
@@ -26,6 +32,12 @@ from .domain import (
     SafariZone,
     SafariZoneDefinition,
 )
+from .encounter import (
+    SafariEncounter,
+    SafariEncounterClosed,
+    SafariEncounterSlot,
+    SafariSelectionAlreadyConfirmed,
+)
 from .participant import NotEnoughSafariBalls, SafariParticipant
 from .progress_result import SafariWorldProgressResult
 from .progress_service import SAFARI_UNLOCK_THRESHOLD, SafariWorldProgressService
@@ -48,6 +60,7 @@ from .route_vote import (
     SafariRouteVoteClosed,
     SafariRouteVoteResult,
 )
+from .session import SafariInvalidSessionState, SafariSession, SafariSessionClosed
 from .unlock import SafariUnlock, SafariUnlockAlreadyConsumed
 from .world import SafariWorld
 
@@ -61,7 +74,11 @@ __all__ = [
     "WEATHER_WEIGHTS",
     "SAFARI_ROUTE_SEGMENT_SCHEDULES",
     "NotEnoughSafariBalls",
+    "SafariCaptureSelection",
     "SafariComposition",
+    "SafariEncounter",
+    "SafariEncounterClosed",
+    "SafariEncounterSlot",
     "SafariEncounterStatus",
     "SafariExtraordinaryFlags",
     "SafariFinishReason",
@@ -70,6 +87,9 @@ __all__ = [
     "SafariMapInfluence",
     "SafariPhase",
     "SafariParticipant",
+    "SafariPersistedCapture",
+    "SafariPersistedEncounterResult",
+    "SafariPersistedSlotResult",
     "SafariRegistrationStatus",
     "SafariRegistration",
     "SafariRegistrationClosed",
@@ -85,6 +105,10 @@ __all__ = [
     "SafariRouteConfigurationError",
     "SafariRouteSchedulePolicy",
     "SafariSessionStatus",
+    "SafariSession",
+    "SafariSessionClosed",
+    "SafariInvalidSessionState",
+    "SafariSelectionAlreadyConfirmed",
     "SafariSlotStatus",
     "SafariThematicEvent",
     "SafariTimeOfDay",
