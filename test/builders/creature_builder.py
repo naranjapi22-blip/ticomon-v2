@@ -54,6 +54,7 @@ class CreatureBuilder:
             current_form=None,
             id=self._id,
             collection_number=self._collection_number,
+            original_trainer_id=self._trainer_id,
         )
 
     def with_id(

@@ -58,6 +58,7 @@ class _NeonCaptureTransaction(CaptureTransaction):
             """
             INSERT INTO creatures (
                 trainer_id,
+                original_trainer_id,
                 collection_number,
                 species_id,
                 current_form_id,
@@ -71,15 +72,16 @@ class _NeonCaptureTransaction(CaptureTransaction):
                 special_defense_iv,
                 speed_iv
             )
-            VALUES (
-                $1, $2, $3, $4, $5, $6, $7,
-                $8, $9, $10, $11, $12, $13
-            )
-            RETURNING id, collection_number
-            """,
+                VALUES (
+                    $1, $2, $3, $4, $5, $6, $7,
+                    $8, $9, $10, $11, $12, $13, $14
+                )
+                RETURNING id, collection_number
+                """,
             params[0],
+            params[1],
             collection_number,
-            *params[1:],
+            *params[2:],
         )
 
         assert row is not None

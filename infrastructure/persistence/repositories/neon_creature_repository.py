@@ -41,6 +41,7 @@ class NeonCreatureRepository(CreatureRepository):
                 """
                 INSERT INTO creatures (
                     trainer_id,
+                    original_trainer_id,
                     collection_number,
                     species_id,
                     current_form_id,
@@ -56,13 +57,14 @@ class NeonCreatureRepository(CreatureRepository):
                 )
                 VALUES (
                     $1, $2, $3, $4, $5, $6, $7,
-                    $8, $9, $10, $11, $12, $13
+                    $8, $9, $10, $11, $12, $13, $14
                 )
                 RETURNING id
                 """,
                 params[0],  # trainer_id
+                params[1],  # original_trainer_id
                 collection_number,
-                *params[1:],
+                *params[2:],
             )
 
             row = await connection.fetchrow(

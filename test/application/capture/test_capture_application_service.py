@@ -149,6 +149,7 @@ async def test_success_persists_creature_candies_and_creates_world():
 
     assert result.success is True
     assert result.creature is transaction.saved_creature
+    assert result.creature.original_trainer_id == TRAINER_ID
     assert result.creature.collection_number == 4
     assert transaction.inventory.get_amount(CandyType.FIRE) == 1
     assert transaction.inventory.get_amount(CandyType.WATER) == 1

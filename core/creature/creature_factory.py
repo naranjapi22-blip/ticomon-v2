@@ -18,4 +18,5 @@ class CreatureFactory:
             current_form=opportunity.initial_form,
             id=None,
             collection_number=None,
+            original_trainer_id=trainer_id,
         )

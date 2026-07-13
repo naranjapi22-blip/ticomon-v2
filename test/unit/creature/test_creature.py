@@ -42,3 +42,4 @@ def test_creature_returns_base_stat():
     )
 
     assert creature.stat_for(Stat.ATTACK) == 49
+    assert creature.original_trainer_id == 1

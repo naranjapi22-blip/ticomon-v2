@@ -1,6 +1,7 @@
 import asyncio
 
 from infrastructure.db_config import close_pool, get_pool
+from scripts.creature_schema import ensure_creature_original_trainer_id
 
 
 async def create_safari_schema() -> None:
@@ -65,6 +66,7 @@ async def create_safari_schema() -> None:
                 WHERE status = 'AVAILABLE'
                 """
             )
+            await ensure_creature_original_trainer_id(connection)
 
 
 async def main() -> None:

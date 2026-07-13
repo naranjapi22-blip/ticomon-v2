@@ -32,3 +32,15 @@ class SafariRouteVoteUnavailable(SafariApplicationError):
 
 class SafariRouteVoteNotFound(SafariApplicationError):
     pass
+
+
+class SafariCaptureSelectionUnavailable(SafariApplicationError):
+    pass
+
+
+class SafariCaptureSelectionNotFound(SafariApplicationError):
+    pass
+
+
+class SafariCaptureResolutionUnavailable(SafariApplicationError):
+    pass

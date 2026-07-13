@@ -9,6 +9,16 @@ class CreatureMapper:
 
     @staticmethod
     def from_row(row, species):
+        def _row_value(key):
+            try:
+                return row[key]
+            except (KeyError, IndexError, TypeError):
+                return None
+
+        original_trainer_id = _row_value("original_trainer_id")
+        if original_trainer_id is None:
+            original_trainer_id = row["trainer_id"]
+
         return Creature(
             id=row["id"],
             collection_number=row["collection_number"],
@@ -33,12 +43,18 @@ class CreatureMapper:
                 if row["variant_id"] is not None
                 else None
             ),
+            original_trainer_id=original_trainer_id,
         )
 
     @staticmethod
     def to_row(creature: Creature) -> tuple:
+        original_trainer_id = creature.original_trainer_id
+        if original_trainer_id is None:
+            original_trainer_id = creature.trainer_id
+
         return (
             creature.trainer_id,
+            original_trainer_id,
             creature.species.id,
             creature.current_form.id if creature.current_form else None,
             creature.is_shiny,

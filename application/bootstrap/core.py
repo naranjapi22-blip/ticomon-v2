@@ -26,6 +26,7 @@ from application.release.release_application_service import (
     ReleaseApplicationService,
 )
 from application.safari import (
+    SafariCaptureApplicationService,
     SafariRegistrationApplicationService,
     SafariRouteApplicationService,
     StartSafariApplicationService,
@@ -43,6 +44,7 @@ from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_service import (
     CaptureApplicationService,
 )
+from core.capture.attempt_service import CaptureAttemptService
 from core.capture.domain.capture_ball_selector import CaptureBallSelector
 from core.capture.domain.capture_chance_calculator import (
     CaptureChanceCalculator,
@@ -55,6 +57,7 @@ from core.evolution.evolution_cost_policy import (
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
 from core.opportunity.opportunity_factory import OpportunityFactory
+from core.safari.capture_resolution import SafariCaptureResolver
 from core.safari.encounter_generator import SafariEncounterGenerator
 from core.safari.map_selector import SafariMapSelector
 from core.safari.progress_service import SafariWorldProgressService
@@ -133,6 +136,7 @@ class CoreServices:
     capture_application: CaptureApplicationService
     safari_registration_application: SafariRegistrationApplicationService
     safari_route_application: SafariRouteApplicationService
+    safari_capture_application: SafariCaptureApplicationService
     start_safari_application: StartSafariApplicationService
     evolution_application: EvolutionApplicationService
     release_application: ReleaseApplicationService
@@ -228,6 +232,15 @@ def build_core(
             random_source=safari_random,
         ),
         random_source=safari_random,
+    )
+    safari_capture_application = SafariCaptureApplicationService(
+        activity_repository=safari_activity_repository,
+        capture_resolver=SafariCaptureResolver(
+            attempt_service=CaptureAttemptService(chance_calculator),
+            random_source=safari_random,
+        ),
+        unit_of_work=NeonCaptureUnitOfWork(),
+        reward_policy=reward_policy,
     )
     start_safari_application = StartSafariApplicationService(
         activity_repository=safari_activity_repository,
@@ -331,6 +344,7 @@ def build_core(
         capture_application=capture_application,
         safari_registration_application=safari_registration_application,
         safari_route_application=safari_route_application,
+        safari_capture_application=safari_capture_application,
         start_safari_application=start_safari_application,
         evolution_application=evolution_application,
         release_application=release_application,

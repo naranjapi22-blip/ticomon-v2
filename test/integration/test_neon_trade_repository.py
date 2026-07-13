@@ -172,6 +172,7 @@ async def test_executes_atomic_trade_and_swaps_collection_numbers(
 
         for field in (
             "id",
+            "original_trainer_id",
             "species_id",
             "current_form_id",
             "is_shiny",
@@ -387,6 +388,7 @@ async def _insert_creature(
         """
         INSERT INTO creatures (
             trainer_id,
+            original_trainer_id,
             collection_number,
             species_id,
             current_form_id,
@@ -401,11 +403,12 @@ async def _insert_creature(
             speed_iv
         )
         VALUES (
-            $1, $2, 1, NULL, $3, 'hardy', 1.0,
+            $1, $2, $3, 1, NULL, $4, 'hardy', 1.0,
             31, 30, 29, 28, 27, 26
         )
         RETURNING id
         """,
+        trainer_id,
         trainer_id,
         collection_number,
         is_shiny,

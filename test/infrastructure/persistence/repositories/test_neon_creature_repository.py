@@ -136,6 +136,7 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
     assert creatures[0].current_form is not None
     assert creatures[0].current_form.id == 40
     assert creatures[0].current_form.name == "Mega"
+    assert creatures[0].original_trainer_id == 99
     assert creatures[0].collection_number == 7
     assert creatures[0].ivs.hp == 31
     assert creatures[0].is_shiny is True
@@ -143,6 +144,7 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
     assert creatures[0].size.value == 1.5
     assert creatures[1].species == water
     assert creatures[1].current_form is None
+    assert creatures[1].original_trainer_id == 99
     assert creatures[1].collection_number == 8
     assert creatures[1].ivs.attack == 20
     assert creatures[1].is_shiny is False

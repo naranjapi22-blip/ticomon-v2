@@ -58,7 +58,10 @@ async def test_transaction_rolls_back_creature_candies_and_world(capture_data):
 
     with pytest.raises(RuntimeError, match="rollback"):
         async with unit_of_work.transaction() as transaction:
-            await transaction.save_creature(_creature(trainer_id, species))
+            saved_creature = await transaction.save_creature(
+                _creature(trainer_id, species)
+            )
+            assert saved_creature.original_trainer_id == trainer_id
             inventory = CandyInventory()
             inventory.add(_candy_bundle())
             await transaction.save_candy_inventory(trainer_id, inventory)
@@ -72,6 +75,13 @@ async def test_transaction_rolls_back_creature_candies_and_world(capture_data):
         assert (
             await connection.fetchval(
                 "SELECT COUNT(*) FROM creatures WHERE trainer_id = $1",
+                trainer_id,
+            )
+            == 0
+        )
+        assert (
+            await connection.fetchval(
+                "SELECT COUNT(*) FROM creatures WHERE original_trainer_id = $1",
                 trainer_id,
             )
             == 0

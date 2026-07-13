@@ -32,6 +32,11 @@ class Creature:
 
     id: int | None = None
     collection_number: int | None = None
+    original_trainer_id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.original_trainer_id is None and self.trainer_id is not None:
+            self.original_trainer_id = self.trainer_id
 
     def stat_for(self, stat: Stat) -> int:
         return self.species.base_stats.for_stat(stat)

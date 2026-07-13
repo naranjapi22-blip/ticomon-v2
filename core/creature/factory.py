@@ -17,11 +17,11 @@ class CreatureFactory:
     ) -> Creature:
         return Creature(
             species=opportunity.species,
-            variant=opportunity.variant,
             trainer_id=trainer_id,
             ivs=opportunity.ivs,
             size=opportunity.size,
             nature=opportunity.nature,
             is_shiny=opportunity.is_shiny,
             current_form=opportunity.initial_form,
+            original_trainer_id=trainer_id,
         )

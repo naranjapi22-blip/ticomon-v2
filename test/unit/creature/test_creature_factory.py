@@ -38,6 +38,7 @@ def test_create_creature():
     )
 
     assert creature.trainer_id == 50
+    assert creature.original_trainer_id == 50
     assert creature.species is species
     assert creature.current_form == opportunity.initial_form
     assert creature.current_form.name == "Rockstar"
