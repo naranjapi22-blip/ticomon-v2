@@ -247,6 +247,10 @@ class SafariExtraordinaryFlags:
     regional_herd_seen: bool = False
 
 
+SAFARI_MIN_PARTICIPANTS = 2
+SAFARI_MAX_PARTICIPANTS = 10
+
+
 def _type_weights(*types: str) -> dict[str, float]:
     weights: dict[str, float] = {}
 

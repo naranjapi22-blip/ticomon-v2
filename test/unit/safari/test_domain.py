@@ -7,6 +7,8 @@ import pytest
 from core.safari import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
+    SAFARI_MAX_PARTICIPANTS,
+    SAFARI_MIN_PARTICIPANTS,
     SAFARI_VALID_WEATHER_BY_MAP,
     SAFARI_ZONE_DEFINITION_BY_ZONE,
     SAFARI_ZONE_DEFINITIONS,
@@ -31,6 +33,11 @@ from core.safari import (
     SafariZone,
     SafariZoneDefinition,
 )
+
+
+def test_global_participant_policy_is_canonical():
+    assert SAFARI_MIN_PARTICIPANTS == 2
+    assert SAFARI_MAX_PARTICIPANTS == 10
 
 
 def test_enum_values_are_exact():

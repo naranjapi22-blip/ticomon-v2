@@ -1,4 +1,5 @@
 import logging
+import random
 from dataclasses import dataclass
 
 from application.adventure.start_adventure.start_adventure_application_service import (
@@ -24,6 +25,10 @@ from application.release.preview_release_application_service import (
 from application.release.release_application_service import (
     ReleaseApplicationService,
 )
+from application.safari import (
+    SafariRegistrationApplicationService,
+    StartSafariApplicationService,
+)
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
@@ -48,7 +53,12 @@ from core.evolution.evolution_cost_policy import (
 )
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
+from core.opportunity.opportunity_factory import OpportunityFactory
+from core.safari.encounter_generator import SafariEncounterGenerator
+from core.safari.map_selector import SafariMapSelector
 from core.safari.progress_service import SafariWorldProgressService
+from core.safari.time_of_day_selector import SafariTimeOfDaySelector
+from core.safari.weather_selector import SafariWeatherSelector
 from core.spawn.application.get_current_spawn_application_service import (
     GetCurrentSpawnApplicationService,
 )
@@ -88,6 +98,12 @@ from infrastructure.postgres.energy.neon_energy_repository import (
 from infrastructure.postgres.trainer.neon_trainer_repository import (
     NeonTrainerRepository,
 )
+from infrastructure.safari.in_memory_safari_activity_repository import (
+    InMemorySafariActivityRepository,
+)
+from infrastructure.safari.neon_safari_unlock_repository import (
+    NeonSafariUnlockRepository,
+)
 from infrastructure.spawn.in_memory_spawn_session_repository import (
     InMemorySpawnSessionRepository,
 )
@@ -113,6 +129,8 @@ class CoreServices:
     select_opportunity_application: SelectOpportunityApplicationService
     get_current_spawn_application: GetCurrentSpawnApplicationService
     capture_application: CaptureApplicationService
+    safari_registration_application: SafariRegistrationApplicationService
+    start_safari_application: StartSafariApplicationService
     evolution_application: EvolutionApplicationService
     release_application: ReleaseApplicationService
     preview_release_application: PreviewReleaseApplicationService
@@ -173,6 +191,8 @@ def build_core(
     trade_repository = NeonTradeRepository()
 
     spawn_session_repository = InMemorySpawnSessionRepository()
+    safari_activity_repository = InMemorySafariActivityRepository()
+    safari_unlock_repository = NeonSafariUnlockRepository()
 
     stat_calculator = StatCalculator()
 
@@ -189,6 +209,25 @@ def build_core(
         reward_policy=reward_policy,
         world_progress_service=SafariWorldProgressService(),
         spawn_session_repository=spawn_session_repository,
+    )
+
+    safari_random = random.Random()
+    safari_registration_application = SafariRegistrationApplicationService(
+        activity_repository=safari_activity_repository,
+        unlock_repository=safari_unlock_repository,
+    )
+    start_safari_application = StartSafariApplicationService(
+        activity_repository=safari_activity_repository,
+        unlock_repository=safari_unlock_repository,
+        map_selector=SafariMapSelector(),
+        weather_selector=SafariWeatherSelector(),
+        time_of_day_selector=SafariTimeOfDaySelector(),
+        encounter_generator=SafariEncounterGenerator(
+            species_repository=species_repository,
+            opportunity_factory=OpportunityFactory(),
+            random_source=safari_random,
+        ),
+        random_source=safari_random,
     )
 
     evolution_application = EvolutionApplicationService(
@@ -277,6 +316,8 @@ def build_core(
         select_opportunity_application=select_opportunity_application,
         get_current_spawn_application=get_current_spawn_application,
         capture_application=capture_application,
+        safari_registration_application=safari_registration_application,
+        start_safari_application=start_safari_application,
         evolution_application=evolution_application,
         release_application=release_application,
         preview_release_application=preview_release_application,

@@ -1,0 +1,91 @@
+from datetime import datetime
+
+from application.safari.exceptions import (
+    SafariActivityAlreadyExists,
+    SafariRegistrationNotFound,
+    SafariUnlockUnavailable,
+)
+from application.safari.results import (
+    CancelSafariRegistrationResult,
+    JoinSafariRegistrationResult,
+    OpenSafariRegistrationResult,
+)
+from core.safari.activity_repository import SafariActivityRepository
+from core.safari.domain import SAFARI_MAX_PARTICIPANTS
+from core.safari.registration import SafariRegistration
+from core.safari.unlock_repository import SafariUnlockRepository
+
+
+class SafariRegistrationApplicationService:
+    def __init__(
+        self,
+        activity_repository: SafariActivityRepository,
+        unlock_repository: SafariUnlockRepository,
+    ) -> None:
+        self._activity_repository = activity_repository
+        self._unlock_repository = unlock_repository
+
+    async def open(
+        self,
+        guild_id: int,
+        trainer_id: int,
+        opened_at: datetime,
+    ) -> OpenSafariRegistrationResult:
+        async with self._activity_repository.lock(guild_id):
+            if await self._activity_repository.get_activity(guild_id) is not None:
+                raise SafariActivityAlreadyExists(
+                    "Safari activity already exists for guild."
+                )
+
+            unlocks = await self._unlock_repository.get_available_by_guild_id(guild_id)
+            if not unlocks:
+                raise SafariUnlockUnavailable("No Safari unlock is available.")
+            unlock = unlocks[0]
+            if unlock.id is None:
+                raise SafariUnlockUnavailable(
+                    "Available Safari unlock has no identity."
+                )
+
+            registration = SafariRegistration(
+                guild_id=guild_id,
+                unlock_id=unlock.id,
+                participant_ids=(trainer_id,),
+                opened_at=opened_at,
+            )
+            await self._activity_repository.save_registration(registration)
+            return OpenSafariRegistrationResult(
+                registration=registration,
+                capacity=SAFARI_MAX_PARTICIPANTS,
+            )
+
+    async def join(
+        self,
+        guild_id: int,
+        trainer_id: int,
+    ) -> JoinSafariRegistrationResult:
+        async with self._activity_repository.lock(guild_id):
+            registration = await self._activity_repository.get_registration(guild_id)
+            if registration is None:
+                raise SafariRegistrationNotFound("Safari registration was not found.")
+
+            already_registered = trainer_id in registration.participant_ids
+            registration.join(trainer_id, SAFARI_MAX_PARTICIPANTS)
+            return JoinSafariRegistrationResult(
+                added=not already_registered,
+                participant_count=registration.participant_count,
+                capacity=SAFARI_MAX_PARTICIPANTS,
+                status=registration.status,
+            )
+
+    async def cancel(
+        self,
+        guild_id: int,
+    ) -> CancelSafariRegistrationResult:
+        async with self._activity_repository.lock(guild_id):
+            registration = await self._activity_repository.get_registration(guild_id)
+            if registration is None:
+                raise SafariRegistrationNotFound("Safari registration was not found.")
+
+            registration.cancel()
+            await self._activity_repository.clear_registration(guild_id)
+            return CancelSafariRegistrationResult(registration)

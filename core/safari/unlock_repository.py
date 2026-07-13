@@ -25,3 +25,13 @@ class SafariUnlockRepository(ABC):
         consumed_session_id: UUID,
     ) -> SafariUnlock | None:
         """Atomically consumes and returns the next available unlock."""
+
+    @abstractmethod
+    async def consume(
+        self,
+        unlock_id: int,
+        guild_id: int,
+        consumed_at: datetime,
+        consumed_session_id: UUID,
+    ) -> SafariUnlock | None:
+        """Atomically consumes the specified available unlock for its guild."""

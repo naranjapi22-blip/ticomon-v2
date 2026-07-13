@@ -17,6 +17,7 @@ def make_registration(
 ) -> SafariRegistration:
     return SafariRegistration(
         guild_id=123,
+        unlock_id=1,
         participant_ids=participant_ids or set(),
         opened_at=OPENED_AT,
     )
@@ -25,11 +26,13 @@ def make_registration(
 def test_registration_can_be_created_and_deduplicates_participants():
     registration = SafariRegistration(
         guild_id=123,
+        unlock_id=1,
         participant_ids=[10, 10, 20],
         opened_at=OPENED_AT,
     )
 
     assert registration.guild_id == 123
+    assert registration.unlock_id == 1
     assert registration.opened_at == OPENED_AT
     assert registration.status == SafariRegistrationStatus.OPEN
     assert registration.participant_ids == frozenset({10, 20})
@@ -41,6 +44,7 @@ def test_registration_rejects_invalid_construction_values():
     with pytest.raises(ValueError):
         SafariRegistration(
             guild_id=0,
+            unlock_id=1,
             participant_ids=set(),
             opened_at=OPENED_AT,
         )
@@ -48,6 +52,7 @@ def test_registration_rejects_invalid_construction_values():
     with pytest.raises(ValueError):
         SafariRegistration(
             guild_id=123,
+            unlock_id=1,
             participant_ids=set(),
             opened_at=None,  # type: ignore[arg-type]
         )
@@ -55,7 +60,16 @@ def test_registration_rejects_invalid_construction_values():
     with pytest.raises(ValueError):
         SafariRegistration(
             guild_id=123,
+            unlock_id=1,
             participant_ids={0},
+            opened_at=OPENED_AT,
+        )
+
+    with pytest.raises(ValueError):
+        SafariRegistration(
+            guild_id=123,
+            unlock_id=0,
+            participant_ids=set(),
             opened_at=OPENED_AT,
         )
 

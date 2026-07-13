@@ -12,12 +12,18 @@ from core.safari.capture import (
     _require_non_empty_uuid,
 )
 from core.safari.domain import (
+    SAFARI_LEVEL_CONFIGS,
+    SAFARI_VALID_WEATHER_BY_MAP,
+    SAFARI_ZONE_DEFINITION_BY_ZONE,
     SafariEncounterStatus,
     SafariExtraordinaryFlags,
     SafariFinishReason,
+    SafariMap,
     SafariPhase,
     SafariSessionStatus,
     SafariSlotStatus,
+    SafariTimeOfDay,
+    SafariWeather,
 )
 from core.safari.encounter import (
     SafariEncounter,
@@ -46,12 +52,37 @@ class SafariSession:
         total_encounters: int,
         initial_segment: SafariRouteSegment,
         started_at: datetime,
+        unlock_id: int,
+        level: int,
+        safari_map: SafariMap,
+        weather: SafariWeather,
+        time_of_day: SafariTimeOfDay,
     ) -> None:
         _require_non_empty_uuid(id, "id")
         if guild_id <= 0:
             raise ValueError("guild_id must be positive.")
         if started_at is None:
             raise ValueError("started_at is required.")
+        if unlock_id <= 0:
+            raise ValueError("unlock_id must be positive.")
+        if level <= 0:
+            raise ValueError("level must be positive.")
+        if not isinstance(safari_map, SafariMap):
+            raise ValueError("safari_map must be a SafariMap.")
+        if not isinstance(weather, SafariWeather):
+            raise ValueError("weather must be a SafariWeather.")
+        if not isinstance(time_of_day, SafariTimeOfDay):
+            raise ValueError("time_of_day must be a SafariTimeOfDay.")
+        configuration = SAFARI_LEVEL_CONFIGS.get(level)
+        if configuration is None or configuration.encounter_count != total_encounters:
+            raise ValueError("level does not match total_encounters.")
+        if weather not in SAFARI_VALID_WEATHER_BY_MAP[safari_map]:
+            raise ValueError("weather is not valid for safari_map.")
+        if (
+            SAFARI_ZONE_DEFINITION_BY_ZONE[initial_segment.zone].safari_map
+            is not safari_map
+        ):
+            raise ValueError("initial segment zone must belong to safari_map.")
 
         copied_participants = tuple(participants)
         if not copied_participants:
@@ -70,6 +101,11 @@ class SafariSession:
 
         self._id = id
         self._guild_id = guild_id
+        self._unlock_id = unlock_id
+        self._level = level
+        self._safari_map = safari_map
+        self._weather = weather
+        self._time_of_day = time_of_day
         self._participants_by_trainer = {
             participant.trainer_id: participant for participant in copied_participants
         }
@@ -97,6 +133,26 @@ class SafariSession:
     @property
     def guild_id(self) -> int:
         return self._guild_id
+
+    @property
+    def unlock_id(self) -> int:
+        return self._unlock_id
+
+    @property
+    def level(self) -> int:
+        return self._level
+
+    @property
+    def safari_map(self) -> SafariMap:
+        return self._safari_map
+
+    @property
+    def weather(self) -> SafariWeather:
+        return self._weather
+
+    @property
+    def time_of_day(self) -> SafariTimeOfDay:
+        return self._time_of_day
 
     @property
     def participants_by_trainer(self) -> Mapping[int, SafariParticipant]:

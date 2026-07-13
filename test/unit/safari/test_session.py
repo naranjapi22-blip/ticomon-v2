@@ -15,6 +15,7 @@ from core.safari import (
     SafariEncounterStatus,
     SafariFinishReason,
     SafariInvalidSessionState,
+    SafariMap,
     SafariParticipant,
     SafariPersistedCapture,
     SafariPersistedEncounterResult,
@@ -28,11 +29,20 @@ from core.safari import (
     SafariSessionClosed,
     SafariSessionStatus,
     SafariSlotStatus,
+    SafariTimeOfDay,
+    SafariWeather,
     SafariZone,
 )
 from test.factories import create_species
 
 NOW = datetime(2026, 7, 12, tzinfo=UTC)
+SESSION_CONTEXT = (
+    1,
+    1,
+    SafariMap.FOREST,
+    SafariWeather.CLEAR,
+    SafariTimeOfDay.DAY,
+)
 
 
 def make_segment(
@@ -58,6 +68,11 @@ def make_session(
         total_encounters=5,
         initial_segment=make_segment(),
         started_at=NOW,
+        unlock_id=1,
+        level=1,
+        safari_map=SafariMap.FOREST,
+        weather=SafariWeather.CLEAR,
+        time_of_day=SafariTimeOfDay.DAY,
     )
 
 
@@ -138,6 +153,11 @@ def test_session_validates_identity_participants_and_initial_segment():
 
     assert session.status == SafariSessionStatus.ENCOUNTER
     assert session.phase == SafariPhase.START
+    assert session.unlock_id == 1
+    assert session.level == 1
+    assert session.safari_map is SafariMap.FOREST
+    assert session.weather is SafariWeather.CLEAR
+    assert session.time_of_day is SafariTimeOfDay.DAY
     assert session.completed_encounter_count == 0
     assert isinstance(session.participants_by_trainer, MappingProxyType)
 
@@ -149,9 +169,10 @@ def test_session_validates_identity_participants_and_initial_segment():
             5,
             make_segment(),
             NOW,
+            *SESSION_CONTEXT,
         )
     with pytest.raises(ValueError):
-        SafariSession(uuid4(), 0, (), 5, make_segment(), NOW)
+        SafariSession(uuid4(), 0, (), 5, make_segment(), NOW, *SESSION_CONTEXT)
     with pytest.raises(ValueError):
         SafariSession(
             uuid4(),
@@ -160,6 +181,7 @@ def test_session_validates_identity_participants_and_initial_segment():
             5,
             make_segment(),
             NOW,
+            *SESSION_CONTEXT,
         )
     with pytest.raises(ValueError):
         SafariSession(
@@ -169,6 +191,7 @@ def test_session_validates_identity_participants_and_initial_segment():
             5,
             make_segment(remaining_encounters=2),
             NOW,
+            *SESSION_CONTEXT,
         )
 
 

@@ -1,4 +1,4 @@
-from .activity_repository import SafariActivityRepository
+from .activity_repository import SafariActivity, SafariActivityRepository
 from .capture import (
     SafariCaptureSelection,
     SafariPersistedCapture,
@@ -14,6 +14,8 @@ from .capture_resolution import (
 from .domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
+    SAFARI_MAX_PARTICIPANTS,
+    SAFARI_MIN_PARTICIPANTS,
     SAFARI_VALID_WEATHER_BY_MAP,
     SAFARI_ZONE_DEFINITION_BY_ZONE,
     SAFARI_ZONE_DEFINITIONS,
@@ -99,6 +101,8 @@ from .world_repository import SafariWorldRepository
 __all__ = [
     "SAFARI_INITIAL_ZONE_BY_MAP",
     "SAFARI_LEVEL_CONFIGS",
+    "SAFARI_MAX_PARTICIPANTS",
+    "SAFARI_MIN_PARTICIPANTS",
     "SAFARI_VALID_WEATHER_BY_MAP",
     "SAFARI_ZONE_DEFINITION_BY_ZONE",
     "SAFARI_ZONE_DEFINITIONS",
@@ -115,6 +119,7 @@ __all__ = [
     "EVENT_WEIGHTS",
     "NotEnoughSafariBalls",
     "SafariCaptureSelection",
+    "SafariActivity",
     "SafariCaptureAttempt",
     "SafariCaptureResolver",
     "SafariComposition",

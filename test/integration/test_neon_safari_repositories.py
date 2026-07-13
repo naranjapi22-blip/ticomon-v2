@@ -135,6 +135,62 @@ async def test_concurrent_consumers_do_not_receive_same_unlock(safari_guild_id):
 
 
 @pytest.mark.asyncio
+async def test_exact_unlock_consumption_is_atomic_and_preserves_fifo_api(
+    safari_guild_id,
+):
+    repository = NeonSafariUnlockRepository()
+    now = datetime.now(UTC)
+    first = await repository.save(_unlock(safari_guild_id, now))
+    second = await repository.save(_unlock(safari_guild_id, now + timedelta(seconds=1)))
+
+    results = await asyncio.gather(
+        repository.consume(second.id, safari_guild_id, now, uuid.uuid4()),
+        repository.consume(second.id, safari_guild_id, now, uuid.uuid4()),
+    )
+
+    assert sum(result is not None for result in results) == 1
+    assert all(result is None or result.id == second.id for result in results)
+    assert (
+        await repository.consume(
+            second.id,
+            safari_guild_id,
+            now,
+            uuid.uuid4(),
+        )
+        is None
+    )
+
+    consumed_next = await repository.consume_next(
+        safari_guild_id,
+        now,
+        uuid.uuid4(),
+    )
+    assert consumed_next is not None
+    assert consumed_next.id == first.id
+
+
+@pytest.mark.asyncio
+async def test_exact_unlock_consume_rejects_another_guild(safari_guild_id):
+    repository = NeonSafariUnlockRepository()
+    now = datetime.now(UTC)
+    saved = await repository.save(_unlock(safari_guild_id, now))
+
+    assert (
+        await repository.consume(
+            saved.id,
+            safari_guild_id + 1,
+            now,
+            uuid.uuid4(),
+        )
+        is None
+    )
+    assert [
+        unlock.id
+        for unlock in await repository.get_available_by_guild_id(safari_guild_id)
+    ] == [saved.id]
+
+
+@pytest.mark.asyncio
 async def test_database_constraints_reject_invalid_world(safari_guild_id):
     pool = await get_pool()
 

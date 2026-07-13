@@ -18,12 +18,16 @@ class SafariRegistration:
     def __init__(
         self,
         guild_id: int,
+        unlock_id: int,
         participant_ids: Iterable[int],
         opened_at: datetime,
         status: SafariRegistrationStatus = SafariRegistrationStatus.OPEN,
     ) -> None:
         if guild_id <= 0:
             raise ValueError("guild_id must be positive.")
+
+        if unlock_id <= 0:
+            raise ValueError("unlock_id must be positive.")
 
         if opened_at is None:
             raise ValueError("opened_at is required.")
@@ -33,6 +37,7 @@ class SafariRegistration:
             raise ValueError("participant IDs must be positive.")
 
         self._guild_id = guild_id
+        self._unlock_id = unlock_id
         self._participant_ids = participants
         self._opened_at = opened_at
         self._status = status
@@ -40,6 +45,10 @@ class SafariRegistration:
     @property
     def guild_id(self) -> int:
         return self._guild_id
+
+    @property
+    def unlock_id(self) -> int:
+        return self._unlock_id
 
     @property
     def participant_ids(self) -> frozenset[int]:

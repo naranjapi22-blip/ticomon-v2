@@ -143,6 +143,50 @@ async def test_unlock_repository_returns_none_when_queue_is_empty(monkeypatch):
     assert args[1] == datetime(2026, 7, 13, 12, tzinfo=UTC)
 
 
+@pytest.mark.asyncio
+async def test_unlock_repository_consumes_exact_available_unlock(monkeypatch):
+    consumed_at = datetime(2026, 7, 13, 12, tzinfo=UTC)
+    session_id = UUID("11111111-1111-1111-1111-111111111111")
+    consumed = _unlock(7, datetime(2026, 7, 13, 10, tzinfo=UTC))
+    consumed.consume(consumed_at, session_id)
+    connection = _Connection(fetchrow_results=[_unlock_row(consumed)])
+    _replace_pool(monkeypatch, "neon_safari_unlock_repository", connection)
+
+    result = await NeonSafariUnlockRepository().consume(
+        7,
+        123,
+        consumed_at,
+        session_id,
+    )
+
+    query, args = connection.calls[0]
+    assert "WHERE id = $1" in query
+    assert "guild_id = $2" in query
+    assert "status = 'AVAILABLE'" in query
+    assert "RETURNING *" in query
+    assert "SKIP LOCKED" not in query
+    assert args == (7, 123, consumed_at, session_id)
+    assert result is not None
+    assert result.id == 7
+
+
+@pytest.mark.asyncio
+async def test_unlock_repository_exact_consume_returns_none_when_unavailable(
+    monkeypatch,
+):
+    connection = _Connection(fetchrow_results=[None])
+    _replace_pool(monkeypatch, "neon_safari_unlock_repository", connection)
+
+    result = await NeonSafariUnlockRepository().consume(
+        7,
+        123,
+        datetime(2026, 7, 13, 12),
+        UUID("11111111-1111-1111-1111-111111111111"),
+    )
+
+    assert result is None
+
+
 def _replace_pool(monkeypatch, module_name: str, connection: _Connection) -> None:
     async def fake_get_pool():
         return _Pool(connection)

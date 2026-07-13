@@ -122,6 +122,41 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
 
         return self._mapper.from_row(row) if row is not None else None
 
+    async def consume(
+        self,
+        unlock_id: int,
+        guild_id: int,
+        consumed_at: datetime,
+        consumed_session_id: UUID,
+    ) -> SafariUnlock | None:
+        if unlock_id <= 0:
+            raise ValueError("unlock_id must be positive.")
+        self._validate_guild_id(guild_id)
+        if consumed_at is None or consumed_session_id is None:
+            raise ValueError("consumption data is required.")
+
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            row = await connection.fetchrow(
+                """
+                UPDATE safari_unlocks
+                SET
+                    status = 'CONSUMED',
+                    consumed_at = $3,
+                    consumed_session_id = $4
+                WHERE id = $1
+                  AND guild_id = $2
+                  AND status = 'AVAILABLE'
+                RETURNING *
+                """,
+                unlock_id,
+                guild_id,
+                self._mapper.as_utc(consumed_at),
+                consumed_session_id,
+            )
+
+        return self._mapper.from_row(row) if row is not None else None
+
     @staticmethod
     def _validate_guild_id(guild_id: int) -> None:
         if guild_id <= 0:

@@ -7,11 +7,13 @@ from core.safari import SafariRegistration
 from infrastructure.safari.in_memory_safari_activity_repository import (
     InMemorySafariActivityRepository,
 )
+from test.unit.safari.test_session import make_session
 
 
 def make_registration(guild_id: int, trainer_id: int) -> SafariRegistration:
     return SafariRegistration(
         guild_id=guild_id,
+        unlock_id=1,
         participant_ids={trainer_id},
         opened_at=datetime(2026, 7, 12, 10, 0),
     )
@@ -73,6 +75,40 @@ async def test_new_repository_instance_starts_empty():
     new_repository = InMemorySafariActivityRepository()
 
     assert await new_repository.get_registration(1) is None
+
+
+@pytest.mark.asyncio
+async def test_session_replaces_registration_as_the_single_guild_activity():
+    repository = InMemorySafariActivityRepository()
+    registration = make_registration(10, 100)
+    session = make_session()
+
+    await repository.save_registration(registration)
+    await repository.save_session(session)
+
+    assert await repository.get_registration(10) is None
+    assert await repository.get_session(10) is session
+    assert await repository.get_activity(10) is session
+
+
+@pytest.mark.asyncio
+async def test_registration_cannot_replace_an_active_session():
+    repository = InMemorySafariActivityRepository()
+    await repository.save_session(make_session())
+
+    with pytest.raises(ValueError):
+        await repository.save_registration(make_registration(10, 100))
+
+
+@pytest.mark.asyncio
+async def test_clear_session_is_idempotent():
+    repository = InMemorySafariActivityRepository()
+    await repository.save_session(make_session())
+
+    await repository.clear_session(10)
+    await repository.clear_session(10)
+
+    assert await repository.get_activity(10) is None
 
 
 @pytest.mark.asyncio
