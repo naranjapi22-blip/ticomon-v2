@@ -20,6 +20,15 @@ class SafariEncounterGenerationError(ValueError):
 
 class SafariEncounterGenerator:
     _MAX_SLOT_COUNT = 3
+    _COMMON_COMPOSITIONS = frozenset(
+        {
+            SafariComposition.NORMAL,
+            SafariComposition.DUEL,
+            SafariComposition.HERD,
+            SafariComposition.SOLITARY,
+            SafariComposition.BABY_NEST,
+        }
+    )
 
     def __init__(
         self,
@@ -31,22 +40,70 @@ class SafariEncounterGenerator:
         self._opportunity_factory = opportunity_factory
         self._random_source = random_source
 
-    async def generate(self, context: SafariEncounterContext) -> SafariEncounter:
+    async def generate(
+        self,
+        context: SafariEncounterContext,
+        composition: SafariComposition = SafariComposition.NORMAL,
+    ) -> SafariEncounter:
+        self._validate_composition(composition)
         catalog = await self._species_repository.get_all()
+        return self._generate_from_catalog(context, composition, catalog)
+
+    async def generate_from_compositions(
+        self,
+        context: SafariEncounterContext,
+        compositions: tuple[SafariComposition, ...],
+    ) -> SafariEncounter:
+        ordered_compositions = tuple(dict.fromkeys(compositions))
+        for composition in ordered_compositions:
+            self._validate_composition(composition)
+
+        catalog = await self._species_repository.get_all()
+        normal_attempted = False
+        last_error: SafariEncounterGenerationError | None = None
+
+        for composition in ordered_compositions:
+            normal_attempted = (
+                normal_attempted or composition == SafariComposition.NORMAL
+            )
+            try:
+                return self._generate_from_catalog(context, composition, catalog)
+            except SafariEncounterGenerationError as error:
+                last_error = error
+
+        if not normal_attempted:
+            try:
+                return self._generate_from_catalog(
+                    context,
+                    SafariComposition.NORMAL,
+                    catalog,
+                )
+            except SafariEncounterGenerationError as error:
+                last_error = error
+
+        raise SafariEncounterGenerationError(
+            "no common Safari composition can be generated."
+        ) from last_error
+
+    def _generate_from_catalog(
+        self,
+        context: SafariEncounterContext,
+        composition: SafariComposition,
+        catalog: tuple[Species, ...],
+    ) -> SafariEncounter:
         weighted_candidates = [
             (species, self._weight_for(species, context))
             for species in catalog
             if self._is_candidate(species, context)
+            and (composition != SafariComposition.BABY_NEST or species.metadata.is_baby)
         ]
         selectable_candidates = [
             (species, weight) for species, weight in weighted_candidates if weight > 0
         ]
-        if not selectable_candidates:
-            raise SafariEncounterGenerationError(
-                "no valid Species are available for a normal Safari encounter."
-            )
-
-        selected_species = self._select_without_replacement(selectable_candidates)
+        selected_species = self._select_species(
+            composition,
+            selectable_candidates,
+        )
         slots = tuple(
             SafariEncounterSlot(
                 id=uuid4(),
@@ -56,10 +113,54 @@ class SafariEncounterGenerator:
         )
         return SafariEncounter(
             id=uuid4(),
-            composition=SafariComposition.NORMAL,
+            composition=composition,
             slots=slots,
             is_regional_herd=False,
         )
+
+    def _select_species(
+        self,
+        composition: SafariComposition,
+        weighted_candidates: list[tuple[Species, float]],
+    ) -> tuple[Species, ...]:
+        candidate_count = len(weighted_candidates)
+        if composition == SafariComposition.NORMAL:
+            self._require_candidates(composition, candidate_count, 1)
+            return self._select_without_replacement(
+                weighted_candidates,
+                min(self._MAX_SLOT_COUNT, candidate_count),
+            )
+        if composition == SafariComposition.DUEL:
+            self._require_candidates(composition, candidate_count, 2)
+            return self._select_without_replacement(weighted_candidates, 2)
+        if composition == SafariComposition.HERD:
+            self._require_candidates(composition, candidate_count, 1)
+            species = self._select_without_replacement(weighted_candidates, 1)[0]
+            return (species,) * self._random_source.choice((3, 4, 5))
+        if composition == SafariComposition.SOLITARY:
+            self._require_candidates(composition, candidate_count, 1)
+            return self._select_without_replacement(weighted_candidates, 1)
+
+        self._require_candidates(composition, candidate_count, 2)
+        target_count = 2 if candidate_count == 2 else self._random_source.choice((2, 3))
+        return self._select_without_replacement(weighted_candidates, target_count)
+
+    @staticmethod
+    def _require_candidates(
+        composition: SafariComposition,
+        actual_count: int,
+        required_count: int,
+    ) -> None:
+        if actual_count < required_count:
+            raise SafariEncounterGenerationError(
+                f"not enough valid Species for Safari composition {composition.value}."
+            )
+
+    def _validate_composition(self, composition: SafariComposition) -> None:
+        if composition not in self._COMMON_COMPOSITIONS:
+            raise SafariEncounterGenerationError(
+                f"unsupported Safari composition: {composition.value}."
+            )
 
     def _is_candidate(
         self,
@@ -103,10 +204,10 @@ class SafariEncounterGenerator:
     def _select_without_replacement(
         self,
         weighted_candidates: list[tuple[Species, float]],
+        target_count: int,
     ) -> tuple[Species, ...]:
         available = list(weighted_candidates)
         selected: list[Species] = []
-        target_count = min(self._MAX_SLOT_COUNT, len(available))
 
         while len(selected) < target_count:
             candidates = [species for species, _ in available]

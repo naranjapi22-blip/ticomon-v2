@@ -17,6 +17,7 @@ from core.safari import (
     SafariZone,
 )
 from core.species.regional_species import is_regional_species
+from core.species.variant import Variant
 from test.factories import create_species
 
 
@@ -42,10 +43,27 @@ class RecordingOpportunityFactory:
         return opportunity
 
 
+class DistinctHerdOpportunityFactory:
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def create(self, species):
+        opportunity = OpportunityFactory.create(species)
+        self.call_count += 1
+        opportunity.is_shiny = self.call_count % 2 == 0
+        opportunity.initial_form = Variant(
+            id=self.call_count,
+            name=f"Form {self.call_count}",
+        )
+        return opportunity
+
+
 class FakeWeightedRandom:
-    def __init__(self, selected_ids=()) -> None:
+    def __init__(self, selected_ids=(), choice_values=()) -> None:
         self.selected_ids = list(selected_ids)
+        self.choice_values = list(choice_values)
         self.calls = []
+        self.choice_calls = []
 
     def choices(self, candidates, weights, k):
         assert k == 1
@@ -56,6 +74,15 @@ class FakeWeightedRandom:
             selected_id = self.selected_ids.pop(0)
             return [next(item for item in candidates if item.id == selected_id)]
         return [candidates[0]]
+
+    def choice(self, candidates):
+        candidates = tuple(candidates)
+        self.choice_calls.append(candidates)
+        if self.choice_values:
+            selected = self.choice_values.pop(0)
+            assert selected in candidates
+            return selected
+        return candidates[0]
 
 
 def make_context(**overrides) -> SafariEncounterContext:
@@ -325,3 +352,256 @@ async def test_thirteen_normal_encounters_do_not_repeat_species():
         seen_species_ids.update(encounter_ids)
 
     assert len(seen_species_ids) == 39
+
+
+@pytest.mark.asyncio
+async def test_explicit_normal_keeps_phase_seven_behavior():
+    catalog = tuple(make_species(index) for index in range(1, 5))
+    generator, _, _, _ = make_generator(catalog)
+
+    encounter = await generator.generate(
+        make_context(),
+        SafariComposition.NORMAL,
+    )
+
+    assert encounter.composition == SafariComposition.NORMAL
+    assert len(encounter.slots) == 3
+    assert len({slot.species_id for slot in encounter.slots}) == 3
+
+
+@pytest.mark.asyncio
+async def test_duel_has_two_distinct_species_and_independent_opportunities():
+    catalog = tuple(make_species(index) for index in range(1, 4))
+    random_source = FakeWeightedRandom(selected_ids=(2, 3))
+    generator, _, factory, _ = make_generator(catalog, random_source)
+
+    encounter = await generator.generate(make_context(), SafariComposition.DUEL)
+
+    assert encounter.composition == SafariComposition.DUEL
+    assert [slot.species_id for slot in encounter.slots] == [2, 3]
+    assert len({id(slot.opportunity) for slot in encounter.slots}) == 2
+    assert factory.species == [catalog[1], catalog[2]]
+
+
+@pytest.mark.asyncio
+async def test_duel_fails_instead_of_degrading_with_one_candidate():
+    generator, _, factory, _ = make_generator((make_species(1),))
+
+    with pytest.raises(SafariEncounterGenerationError, match="DUEL"):
+        await generator.generate(make_context(), SafariComposition.DUEL)
+
+    assert factory.species == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("slot_count", [3, 4, 5])
+async def test_herd_repeats_species_with_independent_slots_and_opportunities(
+    slot_count,
+):
+    catalog = (make_species(1), make_species(2))
+    random_source = FakeWeightedRandom(selected_ids=(2,), choice_values=(slot_count,))
+    generator, _, factory, _ = make_generator(catalog, random_source)
+
+    encounter = await generator.generate(make_context(), SafariComposition.HERD)
+
+    assert encounter.composition == SafariComposition.HERD
+    assert len(encounter.slots) == slot_count
+    assert {slot.species_id for slot in encounter.slots} == {2}
+    assert len({slot.id for slot in encounter.slots}) == slot_count
+    assert len({id(slot.opportunity) for slot in encounter.slots}) == slot_count
+    assert factory.species == [catalog[1]] * slot_count
+    assert not encounter.is_regional_herd
+
+
+@pytest.mark.asyncio
+async def test_herd_preserves_independently_generated_shiny_and_variant_values():
+    repository = FakeSpeciesRepository((make_species(1),))
+    factory = DistinctHerdOpportunityFactory()
+    generator = SafariEncounterGenerator(
+        repository,  # type: ignore[arg-type]
+        factory,  # type: ignore[arg-type]
+        FakeWeightedRandom(choice_values=(3,)),  # type: ignore[arg-type]
+    )
+
+    encounter = await generator.generate(make_context(), SafariComposition.HERD)
+
+    shiny_values = [slot.opportunity.is_shiny for slot in encounter.slots]
+    assert shiny_values == [False, True, False]
+    assert [slot.opportunity.initial_form.name for slot in encounter.slots] == [
+        "Form 1",
+        "Form 2",
+        "Form 3",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_solitary_selects_one_weighted_ordinary_species():
+    ordinary_baby = make_species(1, is_baby=True)
+    ordinary = make_species(2)
+    random_source = FakeWeightedRandom(selected_ids=(2,))
+    generator, _, _, _ = make_generator(
+        (ordinary_baby, ordinary),
+        random_source,
+    )
+
+    encounter = await generator.generate(make_context(), SafariComposition.SOLITARY)
+
+    assert encounter.composition == SafariComposition.SOLITARY
+    assert [slot.species_id for slot in encounter.slots] == [2]
+    assert not encounter.is_regional_herd
+
+
+@pytest.mark.asyncio
+async def test_baby_nest_uses_exactly_two_when_only_two_babies_are_available():
+    babies = (make_species(1, is_baby=True), make_species(2, is_baby=True))
+    non_baby = make_species(3)
+    generator, _, _, random_source = make_generator((*babies, non_baby))
+
+    encounter = await generator.generate(make_context(), SafariComposition.BABY_NEST)
+
+    assert encounter.composition == SafariComposition.BABY_NEST
+    assert {slot.species_id for slot in encounter.slots} == {1, 2}
+    assert random_source.choice_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("slot_count", [2, 3])
+async def test_baby_nest_count_is_controlled_when_three_babies_exist(slot_count):
+    babies = tuple(make_species(index, is_baby=True) for index in range(1, 4))
+    random_source = FakeWeightedRandom(choice_values=(slot_count,))
+    generator, _, _, _ = make_generator(babies, random_source)
+
+    encounter = await generator.generate(make_context(), SafariComposition.BABY_NEST)
+
+    assert len(encounter.slots) == slot_count
+    assert len({slot.species_id for slot in encounter.slots}) == slot_count
+    assert all(slot.opportunity.species.metadata.is_baby for slot in encounter.slots)
+
+
+@pytest.mark.asyncio
+async def test_baby_nest_fails_with_one_baby_and_does_not_fill_with_non_baby():
+    catalog = (make_species(1, is_baby=True), make_species(2))
+    generator, _, factory, _ = make_generator(catalog)
+
+    with pytest.raises(SafariEncounterGenerationError, match="BABY_NEST"):
+        await generator.generate(make_context(), SafariComposition.BABY_NEST)
+
+    assert factory.species == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "composition",
+    [
+        SafariComposition.NORMAL,
+        SafariComposition.DUEL,
+        SafariComposition.HERD,
+        SafariComposition.SOLITARY,
+        SafariComposition.BABY_NEST,
+    ],
+)
+async def test_all_common_compositions_keep_base_exclusions(composition):
+    valid_species = [make_species(1, is_baby=True), make_species(2, is_baby=True)]
+    catalog = (
+        *valid_species,
+        make_species(3, pokeapi_id=10100, is_baby=True),
+        make_species(4, is_legendary=True, is_baby=True),
+        make_species(5, is_mythical=True, is_baby=True),
+        make_species(6, is_baby=True),
+    )
+    random_source = FakeWeightedRandom(choice_values=(3,))
+    generator, _, _, _ = make_generator(catalog, random_source)
+
+    encounter = await generator.generate(
+        make_context(seen_species_ids={6}),
+        composition,
+    )
+
+    assert {slot.species_id for slot in encounter.slots} <= {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_fallback_tries_ordered_unique_compositions_then_succeeds():
+    catalog = (make_species(1), make_species(2))
+    generator, repository, _, _ = make_generator(catalog)
+
+    encounter = await generator.generate_from_compositions(
+        make_context(),
+        (
+            SafariComposition.BABY_NEST,
+            SafariComposition.BABY_NEST,
+            SafariComposition.DUEL,
+        ),
+    )
+
+    assert encounter.composition == SafariComposition.DUEL
+    assert repository.get_all_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_fallback_uses_normal_only_after_requested_compositions_fail():
+    generator, _, _, _ = make_generator((make_species(1),))
+
+    encounter = await generator.generate_from_compositions(
+        make_context(),
+        (SafariComposition.BABY_NEST, SafariComposition.DUEL),
+    )
+
+    assert encounter.composition == SafariComposition.NORMAL
+    assert len(encounter.slots) == 1
+
+
+@pytest.mark.asyncio
+async def test_fallback_fails_when_normal_cannot_generate_without_relaxing_filters():
+    catalog = (
+        make_species(1, is_legendary=True),
+        make_species(2, pokeapi_id=10100),
+    )
+    generator, _, factory, _ = make_generator(catalog)
+
+    with pytest.raises(
+        SafariEncounterGenerationError,
+        match="no common Safari composition",
+    ):
+        await generator.generate_from_compositions(
+            make_context(),
+            (SafariComposition.BABY_NEST, SafariComposition.SOLITARY),
+        )
+
+    assert factory.species == []
+
+
+@pytest.mark.asyncio
+async def test_unsupported_extraordinary_composition_is_rejected():
+    generator, repository, _, _ = make_generator((make_species(1),))
+
+    with pytest.raises(SafariEncounterGenerationError, match="unsupported"):
+        await generator.generate(make_context(), SafariComposition.LEGENDARY)
+
+    assert repository.get_all_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_common_composition_sequence_respects_seen_species():
+    catalog = tuple(make_species(index) for index in range(1, 11)) + tuple(
+        make_species(index, is_baby=True) for index in range(11, 21)
+    )
+    generator, _, _, _ = make_generator(catalog)
+    seen_species_ids: set[int] = set()
+
+    for composition in (
+        SafariComposition.NORMAL,
+        SafariComposition.DUEL,
+        SafariComposition.HERD,
+        SafariComposition.SOLITARY,
+        SafariComposition.BABY_NEST,
+    ):
+        encounter = await generator.generate(
+            make_context(seen_species_ids=seen_species_ids),
+            composition,
+        )
+        encounter_species_ids = {slot.species_id for slot in encounter.slots}
+        assert not (encounter_species_ids & seen_species_ids)
+        seen_species_ids.update(encounter_species_ids)
+
+    assert len(seen_species_ids) >= 9
