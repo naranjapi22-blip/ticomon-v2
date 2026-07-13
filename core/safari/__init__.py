@@ -1,3 +1,4 @@
+from .activity_repository import SafariActivityRepository
 from .domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
@@ -27,6 +28,11 @@ from .domain import (
 )
 from .progress_result import SafariWorldProgressResult
 from .progress_service import SAFARI_UNLOCK_THRESHOLD, SafariWorldProgressService
+from .registration import (
+    SafariParticipantLimitReached,
+    SafariRegistration,
+    SafariRegistrationClosed,
+)
 from .unlock import SafariUnlock, SafariUnlockAlreadyConsumed
 from .world import SafariWorld
 
@@ -47,6 +53,10 @@ __all__ = [
     "SafariMapInfluence",
     "SafariPhase",
     "SafariRegistrationStatus",
+    "SafariRegistration",
+    "SafariRegistrationClosed",
+    "SafariParticipantLimitReached",
+    "SafariActivityRepository",
     "SafariRouteVoteStatus",
     "SafariSessionStatus",
     "SafariSlotStatus",
