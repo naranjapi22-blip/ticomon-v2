@@ -38,6 +38,11 @@ from .encounter import (
     SafariEncounterSlot,
     SafariSelectionAlreadyConfirmed,
 )
+from .encounter_context import SafariEncounterContext
+from .encounter_generator import (
+    SafariEncounterGenerationError,
+    SafariEncounterGenerator,
+)
 from .map_selector import SafariMapSelector
 from .participant import NotEnoughSafariBalls, SafariParticipant
 from .progress_result import SafariWorldProgressResult
@@ -81,6 +86,9 @@ __all__ = [
     "SafariComposition",
     "SafariEncounter",
     "SafariEncounterClosed",
+    "SafariEncounterContext",
+    "SafariEncounterGenerationError",
+    "SafariEncounterGenerator",
     "SafariEncounterSlot",
     "SafariEncounterStatus",
     "SafariExtraordinaryFlags",
