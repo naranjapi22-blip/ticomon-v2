@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Mapping
+from uuid import UUID
 
 from core.candy.candy_bundle import CandyBundle
 from core.creature.creature import Creature
@@ -14,9 +16,17 @@ from core.safari.capture_resolution import (
     SafariSlotOutcome,
 )
 from core.safari.domain import (
+    SafariComposition,
     SafariEncounterStatus,
+    SafariFinishReason,
+    SafariMap,
+    SafariPhase,
     SafariRegistrationStatus,
     SafariSessionStatus,
+    SafariSlotStatus,
+    SafariTimeOfDay,
+    SafariWeather,
+    SafariZone,
 )
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.generated_encounter import SafariGeneratedEncounter
@@ -26,6 +36,8 @@ from core.safari.route import SafariRouteOption, SafariRouteSegment
 from core.safari.route_vote import SafariRouteVote, SafariRouteVoteResult
 from core.safari.session import SafariSession
 from core.safari.unlock import SafariUnlock
+from core.species.species import Species
+from core.species.variant import Variant
 
 
 class SafariCaptureSelectionState(str, Enum):
@@ -83,6 +95,114 @@ class ResolveSafariRouteVoteResult:
     selected_option: SafariRouteOption
     destination_segment: SafariRouteSegment
     next_encounter: SafariGeneratedEncounter
+
+
+@dataclass(frozen=True, slots=True)
+class SafariCapturedCreatureSummary:
+    slot_id: UUID
+    trainer_id: int
+    creature_id: int
+    species: Species
+    collection_number: int
+    is_shiny: bool
+    current_form: Variant | None
+
+
+@dataclass(frozen=True, slots=True)
+class SafariEncounterSlotSummary:
+    slot_id: UUID
+    species: Species
+    status: SafariSlotStatus
+    winner_trainer_id: int | None
+    attempts_executed: int
+    balls_committed: int
+    captured_creature: SafariCapturedCreatureSummary | None
+
+
+@dataclass(frozen=True, slots=True)
+class SafariEncounterSummary:
+    encounter_id: UUID
+    composition: SafariComposition
+    is_regional_herd: bool
+    slot_summaries: tuple[SafariEncounterSlotSummary, ...]
+    captured_slot_count: int
+    escaped_slot_count: int
+    attempts_executed: int
+    balls_committed: int
+
+
+@dataclass(frozen=True, slots=True)
+class SafariRouteSegmentSummary:
+    zone: SafariZone
+    phase: SafariPhase
+    remaining_encounters: int
+    source_option_id: str | None
+    vote_result: SafariRouteVoteResult | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SafariRouteSummary:
+    safari_map: SafariMap
+    weather: SafariWeather
+    time_of_day: SafariTimeOfDay
+    segments: tuple[SafariRouteSegmentSummary, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SafariParticipantSummary:
+    rank: int
+    trainer_id: int
+    capture_count: int
+    shiny_capture_count: int
+    captured_creatures: tuple[SafariCapturedCreatureSummary, ...]
+    initial_balls: int
+    balls_used: int
+    balls_remaining: int
+    attempts_executed: int
+    slots_won: int
+    encounters_participated: int
+
+
+@dataclass(frozen=True, slots=True)
+class SafariTotalsSummary:
+    encounters_completed: int
+    pokemon_seen: int
+    slots_captured: int
+    slots_escaped: int
+    attempts_executed: int
+    balls_committed: int
+
+
+@dataclass(frozen=True, slots=True)
+class SafariExtraordinarySummary:
+    legendary_seen: bool
+    mythical_seen: bool
+    shiny_encounter_seen: bool
+    regional_herd_seen: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SafariFinalSummary:
+    guild_id: int
+    session_id: UUID
+    level: int
+    safari_map: SafariMap
+    weather: SafariWeather
+    time_of_day: SafariTimeOfDay
+    started_at: datetime
+    finished_at: datetime
+    finish_reason: SafariFinishReason
+    ranking: tuple[SafariParticipantSummary, ...]
+    route: SafariRouteSummary
+    encounters: tuple[SafariEncounterSummary, ...]
+    totals: SafariTotalsSummary
+    extraordinary: SafariExtraordinarySummary
+
+
+@dataclass(frozen=True, slots=True)
+class FinishSafariResult:
+    session: SafariSession
+    summary: SafariFinalSummary
 
 
 @dataclass(frozen=True, slots=True)

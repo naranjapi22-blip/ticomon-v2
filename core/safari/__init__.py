@@ -66,6 +66,11 @@ from .event_catalog import (
     available_regional_events_for,
 )
 from .generated_encounter import SafariGeneratedEncounter
+from .history import (
+    SafariCapturedCreatureSnapshot,
+    SafariEncounterHistoryEntry,
+    SafariRouteProgressEntry,
+)
 from .map_selector import SafariMapSelector
 from .participant import NotEnoughSafariBalls, SafariParticipant
 from .progress_result import SafariWorldProgressResult
@@ -135,6 +140,8 @@ __all__ = [
     "SafariFinishReason",
     "SafariGeneratedEncounter",
     "SafariGeneratedRegionalEncounter",
+    "SafariCapturedCreatureSnapshot",
+    "SafariEncounterHistoryEntry",
     "SafariLevelConfiguration",
     "SafariMap",
     "SafariMapInfluence",
@@ -153,6 +160,7 @@ __all__ = [
     "SafariRouteVoteStatus",
     "SafariRouteOption",
     "SafariRouteSegment",
+    "SafariRouteProgressEntry",
     "SafariRouteVote",
     "SafariRouteVoteClosed",
     "SafariRouteVoteResult",

@@ -41,6 +41,10 @@ from core.safari.domain import (
     SafariSlotStatus,
 )
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
+from core.safari.history import (
+    SafariCapturedCreatureSnapshot,
+    SafariEncounterHistoryEntry,
+)
 from core.safari.participant import NotEnoughSafariBalls, SafariParticipant
 from core.safari.session import SafariSession
 
@@ -182,7 +186,15 @@ class SafariCaptureApplicationService:
             slot_application_results, persisted_result, rewards_by_trainer = (
                 await self._persist_resolution(resolution)
             )
-            session.apply_persisted_encounter_result(persisted_result)
+            history_entry = self._build_history_entry(
+                encounter,
+                resolution,
+                slot_application_results,
+            )
+            session.apply_persisted_encounter_result(
+                persisted_result,
+                history_entry=history_entry,
+            )
             await self._activity_repository.save_session(session)
 
             return ResolveSafariCaptureResult(
@@ -306,6 +318,29 @@ class SafariCaptureApplicationService:
             tuple(ordered_slot_results),
             persisted_result,
             MappingProxyType(rewards_by_trainer),
+        )
+
+    @staticmethod
+    def _build_history_entry(
+        encounter: SafariEncounter,
+        resolution: SafariEncounterResolution,
+        slot_application_results: tuple[SafariCaptureSlotApplicationResult, ...],
+    ) -> SafariEncounterHistoryEntry:
+        captured_creatures = tuple(
+            SafariCapturedCreatureSnapshot(
+                slot_id=result.slot_outcome.slot_id,
+                trainer_id=result.creature.trainer_id,
+                creature_id=result.creature.id,
+                creature=result.creature,
+            )
+            for result in slot_application_results
+            if result.creature is not None
+        )
+        return SafariEncounterHistoryEntry(
+            encounter=encounter,
+            resolution=resolution,
+            captured_creatures=captured_creatures,
+            eligible_participant_ids=encounter.eligible_participant_ids,
         )
 
     async def _require_session(self, guild_id: int) -> SafariSession:

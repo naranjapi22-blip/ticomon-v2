@@ -18,6 +18,10 @@ class SafariSessionNotFound(SafariApplicationError):
     pass
 
 
+class SafariSessionNotFinished(SafariApplicationError):
+    pass
+
+
 class SafariInsufficientParticipants(SafariApplicationError):
     pass
 

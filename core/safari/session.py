@@ -29,6 +29,10 @@ from core.safari.encounter import (
     SafariEncounter,
     SafariSelectionAlreadyConfirmed,
 )
+from core.safari.history import (
+    SafariEncounterHistoryEntry,
+    SafariRouteProgressEntry,
+)
 from core.safari.participant import SafariParticipant
 from core.safari.route import SafariRouteSegment
 from core.safari.route_schedule import SafariRouteSchedulePolicy
@@ -115,6 +119,8 @@ class SafariSession:
         self._current_segment_index = 0
         self._current_encounter: SafariEncounter | None = None
         self._current_route_vote: SafariRouteVote | None = None
+        self._route_progress_history: list[SafariRouteProgressEntry] = []
+        self._encounter_history: list[SafariEncounterHistoryEntry] = []
         self._completed_encounter_count = 0
         self._seen_species_ids: set[int] = set()
         self._extraordinary_flags = SafariExtraordinaryFlags()
@@ -177,6 +183,14 @@ class SafariSession:
     @property
     def current_route_vote(self) -> SafariRouteVote | None:
         return self._current_route_vote
+
+    @property
+    def route_progress_history(self) -> tuple[SafariRouteProgressEntry, ...]:
+        return tuple(self._route_progress_history)
+
+    @property
+    def encounter_history(self) -> tuple[SafariEncounterHistoryEntry, ...]:
+        return tuple(self._encounter_history)
 
     @property
     def completed_encounter_count(self) -> int:
@@ -276,6 +290,7 @@ class SafariSession:
     def apply_persisted_encounter_result(
         self,
         result: SafariPersistedEncounterResult,
+        history_entry: SafariEncounterHistoryEntry | None = None,
     ) -> None:
         self._require_status(SafariSessionStatus.RESOLUTION)
         encounter = self._require_current_encounter()
@@ -283,8 +298,15 @@ class SafariSession:
         captures = self._validate_persisted_result(encounter, result)
 
         encounter._apply_persisted_result(result)
+        if history_entry is not None:
+            if history_entry.encounter.id != encounter.id:
+                raise ValueError("history entry must match the current encounter.")
+            if history_entry.resolution.encounter_id != encounter.id:
+                raise ValueError("history entry must match the current encounter.")
         for trainer_id, creature_id in captures:
             self._participants_by_trainer[trainer_id].record_capture(creature_id)
+        if history_entry is not None:
+            self._encounter_history.append(history_entry)
         self.current_segment.complete_encounter()
         self._completed_encounter_count += 1
         self._current_encounter = None
@@ -336,6 +358,13 @@ class SafariSession:
         self._route_segments.append(segment)
         self._current_segment_index = next_index
         self._current_route_vote = None
+        self._route_progress_history.append(
+            SafariRouteProgressEntry(
+                vote_result=result,
+                destination_segment=segment,
+                phase=self._phase_for_segment(next_index),
+            )
+        )
         self._phase = self._phase_for_segment(next_index)
         self._status = SafariSessionStatus.ENCOUNTER
         return result

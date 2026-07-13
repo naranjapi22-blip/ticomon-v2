@@ -26,6 +26,7 @@ from application.release.release_application_service import (
     ReleaseApplicationService,
 )
 from application.safari import (
+    FinishSafariApplicationService,
     SafariCaptureApplicationService,
     SafariRegistrationApplicationService,
     SafariRouteApplicationService,
@@ -137,6 +138,7 @@ class CoreServices:
     safari_registration_application: SafariRegistrationApplicationService
     safari_route_application: SafariRouteApplicationService
     safari_capture_application: SafariCaptureApplicationService
+    safari_finish_application: FinishSafariApplicationService
     start_safari_application: StartSafariApplicationService
     evolution_application: EvolutionApplicationService
     release_application: ReleaseApplicationService
@@ -242,6 +244,9 @@ def build_core(
         unit_of_work=NeonCaptureUnitOfWork(),
         reward_policy=reward_policy,
     )
+    safari_finish_application = FinishSafariApplicationService(
+        activity_repository=safari_activity_repository,
+    )
     start_safari_application = StartSafariApplicationService(
         activity_repository=safari_activity_repository,
         unlock_repository=safari_unlock_repository,
@@ -345,6 +350,7 @@ def build_core(
         safari_registration_application=safari_registration_application,
         safari_route_application=safari_route_application,
         safari_capture_application=safari_capture_application,
+        safari_finish_application=safari_finish_application,
         start_safari_application=start_safari_application,
         evolution_application=evolution_application,
         release_application=release_application,
