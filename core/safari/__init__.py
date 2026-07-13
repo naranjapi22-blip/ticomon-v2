@@ -38,6 +38,7 @@ from .encounter import (
     SafariEncounterSlot,
     SafariSelectionAlreadyConfirmed,
 )
+from .map_selector import SafariMapSelector
 from .participant import NotEnoughSafariBalls, SafariParticipant
 from .progress_result import SafariWorldProgressResult
 from .progress_service import SAFARI_UNLOCK_THRESHOLD, SafariWorldProgressService
@@ -61,7 +62,9 @@ from .route_vote import (
     SafariRouteVoteResult,
 )
 from .session import SafariInvalidSessionState, SafariSession, SafariSessionClosed
+from .time_of_day_selector import SafariTimeOfDaySelector
 from .unlock import SafariUnlock, SafariUnlockAlreadyConsumed
+from .weather_selector import SafariWeatherSelector
 from .world import SafariWorld
 
 __all__ = [
@@ -85,6 +88,7 @@ __all__ = [
     "SafariLevelConfiguration",
     "SafariMap",
     "SafariMapInfluence",
+    "SafariMapSelector",
     "SafariPhase",
     "SafariParticipant",
     "SafariPersistedCapture",
@@ -112,8 +116,10 @@ __all__ = [
     "SafariSlotStatus",
     "SafariThematicEvent",
     "SafariTimeOfDay",
+    "SafariTimeOfDaySelector",
     "SafariUnlockStatus",
     "SafariWeather",
+    "SafariWeatherSelector",
     "SafariZone",
     "SafariZoneDefinition",
     "SafariUnlock",
