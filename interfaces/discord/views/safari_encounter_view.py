@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -17,6 +18,9 @@ from application.safari import (
 )
 from core.safari import SafariEncounter, SafariSession, SafariSessionStatus
 from interfaces.discord.buttons.pokedex_button import PokedexButton
+from interfaces.discord.files import image_to_discord_file
+from rendering.safari import SafariEncounterRenderer
+from rendering.safari.narrative import encounter_narrative
 
 
 class SafariEncounterSlotSelect(discord.ui.Select):
@@ -79,6 +83,7 @@ class SafariEncounterView(discord.ui.View):
         self.guild_id = guild_id
         self.session = session
         self.message: discord.Message | None = None
+        self.renderer = SafariEncounterRenderer()
 
         self.add_item(SafariEncounterSlotSelect(self))
         self.add_item(
@@ -104,6 +109,12 @@ class SafariEncounterView(discord.ui.View):
 
         embed = discord.Embed(
             title=f"Safari Encounter {progress}/{self.session.total_encounters}",
+            description=encounter_narrative(
+                self.session.safari_map,
+                self.session.weather,
+                self.session.time_of_day,
+                self.session.phase,
+            ),
             color=discord.Color.green(),
         )
         embed.add_field(name="Map", value=self.session.safari_map.value, inline=True)
@@ -140,6 +151,10 @@ class SafariEncounterView(discord.ui.View):
             )
 
         return embed
+
+    async def build_file(self) -> discord.File:
+        image = await asyncio.to_thread(self.renderer.render, self.session)
+        return image_to_discord_file(image, "safari-encounter.png")
 
     async def choose_slot(
         self,
@@ -289,6 +304,7 @@ class SafariEncounterView(discord.ui.View):
             await interaction.response.edit_message(
                 embed=view.build_embed(),
                 view=view,
+                attachments=[],
             )
             return
 
@@ -299,10 +315,11 @@ class SafariEncounterView(discord.ui.View):
                 session=result.session,
             )
             view.message = self.message
+            file = await view.build_file()
             await interaction.response.edit_message(
                 embed=view.build_embed(),
                 view=view,
-                attachments=[],
+                attachments=[file],
             )
             return
 
@@ -317,10 +334,11 @@ class SafariEncounterView(discord.ui.View):
             finish_result,
         )
         view.message = self.message
+        file = await view.build_file()
         await interaction.response.edit_message(
             embeds=view.build_embeds(),
             view=view,
-            attachments=[],
+            attachments=[file],
         )
 
     async def refresh(self) -> None:

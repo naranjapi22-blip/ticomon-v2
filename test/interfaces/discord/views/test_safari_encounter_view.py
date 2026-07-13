@@ -163,16 +163,23 @@ async def test_resolve_encounter_transitions_to_route_view(monkeypatch) -> None:
 
     await view.resolve_encounter(interaction)
 
+    kwargs = interaction.response.edit_message.await_args.kwargs
     assert isinstance(
-        interaction.response.edit_message.await_args.kwargs["view"],
+        kwargs["view"],
         SafariRouteView,
     )
+    assert kwargs["attachments"] == []
 
 
 @pytest.mark.asyncio
 async def test_resolve_encounter_transitions_to_summary(monkeypatch) -> None:
     view, session = _encounter_view(remaining_encounters=1)
     monkeypatch.setattr(SafariSummaryView, "build_embeds", lambda self: tuple())
+    monkeypatch.setattr(
+        SafariSummaryView,
+        "build_file",
+        AsyncMock(return_value=SimpleNamespace(filename="safari-summary.png")),
+    )
     view.core = SimpleNamespace(
         safari_capture_application=SimpleNamespace(
             close_capture_selection=AsyncMock(),
@@ -190,7 +197,17 @@ async def test_resolve_encounter_transitions_to_summary(monkeypatch) -> None:
         ),
         safari_route_application=SimpleNamespace(),
         safari_finish_application=SimpleNamespace(
-            finish=AsyncMock(return_value=SimpleNamespace(summary=SimpleNamespace()))
+            finish=AsyncMock(
+                return_value=SimpleNamespace(
+                    summary=SimpleNamespace(
+                        safari_map=session.safari_map,
+                        weather=session.weather,
+                        time_of_day=session.time_of_day,
+                        finish_reason=SimpleNamespace(value="completed"),
+                        totals=SimpleNamespace(encounters_completed=1),
+                    )
+                )
+            )
         ),
     )
     interaction = SimpleNamespace(
@@ -202,7 +219,9 @@ async def test_resolve_encounter_transitions_to_summary(monkeypatch) -> None:
 
     await view.resolve_encounter(interaction)
 
+    kwargs = interaction.response.edit_message.await_args.kwargs
     assert isinstance(
-        interaction.response.edit_message.await_args.kwargs["view"],
+        kwargs["view"],
         SafariSummaryView,
     )
+    assert kwargs["attachments"][0].filename == "safari-summary.png"

@@ -10,6 +10,7 @@ from application.safari import (
 )
 from core.safari import SafariRouteOption, SafariRouteVote, SafariSession
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
+from rendering.safari.narrative import route_narrative
 
 
 class SafariRouteOptionSelect(discord.ui.Select):
@@ -74,7 +75,10 @@ class SafariRouteView(discord.ui.View):
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title="Safari Route Vote",
-            description="Choose the next route for the expedition.",
+            description=route_narrative(
+                self.session.safari_map,
+                len(self.options),
+            ),
             color=discord.Color.blurple(),
         )
         embed.add_field(name="Map", value=self.session.safari_map.value, inline=True)
@@ -155,10 +159,11 @@ class SafariRouteView(discord.ui.View):
             session=result.session,
         )
         view.message = self.message
+        file = await view.build_file()
         await interaction.response.edit_message(
             embed=view.build_embed(),
             view=view,
-            attachments=[],
+            attachments=[file],
         )
 
     async def refresh(self) -> None:

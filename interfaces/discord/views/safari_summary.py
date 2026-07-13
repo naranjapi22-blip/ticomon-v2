@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+
 import discord
 
 from application.safari import SafariFinalSummary
+from interfaces.discord.files import image_to_discord_file
+from rendering.safari import SafariSummaryRenderer
+from rendering.safari.narrative import summary_narrative
 
 
 class SafariSummaryView(discord.ui.View):
@@ -12,6 +17,7 @@ class SafariSummaryView(discord.ui.View):
         self.finish_result = finish_result
         self.summary: SafariFinalSummary = finish_result.summary
         self.message: discord.Message | None = None
+        self.renderer = SafariSummaryRenderer()
 
     def build_embeds(self) -> tuple[discord.Embed, ...]:
         return (
@@ -25,8 +31,13 @@ class SafariSummaryView(discord.ui.View):
         summary = self.summary
         embed = discord.Embed(
             title="Safari Summary",
+            description=summary_narrative(
+                summary.finish_reason.value,
+                summary.totals.encounters_completed,
+            ),
             color=discord.Color.green(),
         )
+        embed.set_image(url="attachment://safari-summary.png")
         embed.add_field(name="Map", value=summary.safari_map.value, inline=True)
         embed.add_field(name="Weather", value=summary.weather.value, inline=True)
         embed.add_field(name="Time", value=summary.time_of_day.value, inline=True)
@@ -64,6 +75,10 @@ class SafariSummaryView(discord.ui.View):
         )
         return embed
 
+    async def build_file(self) -> discord.File:
+        image = await asyncio.to_thread(self.renderer.render, self.summary)
+        return image_to_discord_file(image, "safari-summary.png")
+
     def _ranking_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title="Safari Ranking",
@@ -75,7 +90,7 @@ class SafariSummaryView(discord.ui.View):
                     (
                         f"#{creature.collection_number} - "
                         f"{creature.species.name.title()}"
-                        + (" *" if creature.is_shiny else "")
+                        + (" [shiny]" if creature.is_shiny else "")
                         + (
                             f" ({creature.current_form.name})"
                             if creature.current_form is not None

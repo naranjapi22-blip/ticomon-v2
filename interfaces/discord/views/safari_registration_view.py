@@ -141,10 +141,11 @@ class SafariRegistrationView(discord.ui.View):
             session=result.session,
         )
         view.message = self.message
+        file = await view.build_file()
         await interaction.response.edit_message(
             embed=view.build_embed(),
             view=view,
-            attachments=[],
+            attachments=[file],
         )
 
     @discord.ui.button(

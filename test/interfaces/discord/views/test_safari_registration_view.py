@@ -129,9 +129,12 @@ async def test_start_button_opens_encounter_view() -> None:
 
     await view.children[1].callback(interaction)
 
+    kwargs = interaction.response.edit_message.await_args.kwargs
     assert isinstance(
-        interaction.response.edit_message.await_args.kwargs["view"], SafariEncounterView
+        kwargs["view"],
+        SafariEncounterView,
     )
+    assert kwargs["attachments"][0].filename == "safari-encounter.png"
 
 
 @pytest.mark.asyncio
