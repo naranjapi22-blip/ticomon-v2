@@ -91,8 +91,10 @@ from .route_vote import (
 from .session import SafariInvalidSessionState, SafariSession, SafariSessionClosed
 from .time_of_day_selector import SafariTimeOfDaySelector
 from .unlock import SafariUnlock, SafariUnlockAlreadyConsumed
+from .unlock_repository import SafariUnlockRepository
 from .weather_selector import SafariWeatherSelector
 from .world import SafariWorld
+from .world_repository import SafariWorldRepository
 
 __all__ = [
     "SAFARI_INITIAL_ZONE_BY_MAP",
@@ -169,7 +171,9 @@ __all__ = [
     "SafariZoneDefinition",
     "SafariUnlock",
     "SafariUnlockAlreadyConsumed",
+    "SafariUnlockRepository",
     "SafariWorld",
+    "SafariWorldRepository",
     "SafariWorldProgressResult",
     "SafariWorldProgressService",
     "SAFARI_UNLOCK_THRESHOLD",
