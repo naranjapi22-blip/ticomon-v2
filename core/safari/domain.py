@@ -308,7 +308,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.FOREST_ENTRANCE,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Grass", "Bug", "Normal"),
+        base_type_weights=_type_weights("grass", "bug", "normal"),
         allowed_events=_events(),
         transitions=(
             SafariZone.DEEP_FOREST,
@@ -319,7 +319,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.DEEP_FOREST,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Grass", "Bug", "Poison", "Ghost"),
+        base_type_weights=_type_weights("grass", "bug", "poison", "ghost"),
         allowed_events=_events(SafariThematicEvent.ANCIENT_RUINS),
         transitions=(
             SafariZone.FOREST_ENTRANCE,
@@ -330,7 +330,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.RIVERBANK,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Water", "Flying", "Grass"),
+        base_type_weights=_type_weights("water", "flying", "grass"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(
             SafariZone.FOREST_ENTRANCE,
@@ -341,7 +341,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.CLEARING,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Normal", "Flying", "Fairy", "Grass"),
+        base_type_weights=_type_weights("normal", "flying", "fairy", "grass"),
         allowed_events=_events(),
         transitions=(
             SafariZone.FOREST_ENTRANCE,
@@ -352,7 +352,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.ANCIENT_GROVE,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Grass", "Fairy", "Ghost"),
+        base_type_weights=_type_weights("grass", "fairy", "ghost"),
         allowed_events=_events(SafariThematicEvent.ANCIENT_RUINS),
         transitions=(
             SafariZone.DEEP_FOREST,
@@ -362,7 +362,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.MARSH_EDGE,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Water", "Poison", "Bug", "Ground"),
+        base_type_weights=_type_weights("water", "poison", "bug", "ground"),
         allowed_events=_events(),
         transitions=(
             SafariZone.RIVERBANK,
@@ -372,7 +372,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.HILLSIDE_PATH,
         safari_map=SafariMap.FOREST,
-        base_type_weights=_type_weights("Rock", "Flying", "Fighting"),
+        base_type_weights=_type_weights("rock", "flying", "fighting"),
         allowed_events=_events(),
         transitions=(
             SafariZone.CLEARING,
@@ -382,7 +382,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.MOUNTAIN_FOOTHILL,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Rock", "Ground", "Fighting"),
+        base_type_weights=_type_weights("rock", "ground", "fighting"),
         allowed_events=_events(),
         transitions=(
             SafariZone.ROCKY_SLOPE,
@@ -393,7 +393,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.ROCKY_SLOPE,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Rock", "Ground", "Flying"),
+        base_type_weights=_type_weights("rock", "ground", "flying"),
         allowed_events=_events(SafariThematicEvent.DEPOSIT),
         transitions=(
             SafariZone.MOUNTAIN_FOOTHILL,
@@ -404,7 +404,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.VALLEY,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Grass", "Normal", "Ground"),
+        base_type_weights=_type_weights("grass", "normal", "ground"),
         allowed_events=_events(),
         transitions=(
             SafariZone.MOUNTAIN_FOOTHILL,
@@ -415,7 +415,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.CAVE_ENTRANCE,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Rock", "Ground", "Dark"),
+        base_type_weights=_type_weights("rock", "ground", "dark"),
         allowed_events=_events(),
         transitions=(
             SafariZone.MOUNTAIN_FOOTHILL,
@@ -426,7 +426,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.DEEP_CAVE,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Rock", "Dark", "Ghost", "Steel"),
+        base_type_weights=_type_weights("rock", "dark", "ghost", "steel"),
         allowed_events=_events(SafariThematicEvent.DISTORTION),
         transitions=(
             SafariZone.CAVE_ENTRANCE,
@@ -436,7 +436,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.HIGH_RIDGE,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Flying", "Dragon", "Rock"),
+        base_type_weights=_type_weights("flying", "dragon", "rock"),
         allowed_events=_events(),
         transitions=(
             SafariZone.ROCKY_SLOPE,
@@ -446,7 +446,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.FROZEN_PASS,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Ice", "Rock", "Steel"),
+        base_type_weights=_type_weights("ice", "rock", "steel"),
         allowed_events=_events(),
         transitions=(
             SafariZone.VALLEY,
@@ -456,14 +456,14 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.UNDERGROUND_LAKE,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Water", "Rock", "Ground"),
+        base_type_weights=_type_weights("water", "rock", "ground"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(SafariZone.DEEP_CAVE,),
     ),
     SafariZoneDefinition(
         zone=SafariZone.SUMMIT,
         safari_map=SafariMap.MOUNTAIN,
-        base_type_weights=_type_weights("Flying", "Ice", "Dragon"),
+        base_type_weights=_type_weights("flying", "ice", "dragon"),
         allowed_events=_events(),
         transitions=(
             SafariZone.HIGH_RIDGE,
@@ -473,7 +473,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.COAST_SHORE,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Water", "Flying", "Normal"),
+        base_type_weights=_type_weights("water", "flying", "normal"),
         allowed_events=_events(SafariThematicEvent.MIGRATION),
         transitions=(
             SafariZone.ROCKY_BEACH,
@@ -484,7 +484,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.ROCKY_BEACH,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Water", "Rock", "Fighting"),
+        base_type_weights=_type_weights("water", "rock", "fighting"),
         allowed_events=_events(),
         transitions=(
             SafariZone.COAST_SHORE,
@@ -495,7 +495,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.TIDAL_POOLS,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Water", "Poison", "Bug"),
+        base_type_weights=_type_weights("water", "poison", "bug"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(
             SafariZone.COAST_SHORE,
@@ -506,7 +506,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.COASTAL_PATH,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Flying", "Normal", "Electric"),
+        base_type_weights=_type_weights("flying", "normal", "electric"),
         allowed_events=_events(),
         transitions=(
             SafariZone.COAST_SHORE,
@@ -517,7 +517,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.SEA_CAVE,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Water", "Rock", "Dark"),
+        base_type_weights=_type_weights("water", "rock", "dark"),
         allowed_events=_events(SafariThematicEvent.DISTORTION),
         transitions=(
             SafariZone.ROCKY_BEACH,
@@ -527,7 +527,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.CLIFFSIDE,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Flying", "Rock", "Dragon"),
+        base_type_weights=_type_weights("flying", "rock", "dragon"),
         allowed_events=_events(),
         transitions=(
             SafariZone.ROCKY_BEACH,
@@ -537,7 +537,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.LAGOON,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Water", "Grass", "Fairy"),
+        base_type_weights=_type_weights("water", "grass", "fairy"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(
             SafariZone.TIDAL_POOLS,
@@ -547,7 +547,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.MANGROVE_EDGE,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Water", "Grass", "Poison"),
+        base_type_weights=_type_weights("water", "grass", "poison"),
         allowed_events=_events(),
         transitions=(
             SafariZone.TIDAL_POOLS,
@@ -557,7 +557,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.DUNES,
         safari_map=SafariMap.COAST,
-        base_type_weights=_type_weights("Ground", "Normal", "Flying"),
+        base_type_weights=_type_weights("ground", "normal", "flying"),
         allowed_events=_events(),
         transitions=(
             SafariZone.COASTAL_PATH,
@@ -567,7 +567,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.SWAMP_EDGE,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Water", "Poison", "Grass"),
+        base_type_weights=_type_weights("water", "poison", "grass"),
         allowed_events=_events(),
         transitions=(
             SafariZone.MUDDY_TRAIL,
@@ -578,7 +578,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.MUDDY_TRAIL,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Ground", "Poison", "Bug"),
+        base_type_weights=_type_weights("ground", "poison", "bug"),
         allowed_events=_events(),
         transitions=(
             SafariZone.SWAMP_EDGE,
@@ -589,7 +589,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.SHALLOW_WATER,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Water", "Ground", "Poison"),
+        base_type_weights=_type_weights("water", "ground", "poison"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(
             SafariZone.SWAMP_EDGE,
@@ -600,7 +600,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.DENSE_REEDS,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Grass", "Bug", "Flying"),
+        base_type_weights=_type_weights("grass", "bug", "flying"),
         allowed_events=_events(SafariThematicEvent.NEST),
         transitions=(
             SafariZone.SWAMP_EDGE,
@@ -611,7 +611,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.DEAD_FOREST,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Ghost", "Dark", "Poison"),
+        base_type_weights=_type_weights("ghost", "dark", "poison"),
         allowed_events=_events(),
         transitions=(
             SafariZone.MUDDY_TRAIL,
@@ -621,7 +621,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.DEEP_MARSH,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Water", "Poison", "Dark"),
+        base_type_weights=_type_weights("water", "poison", "dark"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(
             SafariZone.SHALLOW_WATER,
@@ -631,7 +631,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.MISTY_CLEARING,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Ghost", "Fairy", "Psychic"),
+        base_type_weights=_type_weights("ghost", "fairy", "psychic"),
         allowed_events=_events(),
         transitions=(
             SafariZone.MUDDY_TRAIL,
@@ -641,7 +641,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.NESTING_GROUND,
         safari_map=SafariMap.SWAMP,
-        base_type_weights=_type_weights("Bug", "Flying"),
+        base_type_weights=_type_weights("bug", "flying"),
         allowed_events=_events(SafariThematicEvent.NEST),
         transitions=(
             SafariZone.DENSE_REEDS,
@@ -651,7 +651,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.PLAINS_TRAIL,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Normal", "Ground", "Fighting"),
+        base_type_weights=_type_weights("normal", "ground", "fighting"),
         allowed_events=_events(),
         transitions=(
             SafariZone.OPEN_FIELD,
@@ -662,7 +662,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.OPEN_FIELD,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Normal", "Flying", "Electric"),
+        base_type_weights=_type_weights("normal", "flying", "electric"),
         allowed_events=_events(SafariThematicEvent.MIGRATION),
         transitions=(
             SafariZone.PLAINS_TRAIL,
@@ -673,7 +673,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.TALL_GRASS,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Grass", "Bug", "Normal"),
+        base_type_weights=_type_weights("grass", "bug", "normal"),
         allowed_events=_events(),
         transitions=(
             SafariZone.PLAINS_TRAIL,
@@ -684,7 +684,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.LOW_HILLS,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Ground", "Rock", "Fighting"),
+        base_type_weights=_type_weights("ground", "rock", "fighting"),
         allowed_events=_events(),
         transitions=(
             SafariZone.PLAINS_TRAIL,
@@ -695,7 +695,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.FLOWER_MEADOW,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Grass", "Fairy", "Bug"),
+        base_type_weights=_type_weights("grass", "fairy", "bug"),
         allowed_events=_events(),
         transitions=(
             SafariZone.OPEN_FIELD,
@@ -705,7 +705,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.WINDY_FIELD,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Flying", "Electric", "Normal"),
+        base_type_weights=_type_weights("flying", "electric", "normal"),
         allowed_events=_events(),
         transitions=(
             SafariZone.OPEN_FIELD,
@@ -715,7 +715,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.RIVER_CROSSING,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Water", "Grass", "Flying"),
+        base_type_weights=_type_weights("water", "grass", "flying"),
         allowed_events=_events(SafariThematicEvent.FISHING),
         transitions=(
             SafariZone.TALL_GRASS,
@@ -725,14 +725,14 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
     SafariZoneDefinition(
         zone=SafariZone.HERDING_GROUNDS,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Normal", "Ground", "Fighting"),
+        base_type_weights=_type_weights("normal", "ground", "fighting"),
         allowed_events=_events(SafariThematicEvent.MIGRATION),
         transitions=(SafariZone.TALL_GRASS,),
     ),
     SafariZoneDefinition(
         zone=SafariZone.ROCKY_OUTCROP,
         safari_map=SafariMap.PLAINS,
-        base_type_weights=_type_weights("Rock", "Ground", "Steel"),
+        base_type_weights=_type_weights("rock", "ground", "steel"),
         allowed_events=_events(SafariThematicEvent.DEPOSIT),
         transitions=(SafariZone.LOW_HILLS,),
     ),

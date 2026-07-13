@@ -222,10 +222,10 @@ def test_zone_transitions_stay_inside_the_same_map_and_are_reachable():
 
 def test_corrected_zones_include_all_agreed_affinities():
     expected_types = {
-        SafariZone.DEEP_FOREST: {"Grass", "Bug", "Poison", "Ghost"},
-        SafariZone.CLEARING: {"Normal", "Flying", "Fairy", "Grass"},
-        SafariZone.MARSH_EDGE: {"Water", "Poison", "Bug", "Ground"},
-        SafariZone.DEEP_CAVE: {"Rock", "Dark", "Ghost", "Steel"},
+        SafariZone.DEEP_FOREST: {"grass", "bug", "poison", "ghost"},
+        SafariZone.CLEARING: {"normal", "flying", "fairy", "grass"},
+        SafariZone.MARSH_EDGE: {"water", "poison", "bug", "ground"},
+        SafariZone.DEEP_CAVE: {"rock", "dark", "ghost", "steel"},
     }
 
     for zone, expected in expected_types.items():
@@ -261,24 +261,24 @@ def test_weather_configuration_is_valid_for_each_map():
 
 
 def test_map_influence_rejects_negative_values_and_reports_values():
-    influence = SafariMapInfluence({"Grass": 3})
+    influence = SafariMapInfluence({"grass": 3})
 
-    assert influence.get("Grass") == 3
-    assert influence.get("Poison") == 0
+    assert influence.get("grass") == 3
+    assert influence.get("poison") == 0
     assert not influence.is_empty()
 
     empty = SafariMapInfluence()
     assert empty.is_empty()
-    assert empty.get("Grass") == 0
+    assert empty.get("grass") == 0
 
     with pytest.raises(ValueError):
-        SafariMapInfluence({"Grass": -1})
+        SafariMapInfluence({"grass": -1})
 
-    source = {"Grass": 2}
+    source = {"grass": 2}
     influence = SafariMapInfluence(source)
-    source["Grass"] = 9
+    source["grass"] = 9
 
-    assert influence.get("Grass") == 2
+    assert influence.get("grass") == 2
     assert isinstance(influence.amounts, MappingProxyType)
 
 
@@ -312,13 +312,13 @@ def test_zone_definition_is_immutable_and_keeps_data_as_tuples():
         definition.zone = SafariZone.CLEARING  # type: ignore[misc]
 
     with pytest.raises(TypeError):
-        definition.base_type_weights["Normal"] = 2.0  # type: ignore[index]
+        definition.base_type_weights["normal"] = 2.0  # type: ignore[index]
 
     with pytest.raises(ValueError):
         SafariZoneDefinition(
             zone=SafariZone.CLEARING,
             safari_map=SafariMap.FOREST,
-            base_type_weights={"Normal": 0.0},
+            base_type_weights={"normal": 0.0},
             allowed_events=(SafariThematicEvent.NONE,),
             transitions=(SafariZone.FOREST_ENTRANCE,),
         )
@@ -327,7 +327,7 @@ def test_zone_definition_is_immutable_and_keeps_data_as_tuples():
         SafariZoneDefinition(
             zone=SafariZone.CLEARING,
             safari_map=SafariMap.FOREST,
-            base_type_weights={"Normal": -1.0},
+            base_type_weights={"normal": -1.0},
             allowed_events=(SafariThematicEvent.NONE,),
             transitions=(SafariZone.FOREST_ENTRANCE,),
         )
