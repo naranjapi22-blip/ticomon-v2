@@ -2,14 +2,15 @@ import asyncio
 import csv
 import logging
 
+from core.species.regional_species import (
+    REGIONAL_POKEAPI_IDS,
+    is_regional_pokeapi_id,
+)
 from infrastructure.db_config import close_pool, get_pool
 
 from .seed_species_neon import insert_species
 
 CSV_FILE = "pokemon_data.csv"
-
-START_ID = 1026
-END_ID = 1077
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,10 @@ def build_species(
     }
 
 
+def is_regional_row(row: dict) -> bool:
+    return is_regional_pokeapi_id(int(row["pokeapi_id"]))
+
+
 async def main():
     pool = await get_pool()
     imported = 0
@@ -66,9 +71,7 @@ async def main():
 
                 for row in reader:
 
-                    species_id = int(row["id"])
-
-                    if species_id < START_ID or species_id > END_ID:
+                    if not is_regional_row(row):
                         continue
 
                     base_name = get_base_name(row["nombre"])
@@ -102,8 +105,8 @@ async def main():
 
                     logger.info(
                         "[%s/%s] ✔ %s",
-                        species_id,
-                        END_ID,
+                        imported,
+                        len(REGIONAL_POKEAPI_IDS),
                         species["name"],
                     )
 
