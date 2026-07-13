@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from typing import Mapping
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG
 from core.safari.domain import (
     SafariComposition,
+    SafariEncounterStatus,
     SafariPhase,
     SafariRegionalEncounterForm,
     SafariThematicEvent,
@@ -19,6 +21,7 @@ from core.safari.event_catalog import (
     EVENT_TYPE_MODIFIERS,
     EVENT_WEIGHTS,
     available_events_for,
+    available_extraordinary_events_for,
     available_regional_events_for,
 )
 from core.safari.generated_encounter import SafariGeneratedEncounter
@@ -215,6 +218,136 @@ class SafariEncounterGenerator:
             "no regional Safari encounter can be generated."
         ) from last_error
 
+    async def generate_legendary(
+        self,
+        context: SafariEncounterContext,
+        event: SafariThematicEvent = SafariThematicEvent.NONE,
+    ) -> SafariGeneratedEncounter:
+        return await self._generate_extraordinary(
+            context,
+            SafariComposition.LEGENDARY,
+            event,
+        )
+
+    async def generate_mythical(
+        self,
+        context: SafariEncounterContext,
+        event: SafariThematicEvent = SafariThematicEvent.NONE,
+    ) -> SafariGeneratedEncounter:
+        return await self._generate_extraordinary(
+            context,
+            SafariComposition.MYTHICAL,
+            event,
+        )
+
+    async def generate_extraordinary_with_events(
+        self,
+        context: SafariEncounterContext,
+        compositions: tuple[SafariComposition, ...],
+    ) -> SafariGeneratedEncounter:
+        ordered_compositions = tuple(dict.fromkeys(compositions))
+        if not ordered_compositions:
+            raise SafariEncounterGenerationError(
+                "at least one extraordinary composition is required."
+            )
+        for composition in ordered_compositions:
+            if composition not in (
+                SafariComposition.LEGENDARY,
+                SafariComposition.MYTHICAL,
+            ):
+                raise ValueError("composition must be LEGENDARY or MYTHICAL.")
+        if context.phase != SafariPhase.FINAL:
+            raise SafariEncounterGenerationError(
+                "extraordinary encounters are only available during FINAL."
+            )
+
+        catalog = await self._species_repository.get_all()
+        last_error: SafariEncounterGenerationError | None = None
+        for composition in ordered_compositions:
+            try:
+                self._validate_extraordinary_request(context, composition)
+            except SafariEncounterGenerationError as error:
+                last_error = error
+                continue
+            events = self._event_attempt_order(
+                available_extraordinary_events_for(context, composition)
+            )
+            for event in events:
+                try:
+                    encounter = self._generate_extraordinary_from_catalog(
+                        context,
+                        composition,
+                        catalog,
+                        event,
+                    )
+                    return SafariGeneratedEncounter(encounter, event)
+                except SafariEncounterGenerationError as error:
+                    last_error = error
+
+        raise SafariEncounterGenerationError(
+            "no extraordinary Safari encounter can be generated."
+        ) from last_error
+
+    def apply_global_shiny(
+        self,
+        context: SafariEncounterContext,
+        generated: (
+            SafariEncounter
+            | SafariGeneratedEncounter
+            | SafariGeneratedRegionalEncounter
+        ),
+    ) -> SafariEncounter | SafariGeneratedEncounter | SafariGeneratedRegionalEncounter:
+        if context.phase != SafariPhase.FINAL:
+            raise SafariEncounterGenerationError(
+                "global shiny encounters are only available during FINAL."
+            )
+        if context.extraordinary_flags.shiny_encounter_seen:
+            raise SafariEncounterGenerationError(
+                "the global shiny encounter was already seen."
+            )
+
+        encounter = (
+            generated.encounter if hasattr(generated, "encounter") else generated
+        )
+        if (
+            encounter.status != SafariEncounterStatus.OPEN
+            or encounter.eligible_participant_ids
+        ):
+            raise SafariEncounterGenerationError(
+                "global shiny must be applied before publishing the encounter."
+            )
+        shiny_encounter = self._copy_encounter_as_shiny(encounter)
+
+        if isinstance(generated, SafariGeneratedRegionalEncounter):
+            return SafariGeneratedRegionalEncounter(
+                shiny_encounter,
+                generated.event,
+                generated.regional_form,
+            )
+        if isinstance(generated, SafariGeneratedEncounter):
+            return SafariGeneratedEncounter(shiny_encounter, generated.event)
+        return shiny_encounter
+
+    async def _generate_extraordinary(
+        self,
+        context: SafariEncounterContext,
+        composition: SafariComposition,
+        event: SafariThematicEvent,
+    ) -> SafariGeneratedEncounter:
+        self._validate_extraordinary_request(context, composition)
+        if event not in available_extraordinary_events_for(context, composition):
+            raise SafariEncounterGenerationError(
+                "Safari event is not available for this extraordinary encounter."
+            )
+        catalog = await self._species_repository.get_all()
+        encounter = self._generate_extraordinary_from_catalog(
+            context,
+            composition,
+            catalog,
+            event,
+        )
+        return SafariGeneratedEncounter(encounter, event)
+
     def _generate_from_catalog(
         self,
         context: SafariEncounterContext,
@@ -291,6 +424,37 @@ class SafariEncounterGenerator:
             is_regional_herd=regional_form == SafariRegionalEncounterForm.HERD,
         )
 
+    def _generate_extraordinary_from_catalog(
+        self,
+        context: SafariEncounterContext,
+        composition: SafariComposition,
+        catalog: tuple[Species, ...],
+        event: SafariThematicEvent,
+    ) -> SafariEncounter:
+        weighted_candidates = [
+            (species, self._weight_for(species, context, event))
+            for species in catalog
+            if self._is_extraordinary_candidate(
+                species,
+                context,
+                composition,
+                event,
+            )
+        ]
+        selectable = [
+            (species, weight) for species, weight in weighted_candidates if weight > 0
+        ]
+        if not selectable:
+            raise SafariEncounterGenerationError(
+                f"no valid {composition.value} Species are available."
+            )
+        selected = self._select_without_replacement(selectable, 1)
+        return self._build_encounter(
+            selected,
+            composition,
+            is_regional_herd=False,
+        )
+
     def _build_encounter(
         self,
         selected_species: tuple[Species, ...],
@@ -310,6 +474,22 @@ class SafariEncounterGenerator:
             composition=composition,
             slots=slots,
             is_regional_herd=is_regional_herd,
+        )
+
+    @staticmethod
+    def _copy_encounter_as_shiny(encounter: SafariEncounter) -> SafariEncounter:
+        slots = tuple(
+            SafariEncounterSlot(
+                id=slot.id,
+                opportunity=replace(slot.opportunity, is_shiny=True),
+            )
+            for slot in encounter.slots
+        )
+        return SafariEncounter(
+            id=encounter.id,
+            composition=encounter.composition,
+            slots=slots,
+            is_regional_herd=encounter.is_regional_herd,
         )
 
     def _select_species(
@@ -369,6 +549,30 @@ class SafariEncounterGenerator:
             raise ValueError("regional_form must be a SafariRegionalEncounterForm.")
 
     @staticmethod
+    def _validate_extraordinary_request(
+        context: SafariEncounterContext,
+        composition: SafariComposition,
+    ) -> None:
+        if composition not in (
+            SafariComposition.LEGENDARY,
+            SafariComposition.MYTHICAL,
+        ):
+            raise ValueError("composition must be LEGENDARY or MYTHICAL.")
+        if context.phase != SafariPhase.FINAL:
+            raise SafariEncounterGenerationError(
+                "extraordinary encounters are only available during FINAL."
+            )
+        flags = context.extraordinary_flags
+        if composition == SafariComposition.LEGENDARY and flags.legendary_seen:
+            raise SafariEncounterGenerationError(
+                "the legendary encounter was already seen."
+            )
+        if composition == SafariComposition.MYTHICAL and flags.mythical_seen:
+            raise SafariEncounterGenerationError(
+                "the mythical encounter was already seen."
+            )
+
+    @staticmethod
     def _require_regional_candidates(
         candidates: list[tuple[Species, float]],
     ) -> None:
@@ -400,6 +604,22 @@ class SafariEncounterGenerator:
             and is_regional_species(species)
             and self._event_allows_species(species, event)
         )
+
+    def _is_extraordinary_candidate(
+        self,
+        species: Species,
+        context: SafariEncounterContext,
+        composition: SafariComposition,
+        event: SafariThematicEvent,
+    ) -> bool:
+        if species.id in context.seen_species_ids or is_regional_species(species):
+            return False
+        metadata = species.metadata
+        if composition == SafariComposition.LEGENDARY:
+            matches_composition = metadata.is_legendary and not metadata.is_mythical
+        else:
+            matches_composition = metadata.is_mythical and not metadata.is_legendary
+        return matches_composition and self._event_allows_species(species, event)
 
     @staticmethod
     def _passes_base_filters(

@@ -10,6 +10,7 @@ from core.safari import (
     EVENT_WEIGHTS,
     EVENTS_BY_PHASE,
     EVENTS_BY_ZONE,
+    EXTRAORDINARY_SAFARI_COMPOSITIONS,
     SafariComposition,
     SafariEncounterContext,
     SafariMap,
@@ -19,6 +20,7 @@ from core.safari import (
     SafariWeather,
     SafariZone,
     available_events_for,
+    available_extraordinary_events_for,
 )
 
 
@@ -62,15 +64,15 @@ def test_event_type_modifiers_are_canonical_non_negative_and_deeply_immutable():
         EVENT_TYPE_MODIFIERS[SafariThematicEvent.FISHING]["water"] = 2.0  # type: ignore[index]
 
 
-def test_compatibility_contains_only_common_compositions():
+def test_compatibility_contains_only_supported_compositions():
     assert isinstance(EVENT_COMPOSITION_COMPATIBILITY, MappingProxyType)
     assert set(EVENT_COMPOSITION_COMPATIBILITY) == set(SafariThematicEvent)
     assert (
         EVENT_COMPOSITION_COMPATIBILITY[SafariThematicEvent.NONE]
-        == COMMON_SAFARI_COMPOSITIONS
+        == COMMON_SAFARI_COMPOSITIONS | EXTRAORDINARY_SAFARI_COMPOSITIONS
     )
     assert all(
-        compositions <= COMMON_SAFARI_COMPOSITIONS
+        compositions <= COMMON_SAFARI_COMPOSITIONS | EXTRAORDINARY_SAFARI_COMPOSITIONS
         for compositions in EVENT_COMPOSITION_COMPATIBILITY.values()
     )
     with pytest.raises(TypeError):
@@ -107,6 +109,19 @@ def test_contextual_availability_intersects_zone_route_phase_and_composition():
     assert available_events_for(route_limited, SafariComposition.NORMAL) == frozenset(
         {SafariThematicEvent.NONE}
     )
+
+
+def test_extraordinary_availability_uses_explicit_compatibility():
+    context = make_context(phase=SafariPhase.FINAL)
+
+    events = available_extraordinary_events_for(
+        context,
+        SafariComposition.LEGENDARY,
+    )
+
+    assert events == frozenset({SafariThematicEvent.NONE, SafariThematicEvent.FISHING})
+    with pytest.raises(ValueError, match="extraordinary"):
+        available_extraordinary_events_for(context, SafariComposition.NORMAL)
 
 
 def test_invalid_zone_event_and_incompatible_composition_are_excluded():

@@ -52,7 +52,9 @@ from .event_catalog import (
     EVENT_WEIGHTS,
     EVENTS_BY_PHASE,
     EVENTS_BY_ZONE,
+    EXTRAORDINARY_SAFARI_COMPOSITIONS,
     available_events_for,
+    available_extraordinary_events_for,
     available_regional_events_for,
 )
 from .generated_encounter import SafariGeneratedEncounter
@@ -98,6 +100,7 @@ __all__ = [
     "COMMON_SAFARI_COMPOSITIONS",
     "EVENTS_BY_PHASE",
     "EVENTS_BY_ZONE",
+    "EXTRAORDINARY_SAFARI_COMPOSITIONS",
     "EVENT_COMPOSITION_COMPATIBILITY",
     "EVENT_REQUIRED_TYPES",
     "EVENT_TYPE_MODIFIERS",
@@ -161,5 +164,6 @@ __all__ = [
     "SafariWorldProgressService",
     "SAFARI_UNLOCK_THRESHOLD",
     "available_events_for",
+    "available_extraordinary_events_for",
     "available_regional_events_for",
 ]

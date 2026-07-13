@@ -213,6 +213,47 @@ def test_composition_does_not_infer_legendary_or_regional_flags():
     assert not session.extraordinary_flags.regional_herd_seen
 
 
+def test_extraordinary_flags_remain_consumed_when_every_slot_escapes():
+    session = make_session()
+    encounter = make_encounter(
+        legendary=True,
+        shiny=True,
+        composition=SafariComposition.LEGENDARY,
+    )
+    session.publish_encounter(encounter)
+    session.decline_capture(1)
+
+    session.apply_persisted_encounter_result(escaped_result(encounter))
+
+    assert session.extraordinary_flags.legendary_seen
+    assert session.extraordinary_flags.shiny_encounter_seen
+
+
+@pytest.mark.parametrize(
+    ("composition", "legendary", "mythical", "flag_name"),
+    [
+        (SafariComposition.LEGENDARY, True, False, "legendary_seen"),
+        (SafariComposition.MYTHICAL, False, True, "mythical_seen"),
+    ],
+)
+def test_publish_consumes_the_matching_extraordinary_species_flag(
+    composition,
+    legendary,
+    mythical,
+    flag_name,
+):
+    session = make_session()
+    encounter = make_encounter(
+        legendary=legendary,
+        mythical=mythical,
+        composition=composition,
+    )
+
+    session.publish_encounter(encounter)
+
+    assert getattr(session.extraordinary_flags, flag_name)
+
+
 def test_selection_replacement_does_not_spend_balls_until_confirmation():
     participant = SafariParticipant(1, 5, 5)
     session = make_session((participant,))

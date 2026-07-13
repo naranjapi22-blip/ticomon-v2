@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 
 from core.safari.domain import (
     SAFARI_VALID_WEATHER_BY_MAP,
     SAFARI_ZONE_DEFINITION_BY_ZONE,
+    SafariExtraordinaryFlags,
     SafariMap,
     SafariPhase,
     SafariThematicEvent,
@@ -40,6 +41,9 @@ class SafariEncounterContext:
     route_type_weight_modifiers: Mapping[str, float]
     seen_species_ids: frozenset[int]
     route_allowed_events: frozenset[SafariThematicEvent] | None = None
+    extraordinary_flags: SafariExtraordinaryFlags = field(
+        default_factory=SafariExtraordinaryFlags
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.safari_map, SafariMap):
@@ -56,6 +60,8 @@ class SafariEncounterContext:
             raise ValueError("time_of_day must be a SafariTimeOfDay.")
         if not isinstance(self.phase, SafariPhase):
             raise ValueError("phase must be a SafariPhase.")
+        if not isinstance(self.extraordinary_flags, SafariExtraordinaryFlags):
+            raise ValueError("extraordinary_flags must be SafariExtraordinaryFlags.")
 
         seen_species_ids = frozenset(self.seen_species_ids)
         if any(species_id <= 0 for species_id in seen_species_ids):

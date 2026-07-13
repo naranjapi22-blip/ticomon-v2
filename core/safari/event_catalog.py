@@ -22,6 +22,10 @@ COMMON_SAFARI_COMPOSITIONS = frozenset(
     }
 )
 
+EXTRAORDINARY_SAFARI_COMPOSITIONS = frozenset(
+    {SafariComposition.LEGENDARY, SafariComposition.MYTHICAL}
+)
+
 
 EVENT_WEIGHTS: Mapping[SafariThematicEvent, float] = MappingProxyType(
     {
@@ -45,13 +49,17 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
     frozenset[SafariComposition],
 ] = MappingProxyType(
     {
-        SafariThematicEvent.NONE: COMMON_SAFARI_COMPOSITIONS,
+        SafariThematicEvent.NONE: (
+            COMMON_SAFARI_COMPOSITIONS | EXTRAORDINARY_SAFARI_COMPOSITIONS
+        ),
         SafariThematicEvent.VOLCANIC_ACTIVITY: frozenset(
             {
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
                 SafariComposition.SOLITARY,
+                SafariComposition.LEGENDARY,
+                SafariComposition.MYTHICAL,
             }
         ),
         SafariThematicEvent.FISHING: frozenset(
@@ -60,6 +68,8 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
                 SafariComposition.SOLITARY,
+                SafariComposition.LEGENDARY,
+                SafariComposition.MYTHICAL,
             }
         ),
         SafariThematicEvent.MIGRATION: frozenset(
@@ -229,3 +239,24 @@ def available_regional_events_for(
         & EVENTS_BY_PHASE[context.phase]
     )
     return available or frozenset({SafariThematicEvent.NONE})
+
+
+def available_extraordinary_events_for(
+    context: SafariEncounterContext,
+    composition: SafariComposition,
+) -> frozenset[SafariThematicEvent]:
+    if composition not in EXTRAORDINARY_SAFARI_COMPOSITIONS:
+        raise ValueError(
+            "event availability requires an extraordinary Safari composition."
+        )
+    available = (
+        EVENTS_BY_ZONE[context.zone]
+        & context.route_allowed_events
+        & EVENTS_BY_PHASE[context.phase]
+    )
+    compatible = frozenset(
+        event
+        for event in available
+        if composition in EVENT_COMPOSITION_COMPATIBILITY[event]
+    )
+    return compatible or frozenset({SafariThematicEvent.NONE})

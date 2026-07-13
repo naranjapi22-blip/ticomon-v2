@@ -5,6 +5,7 @@ import pytest
 
 from core.safari import (
     SafariEncounterContext,
+    SafariExtraordinaryFlags,
     SafariMap,
     SafariPhase,
     SafariTimeOfDay,
@@ -99,3 +100,18 @@ def test_context_allows_explicit_zero_modifier():
     context = make_context(route_type_weight_modifiers={"fire": 0.0})
 
     assert context.route_type_weight_modifiers["fire"] == 0.0
+
+
+def test_context_preserves_immutable_extraordinary_flags():
+    flags = SafariExtraordinaryFlags(legendary_seen=True)
+
+    context = make_context(extraordinary_flags=flags)
+
+    assert context.extraordinary_flags is flags
+    with pytest.raises(FrozenInstanceError):
+        context.extraordinary_flags.legendary_seen = False  # type: ignore[misc]
+
+
+def test_context_rejects_invalid_extraordinary_flags():
+    with pytest.raises(ValueError, match="extraordinary_flags"):
+        make_context(extraordinary_flags=None)
