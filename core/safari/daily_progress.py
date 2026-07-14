@@ -252,6 +252,7 @@ class SafariDailyProgressService:
             level=level,
             encounter_count=configuration.encounter_count,
             balls_per_participant=configuration.balls_per_participant,
+            cycle_date=cycle_date,
             map_influence=SafariMapInfluence(dict(influence.amounts)),
             unlocked_at=unlocked_at,
         )

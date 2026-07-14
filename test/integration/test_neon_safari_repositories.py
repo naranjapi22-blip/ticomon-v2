@@ -78,9 +78,13 @@ async def test_unlock_fifo_consumption_and_guild_isolation(safari_guild_id):
     other_guild_id = uuid.uuid4().int & 0x7FFFFFFFFFFFFFFF
     now = datetime.now(UTC)
 
-    later = await repository.save(_unlock(safari_guild_id, now + timedelta(seconds=1)))
-    oldest = await repository.save(_unlock(safari_guild_id, now))
-    other = await repository.save(_unlock(other_guild_id, now - timedelta(days=1)))
+    later = await repository.save(
+        _unlock(safari_guild_id, now + timedelta(seconds=1), level=2)
+    )
+    oldest = await repository.save(_unlock(safari_guild_id, now, level=1))
+    other = await repository.save(
+        _unlock(other_guild_id, now - timedelta(days=1), level=1)
+    )
 
     available = await repository.get_available_by_guild_id(safari_guild_id)
     assert [unlock.id for unlock in available] == [oldest.id, later.id]
@@ -114,7 +118,7 @@ async def test_unlock_fifo_consumption_and_guild_isolation(safari_guild_id):
 async def test_concurrent_consumers_do_not_receive_same_unlock(safari_guild_id):
     repository = NeonSafariUnlockRepository()
     now = datetime.now(UTC)
-    saved = await repository.save(_unlock(safari_guild_id, now))
+    saved = await repository.save(_unlock(safari_guild_id, now, level=1))
 
     results = await asyncio.gather(
         repository.consume_next(safari_guild_id, now, uuid.uuid4()),
@@ -140,8 +144,10 @@ async def test_exact_unlock_consumption_is_atomic_and_preserves_fifo_api(
 ):
     repository = NeonSafariUnlockRepository()
     now = datetime.now(UTC)
-    first = await repository.save(_unlock(safari_guild_id, now))
-    second = await repository.save(_unlock(safari_guild_id, now + timedelta(seconds=1)))
+    first = await repository.save(_unlock(safari_guild_id, now, level=2))
+    second = await repository.save(
+        _unlock(safari_guild_id, now + timedelta(seconds=1), level=3)
+    )
 
     results = await asyncio.gather(
         repository.consume(second.id, safari_guild_id, now, uuid.uuid4()),
@@ -173,7 +179,7 @@ async def test_exact_unlock_consumption_is_atomic_and_preserves_fifo_api(
 async def test_exact_unlock_consume_rejects_another_guild(safari_guild_id):
     repository = NeonSafariUnlockRepository()
     now = datetime.now(UTC)
-    saved = await repository.save(_unlock(safari_guild_id, now))
+    saved = await repository.save(_unlock(safari_guild_id, now, level=1))
 
     assert (
         await repository.consume(
@@ -212,13 +218,19 @@ async def test_database_constraints_reject_invalid_world(safari_guild_id):
             )
 
 
-def _unlock(guild_id: int, unlocked_at: datetime) -> SafariUnlock:
+def _unlock(
+    guild_id: int,
+    unlocked_at: datetime,
+    *,
+    level: int,
+) -> SafariUnlock:
     return SafariUnlock(
         id=None,
         guild_id=guild_id,
-        level=2,
+        level=level,
         encounter_count=7,
         balls_per_participant=12,
         unlocked_at=unlocked_at,
+        cycle_date=unlocked_at.date(),
         map_influence=SafariMapInfluence({"grass": 4}),
     )

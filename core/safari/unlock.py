@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from core.safari.domain import SafariMapInfluence, SafariUnlockStatus
@@ -19,6 +19,7 @@ class SafariUnlock:
     encounter_count: int
     balls_per_participant: int
     unlocked_at: datetime
+    cycle_date: date | None = None
     map_influence: SafariMapInfluence = field(default_factory=SafariMapInfluence)
     status: SafariUnlockStatus = SafariUnlockStatus.AVAILABLE
     consumed_at: datetime | None = None
@@ -40,10 +41,16 @@ class SafariUnlock:
         if self.unlocked_at is None:
             raise ValueError("unlocked_at is required.")
 
-        if self.status == SafariUnlockStatus.AVAILABLE:
+        if self.cycle_date is not None and not isinstance(self.cycle_date, date):
+            raise ValueError("cycle_date must be a date when provided.")
+
+        if self.status in (
+            SafariUnlockStatus.AVAILABLE,
+            SafariUnlockStatus.EXPIRED,
+        ):
             if self.consumed_at is not None or self.consumed_session_id is not None:
                 raise ValueError(
-                    "available unlocks cannot have consumption data.",
+                    "available or expired unlocks cannot have consumption data.",
                 )
 
         if self.status == SafariUnlockStatus.CONSUMED:

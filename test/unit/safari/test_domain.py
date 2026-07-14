@@ -117,6 +117,7 @@ def test_enum_values_are_exact():
     ]
     assert [member.value for member in SafariUnlockStatus] == [
         "AVAILABLE",
+        "EXPIRED",
         "CONSUMED",
     ]
     assert [member.value for member in SafariFinishReason] == [

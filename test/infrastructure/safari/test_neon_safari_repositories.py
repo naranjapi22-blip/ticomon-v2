@@ -225,6 +225,7 @@ def _unlock(unlock_id: int, unlocked_at: datetime, guild_id: int = 123):
         encounter_count=5,
         balls_per_participant=9,
         unlocked_at=unlocked_at,
+        cycle_date=unlocked_at.date(),
         map_influence=SafariMapInfluence({"grass": 2}),
     )
 
@@ -236,6 +237,7 @@ def _unlock_row(unlock: SafariUnlock) -> dict:
         "level": unlock.level,
         "encounter_count": unlock.encounter_count,
         "balls_per_participant": unlock.balls_per_participant,
+        "cycle_date": unlock.cycle_date,
         "map_influence": dict(unlock.map_influence.amounts),
         "status": unlock.status.value,
         "unlocked_at": unlock.unlocked_at,

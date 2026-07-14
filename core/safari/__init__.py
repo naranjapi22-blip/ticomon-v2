@@ -11,12 +11,14 @@ from .capture_resolution import (
     SafariEncounterResolution,
     SafariSlotOutcome,
 )
+from .daily_active_trainer_repository import SafariDailyActiveTrainerRepository
 from .daily_progress import (
     SafariDailyCaptureResult,
     SafariDailyProgressService,
     SafariDailyProgressSnapshot,
     SafariDailyWorld,
 )
+from .daily_world_repository import SafariDailyWorldRepository
 from .domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
@@ -199,6 +201,8 @@ __all__ = [
     "SafariDailyProgressService",
     "SafariDailyProgressSnapshot",
     "SafariDailyWorld",
+    "SafariDailyActiveTrainerRepository",
+    "SafariDailyWorldRepository",
     "SAFARI_UNLOCK_THRESHOLD",
     "available_events_for",
     "available_extraordinary_events_for",

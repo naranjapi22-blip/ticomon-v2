@@ -1,4 +1,6 @@
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import date, datetime
 from uuid import UUID
 
 from core.safari.unlock import SafariUnlock
@@ -23,13 +25,14 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
                         level,
                         encounter_count,
                         balls_per_participant,
+                        cycle_date,
                         map_influence,
                         status,
                         unlocked_at,
                         consumed_at,
                         consumed_session_id
                     )
-                    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
                     RETURNING *
                     """,
                     *self._mapper.to_row(unlock),
@@ -43,12 +46,13 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
                         level = $2,
                         encounter_count = $3,
                         balls_per_participant = $4,
-                        map_influence = $5::jsonb,
-                        status = $6,
-                        unlocked_at = $7,
-                        consumed_at = $8,
-                        consumed_session_id = $9
-                    WHERE id = $10
+                        cycle_date = $5,
+                        map_influence = $6::jsonb,
+                        status = $7,
+                        unlocked_at = $8,
+                        consumed_at = $9,
+                        consumed_session_id = $10
+                    WHERE id = $11
                     RETURNING *
                     """,
                     *self._mapper.to_row(unlock),
@@ -63,20 +67,28 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
     async def get_available_by_guild_id(
         self,
         guild_id: int,
+        cycle_date: date | None = None,
     ) -> tuple[SafariUnlock, ...]:
         self._validate_guild_id(guild_id)
         pool = await get_pool()
 
+        cycle_clause = ""
+        parameters: tuple = (guild_id,)
+        if cycle_date is not None:
+            cycle_clause = "AND cycle_date = $2"
+            parameters = (guild_id, cycle_date)
+
         async with pool.acquire() as connection:
             rows = await connection.fetch(
-                """
+                f"""
                 SELECT *
                 FROM safari_unlocks
                 WHERE guild_id = $1
                   AND status = 'AVAILABLE'
+                  {cycle_clause}
                 ORDER BY unlocked_at, id
                 """,
-                guild_id,
+                *parameters,
             )
 
         return tuple(self._mapper.from_row(row) for row in rows)
@@ -86,6 +98,7 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
         guild_id: int,
         consumed_at: datetime,
         consumed_session_id: UUID,
+        cycle_date: date | None = None,
     ) -> SafariUnlock | None:
         self._validate_guild_id(guild_id)
         if consumed_at is None or consumed_session_id is None:
@@ -93,15 +106,31 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
 
         pool = await get_pool()
 
+        cycle_clause = ""
+        parameters: tuple = (
+            guild_id,
+            self._mapper.as_utc(consumed_at),
+            consumed_session_id,
+        )
+        if cycle_date is not None:
+            cycle_clause = "AND cycle_date = $4"
+            parameters = (
+                guild_id,
+                self._mapper.as_utc(consumed_at),
+                consumed_session_id,
+                cycle_date,
+            )
+
         async with pool.acquire() as connection:
             async with connection.transaction():
                 row = await connection.fetchrow(
-                    """
+                    f"""
                     WITH next_unlock AS (
                         SELECT id
                         FROM safari_unlocks
                         WHERE guild_id = $1
                           AND status = 'AVAILABLE'
+                          {cycle_clause}
                         ORDER BY unlocked_at, id
                         FOR UPDATE SKIP LOCKED
                         LIMIT 1
@@ -115,9 +144,7 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
                     WHERE unlock.id = next_unlock.id
                     RETURNING unlock.*
                     """,
-                    guild_id,
-                    self._mapper.as_utc(consumed_at),
-                    consumed_session_id,
+                    *parameters,
                 )
 
         return self._mapper.from_row(row) if row is not None else None
@@ -156,6 +183,31 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
             )
 
         return self._mapper.from_row(row) if row is not None else None
+
+    async def expire_available_before(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> int:
+        self._validate_guild_id(guild_id)
+        if cycle_date is None:
+            raise ValueError("cycle_date is required.")
+
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            result = await connection.execute(
+                """
+                UPDATE safari_unlocks
+                SET status = 'EXPIRED'
+                WHERE guild_id = $1
+                  AND cycle_date < $2
+                  AND status = 'AVAILABLE'
+                """,
+                guild_id,
+                cycle_date,
+            )
+
+        return int(result.split()[-1]) if result else 0
 
     @staticmethod
     def _validate_guild_id(guild_id: int) -> None:

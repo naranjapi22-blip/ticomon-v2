@@ -144,6 +144,7 @@ class SafariThematicEvent(str, Enum):
 
 class SafariUnlockStatus(str, Enum):
     AVAILABLE = "AVAILABLE"
+    EXPIRED = "EXPIRED"
     CONSUMED = "CONSUMED"
 
 

@@ -190,13 +190,14 @@ class _NeonCaptureTransaction(CaptureTransaction):
                 level,
                 encounter_count,
                 balls_per_participant,
+                cycle_date,
                 map_influence,
                 status,
                 unlocked_at,
                 consumed_at,
                 consumed_session_id
             )
-            VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
             RETURNING *
             """,
             *self._unlock_mapper.to_row(unlock),
