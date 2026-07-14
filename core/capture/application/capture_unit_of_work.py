@@ -6,7 +6,6 @@ from core.candy.candy_inventory import CandyInventory
 from core.creature.creature import Creature
 from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
-from core.safari.world import SafariWorld
 
 
 class CaptureTransaction(ABC):
@@ -70,17 +69,6 @@ class CaptureTransaction(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_or_create_world(
-        self,
-        guild_id: int,
-        reset_date: date,
-    ) -> SafariWorld:
-        """Locks and returns the guild world, creating its initial state."""
-
-    @abstractmethod
-    async def save_world(self, world: SafariWorld) -> SafariWorld:
-        """Persists the already locked world state."""
-
     @abstractmethod
     async def save_unlock(self, unlock: SafariUnlock) -> SafariUnlock:
         """Appends an unlock to the persistent FIFO queue."""

@@ -100,12 +100,6 @@ class _Transaction(CaptureTransaction):
         self._record("unlock_expire")
         return 0
 
-    async def get_or_create_world(self, guild_id, reset_date):
-        raise NotImplementedError
-
-    async def save_world(self, world):
-        raise NotImplementedError
-
     async def save_unlock(self, unlock):
         self._record("unlock")
         self.saved_unlocks.append(unlock)

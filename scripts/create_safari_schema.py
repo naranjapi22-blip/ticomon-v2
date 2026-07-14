@@ -14,23 +14,6 @@ async def create_safari_schema() -> None:
             await connection.execute(
                 dedent(
                     """
-                    CREATE TABLE IF NOT EXISTS safari_worlds (
-                        guild_id BIGINT PRIMARY KEY
-                            CHECK (guild_id > 0),
-                        current_progress INTEGER NOT NULL
-                            CHECK (current_progress >= 0),
-                        daily_unlock_count INTEGER NOT NULL
-                            CHECK (daily_unlock_count >= 0),
-                        current_influence JSONB NOT NULL DEFAULT '{}'::jsonb
-                            CHECK (jsonb_typeof(current_influence) = 'object'),
-                        last_daily_reset_date DATE NOT NULL
-                    )
-                    """
-                )
-            )
-            await connection.execute(
-                dedent(
-                    """
                     CREATE TABLE IF NOT EXISTS safari_daily_worlds (
                         guild_id BIGINT NOT NULL
                             CHECK (guild_id > 0),
@@ -174,6 +157,13 @@ async def create_safari_schema() -> None:
                 """
             )
             await ensure_creature_original_trainer_id(connection)
+            # The daily Safari tables are now authoritative; legacy world rows
+            # are dropped instead of migrated.
+            await connection.execute(
+                """
+                DROP TABLE IF EXISTS safari_worlds
+                """
+            )
 
 
 async def main() -> None:

@@ -4,9 +4,6 @@ import pytest
 
 from application.bootstrap.core import build_core
 from core.capture.domain.capture_ball import CaptureBall
-from infrastructure.safari.neon_safari_world_repository import (
-    NeonSafariWorldRepository,
-)
 from scripts.create_safari_schema import create_safari_schema
 
 
@@ -84,9 +81,10 @@ async def test_complete_gameplay_loop():
             == inventory_before.get_amount(candy_type) + amount
         )
 
-    world = await NeonSafariWorldRepository().get_by_guild_id(guild_id)
-    assert world is not None
-    assert world.current_progress == 1
-    assert dict(world.current_influence.amounts) == {
+    progress = await services.safari_daily_progress_application.get(guild_id)
+    assert progress.daily_capture_count == 1
+    assert progress.active_player_count == 1
+    assert progress.daily_unlock_count == 0
+    assert dict(progress.current_influence.amounts) == {
         type_name: 1 for type_name in selected.species.types
     }

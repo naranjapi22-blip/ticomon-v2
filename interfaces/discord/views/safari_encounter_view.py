@@ -25,6 +25,10 @@ from core.safari import (
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.files import image_to_discord_file
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_message import (
+    delete_active_safari_message,
+    remember_active_safari_message,
+)
 from interfaces.discord.safari_timing import (
     SAFARI_PHASE_ENDED_MESSAGE,
     SAFARI_SELECTION_SECONDS,
@@ -47,7 +51,9 @@ async def publish_current_encounter(
     channel: discord.abc.Messageable,
     *,
     selection_deadline: datetime | None = None,
+    prefix_content: str | None = None,
 ) -> discord.ui.View:
+    await delete_active_safari_message(core, guild_id, channel)
     view = SafariEncounterView(
         core=core,
         guild_id=guild_id,
@@ -55,12 +61,15 @@ async def publish_current_encounter(
         selection_deadline=selection_deadline,
     )
     content, file = await view.build_message()
+    if prefix_content:
+        content = f"{prefix_content}\n\n{content}"
     message = await channel.send(
         content=content,
         file=file,
         view=view,
     )
     view.message = message
+    await remember_active_safari_message(core, guild_id, message)
     logger.info(
         "safari_next_encounter_published "
         "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s",
@@ -82,6 +91,7 @@ async def publish_current_route_vote(
     vote=None,
     options: tuple[SafariRouteOption, ...] | None = None,
     route_vote_deadline: datetime | None = None,
+    prefix_content: str | None = None,
 ) -> discord.ui.View:
     from interfaces.discord.views.safari_route_view import SafariRouteView
 
@@ -92,6 +102,7 @@ async def publish_current_route_vote(
     if options is None:
         options = vote.options
 
+    await delete_active_safari_message(core, guild_id, channel)
     view = SafariRouteView(
         core=core,
         guild_id=guild_id,
@@ -100,11 +111,15 @@ async def publish_current_route_vote(
         options=options,
         route_vote_deadline=route_vote_deadline,
     )
+    content = view.build_content()
+    if prefix_content:
+        content = f"{prefix_content}\n\n{content}"
     message = await channel.send(
-        content=view.build_content(),
+        content=content,
         view=view,
     )
     view.message = message
+    await remember_active_safari_message(core, guild_id, message)
     view.start_route_timer()
     return view
 
@@ -113,15 +128,22 @@ async def publish_final_summary(
     core: CoreServices,
     guild_id: int,
     channel: discord.abc.Messageable,
+    *,
+    prefix_content: str | None = None,
 ) -> discord.ui.View:
     from interfaces.discord.views.safari_summary import SafariSummaryView
 
     finish_result: FinishSafariResult = await core.safari_finish_application.finish(
         guild_id,
     )
+    await delete_active_safari_message(core, guild_id, channel)
     view = SafariSummaryView(finish_result)
-    message = await channel.send(embeds=view.build_embeds(), view=view)
+    kwargs = {"embeds": view.build_embeds(), "view": view}
+    if prefix_content:
+        kwargs["content"] = prefix_content
+    message = await channel.send(**kwargs)
     view.message = message
+    await remember_active_safari_message(core, guild_id, message)
     return view
 
 
@@ -444,33 +466,22 @@ class SafariEncounterView(discord.ui.View):
             result.next_session_status.name,
             encounter_index,
         )
-
-        if self.message is not None:
-            await self.message.channel.send(
-                content=self._build_encounter_results_message(result),
-            )
-            logger.info(
-                "safari_encounter_results_published "
-                "guild_id=%s session_id=%s encounter_id=%s next_status=%s "
-                "encounter_index=%s",
-                self.guild_id,
-                session_id,
-                encounter_id,
-                result.next_session_status.name,
-                encounter_index,
-            )
+        results_message = self._build_encounter_results_message(result)
 
         if result.next_session_status is SafariSessionStatus.ROUTE_DECISION:
-            await self._show_route_vote()
+            await self._show_route_vote(prefix_content=results_message)
             return
 
         if result.next_session_status is SafariSessionStatus.ENCOUNTER:
-            await self._show_next_encounter(result.session)
+            await self._show_next_encounter(
+                result.session,
+                prefix_content=results_message,
+            )
             return
 
-        await self._show_summary()
+        await self._show_summary(prefix_content=results_message)
 
-    async def _show_route_vote(self) -> None:
+    async def _show_route_vote(self, *, prefix_content: str | None = None) -> None:
         if self.message is not None:
             route_vote = await self.core.safari_route_application.open_route_vote(
                 self.guild_id,
@@ -483,9 +494,15 @@ class SafariEncounterView(discord.ui.View):
                 self.message.channel,
                 vote=route_vote.vote,
                 options=route_vote.options,
+                prefix_content=prefix_content,
             )
 
-    async def _show_next_encounter(self, session: SafariSession) -> None:
+    async def _show_next_encounter(
+        self,
+        session: SafariSession,
+        *,
+        prefix_content: str | None = None,
+    ) -> None:
         if self.message is not None:
             await publish_current_encounter(
                 self.core,
@@ -493,14 +510,16 @@ class SafariEncounterView(discord.ui.View):
                 session,
                 self.message.channel,
                 selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
+                prefix_content=prefix_content,
             )
 
-    async def _show_summary(self) -> None:
+    async def _show_summary(self, *, prefix_content: str | None = None) -> None:
         if self.message is not None:
             await publish_final_summary(
                 self.core,
                 self.guild_id,
                 self.message.channel,
+                prefix_content=prefix_content,
             )
 
     async def _reject_if_ended(self, interaction: discord.Interaction) -> bool:

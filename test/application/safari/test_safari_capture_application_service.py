@@ -104,12 +104,6 @@ class _Transaction(CaptureTransaction):
         self.saved_inventories.append((trainer_id, inventory))
         self._inventories[trainer_id] = inventory
 
-    async def get_or_create_world(self, guild_id, reset_date):
-        raise NotImplementedError
-
-    async def save_world(self, world):
-        raise NotImplementedError
-
     async def save_unlock(self, unlock):
         raise NotImplementedError
 

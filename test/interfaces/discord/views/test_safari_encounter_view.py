@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from application.safari import ResolveSafariCaptureResult
+from application.safari.activity_state import SafariActivityTracker
 from core.safari import SafariSessionStatus
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.views.safari_encounter_view import (
@@ -154,11 +155,17 @@ async def test_selection_timeout_transitions_to_route_view(monkeypatch) -> None:
     )
     view, session = _encounter_view()
     route_vote = make_vote(session.current_segment.zone)
+    old_message = AsyncMock()
     view.message = SimpleNamespace(
-        channel=SimpleNamespace(send=AsyncMock()),
+        channel=SimpleNamespace(
+            id=321,
+            send=AsyncMock(),
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         edit=AsyncMock(),
     )
     view.core = SimpleNamespace(
+        safari_activity_tracker=SafariActivityTracker(),
         safari_capture_application=SimpleNamespace(
             close_capture_selection=AsyncMock(),
             resolve_capture=AsyncMock(
@@ -184,16 +191,15 @@ async def test_selection_timeout_transitions_to_route_view(monkeypatch) -> None:
         ),
         safari_finish_application=SimpleNamespace(),
     )
+    view.core.safari_activity_tracker.set_message(session.guild_id, 321, 99)
 
     await view._resolve_selection_timeout()
 
-    assert view.message.channel.send.await_count == 2
-    assert (
-        "Encounter Results"
-        in view.message.channel.send.await_args_list[0].kwargs["content"]
-    )
+    old_message.delete.assert_awaited_once()
+    assert view.message.channel.send.await_count == 1
+    assert "Encounter Results" in view.message.channel.send.await_args.kwargs["content"]
     assert isinstance(
-        view.message.channel.send.await_args_list[1].kwargs["view"],
+        view.message.channel.send.await_args.kwargs["view"],
         SafariRouteView,
     )
 
@@ -209,11 +215,17 @@ async def test_selection_timeout_transitions_to_next_encounter(monkeypatch) -> N
     view, session = _encounter_view()
     next_session = make_session()
     next_session.publish_encounter(make_encounter((27,)))
+    old_message = AsyncMock()
     view.message = SimpleNamespace(
-        channel=SimpleNamespace(send=AsyncMock()),
+        channel=SimpleNamespace(
+            id=321,
+            send=AsyncMock(),
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         edit=AsyncMock(),
     )
     view.core = SimpleNamespace(
+        safari_activity_tracker=SafariActivityTracker(),
         safari_capture_application=SimpleNamespace(
             close_capture_selection=AsyncMock(),
             resolve_capture=AsyncMock(
@@ -233,19 +245,18 @@ async def test_selection_timeout_transitions_to_next_encounter(monkeypatch) -> N
         ),
         safari_finish_application=SimpleNamespace(),
     )
+    view.core.safari_activity_tracker.set_message(session.guild_id, 321, 99)
 
     await view._resolve_selection_timeout()
 
-    assert view.message.channel.send.await_count == 2
-    assert (
-        "Encounter Results"
-        in view.message.channel.send.await_args_list[0].kwargs["content"]
-    )
+    old_message.delete.assert_awaited_once()
+    assert view.message.channel.send.await_count == 1
+    assert "Encounter Results" in view.message.channel.send.await_args.kwargs["content"]
     assert isinstance(
-        view.message.channel.send.await_args_list[1].kwargs["view"],
+        view.message.channel.send.await_args.kwargs["view"],
         SafariEncounterView,
     )
-    assert view.message.channel.send.await_args_list[1].kwargs["file"].filename == (
+    assert view.message.channel.send.await_args.kwargs["file"].filename == (
         "safari-encounter.png"
     )
     start_selection_timer.assert_called_once()
@@ -255,11 +266,17 @@ async def test_selection_timeout_transitions_to_next_encounter(monkeypatch) -> N
 @pytest.mark.asyncio
 async def test_selection_timeout_transitions_to_summary() -> None:
     view, session = _encounter_view(remaining_encounters=1)
+    old_message = AsyncMock()
     view.message = SimpleNamespace(
-        channel=SimpleNamespace(send=AsyncMock()),
+        channel=SimpleNamespace(
+            id=321,
+            send=AsyncMock(),
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         edit=AsyncMock(),
     )
     view.core = SimpleNamespace(
+        safari_activity_tracker=SafariActivityTracker(),
         safari_capture_application=SimpleNamespace(
             close_capture_selection=AsyncMock(),
             resolve_capture=AsyncMock(
@@ -290,11 +307,13 @@ async def test_selection_timeout_transitions_to_summary() -> None:
             )
         ),
     )
+    view.core.safari_activity_tracker.set_message(session.guild_id, 321, 99)
 
     await view._resolve_selection_timeout()
 
-    assert view.message.channel.send.await_count == 2
-    assert view.message.channel.send.await_args_list[1].kwargs["embeds"][0].title == (
+    old_message.delete.assert_awaited_once()
+    assert view.message.channel.send.await_count == 1
+    assert view.message.channel.send.await_args.kwargs["embeds"][0].title == (
         "Safari Complete"
     )
 

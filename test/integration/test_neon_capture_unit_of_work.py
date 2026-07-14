@@ -36,7 +36,14 @@ async def capture_data():
             guild_ids,
         )
         await connection.execute(
-            "DELETE FROM safari_worlds WHERE guild_id = ANY($1::bigint[])",
+            (
+                "DELETE FROM safari_daily_active_trainers "
+                "WHERE guild_id = ANY($1::bigint[])"
+            ),
+            guild_ids,
+        )
+        await connection.execute(
+            "DELETE FROM safari_daily_worlds WHERE guild_id = ANY($1::bigint[])",
             guild_ids,
         )
         await connection.execute(
@@ -50,7 +57,9 @@ async def capture_data():
 
 
 @pytest.mark.asyncio
-async def test_transaction_rolls_back_creature_candies_and_world(capture_data):
+async def test_transaction_rolls_back_creature_candies_and_daily_world(
+    capture_data,
+):
     trainer_ids, guild_ids, species = capture_data
     trainer_id = trainer_ids[0]
     guild_id = guild_ids[0]
@@ -65,9 +74,18 @@ async def test_transaction_rolls_back_creature_candies_and_world(capture_data):
             inventory = CandyInventory()
             inventory.add(_candy_bundle())
             await transaction.save_candy_inventory(trainer_id, inventory)
-            world = await transaction.get_or_create_world(guild_id, NOW.date())
-            world.current_progress = 50
-            await transaction.save_world(world)
+            world = await transaction.get_or_create_daily_world(
+                guild_id,
+                NOW.date(),
+            )
+            world.daily_capture_count = 50
+            await transaction.save_daily_world(world)
+            await transaction.register_daily_active_trainer_if_absent(
+                guild_id,
+                NOW.date(),
+                trainer_id,
+                NOW,
+            )
             raise RuntimeError("rollback")
 
     pool = await get_pool()
@@ -95,7 +113,14 @@ async def test_transaction_rolls_back_creature_candies_and_world(capture_data):
         )
         assert (
             await connection.fetchval(
-                "SELECT COUNT(*) FROM safari_worlds WHERE guild_id = $1",
+                "SELECT COUNT(*) FROM safari_daily_worlds WHERE guild_id = $1",
+                guild_id,
+            )
+            == 0
+        )
+        assert (
+            await connection.fetchval(
+                "SELECT COUNT(*) FROM safari_daily_active_trainers WHERE guild_id = $1",
                 guild_id,
             )
             == 0
@@ -139,28 +164,31 @@ async def test_different_trainers_allocate_collection_numbers_independently(
 
 
 @pytest.mark.asyncio
-async def test_world_lock_serializes_progress_updates(capture_data):
+async def test_daily_world_lock_serializes_progress_updates(capture_data):
     _, guild_ids, _ = capture_data
     guild_id = guild_ids[0]
 
     async def increment_world():
         async with NeonCaptureUnitOfWork().transaction() as transaction:
-            world = await transaction.get_or_create_world(guild_id, date(2026, 7, 13))
-            world.current_progress += 1
+            world = await transaction.get_or_create_daily_world(
+                guild_id,
+                date(2026, 7, 13),
+            )
+            world.daily_capture_count += 1
             world.current_influence = SafariMapInfluence(
                 {"grass": world.current_influence.get("grass") + 1}
             )
-            await transaction.save_world(world)
+            await transaction.save_daily_world(world)
 
     await asyncio.gather(increment_world(), increment_world())
 
     pool = await get_pool()
     async with pool.acquire() as connection:
         row = await connection.fetchrow(
-            "SELECT * FROM safari_worlds WHERE guild_id = $1",
+            "SELECT * FROM safari_daily_worlds WHERE guild_id = $1",
             guild_id,
         )
-    assert row["current_progress"] == 2
+    assert row["daily_capture_count"] == 2
 
 
 def _creature(trainer_id, species):

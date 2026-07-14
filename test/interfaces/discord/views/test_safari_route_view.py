@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from application.safari.activity_state import SafariActivityTracker
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
 from interfaces.discord.views.safari_route_view import SafariRouteView
 from test.unit.safari.test_session import make_encounter, make_session, make_vote
@@ -87,6 +88,7 @@ async def test_route_timeout_opens_next_encounter(monkeypatch) -> None:
     vote = make_vote(session.current_segment.zone)
     next_session = make_session()
     next_session.publish_encounter(make_encounter((7,)))
+    old_message = AsyncMock()
     resolve_route_vote = AsyncMock(
         return_value=SimpleNamespace(
             session=next_session,
@@ -109,15 +111,20 @@ async def test_route_timeout_opens_next_encounter(monkeypatch) -> None:
         options=vote.options,
     )
     view.message = SimpleNamespace(
-        channel=SimpleNamespace(send=AsyncMock()),
+        channel=SimpleNamespace(
+            id=321,
+            send=AsyncMock(),
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         edit=AsyncMock(),
     )
+    view.core.safari_activity_tracker = SafariActivityTracker()
+    view.core.safari_activity_tracker.set_message(session.guild_id, 321, 99)
 
     await view._resolve_route_timeout()
 
-    assert view.message.edit.await_args.kwargs["content"] == (
-        f"Route selected: {view.format_option_label(vote.options[0])}"
-    )
+    old_message.delete.assert_awaited_once()
+    assert view.message.channel.send.await_count == 1
     assert isinstance(
         view.message.channel.send.await_args.kwargs["view"],
         SafariEncounterView,

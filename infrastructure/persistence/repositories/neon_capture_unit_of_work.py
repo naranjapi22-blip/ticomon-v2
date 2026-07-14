@@ -13,12 +13,10 @@ from core.creature.creature import Creature
 from core.creature.creature_mapper import CreatureMapper
 from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
-from core.safari.world import SafariWorld
 from infrastructure.db_config import get_pool
 from infrastructure.persistence.mappers.candy_mapper import CandyMapper
 from infrastructure.safari.daily_world_mapper import SafariDailyWorldMapper
 from infrastructure.safari.unlock_mapper import SafariUnlockMapper
-from infrastructure.safari.world_mapper import SafariWorldMapper
 
 
 class NeonCaptureUnitOfWork(CaptureUnitOfWork):
@@ -37,7 +35,6 @@ class _NeonCaptureTransaction(CaptureTransaction):
         self._creature_mapper = CreatureMapper()
         self._candy_mapper = CandyMapper()
         self._daily_world_mapper = SafariDailyWorldMapper()
-        self._world_mapper = SafariWorldMapper()
         self._unlock_mapper = SafariUnlockMapper()
 
     async def save_creature(self, creature: Creature) -> Creature:
@@ -207,9 +204,11 @@ class _NeonCaptureTransaction(CaptureTransaction):
             guild_id,
             cycle_date,
             trainer_id,
-            first_capture_at.astimezone(UTC)
-            if first_capture_at.tzinfo is not None
-            else first_capture_at.replace(tzinfo=UTC),
+            (
+                first_capture_at.astimezone(UTC)
+                if first_capture_at.tzinfo is not None
+                else first_capture_at.replace(tzinfo=UTC)
+            ),
         )
         return row is not None
 
@@ -247,58 +246,6 @@ class _NeonCaptureTransaction(CaptureTransaction):
             cycle_date,
         )
         return int(result.split()[-1]) if result else 0
-
-    async def get_or_create_world(
-        self,
-        guild_id: int,
-        reset_date: date,
-    ) -> SafariWorld:
-        initial_world = SafariWorld.create(guild_id, reset_date)
-        await self._connection.execute(
-            """
-            INSERT INTO safari_worlds (
-                guild_id,
-                current_progress,
-                daily_unlock_count,
-                current_influence,
-                last_daily_reset_date
-            )
-            VALUES ($1, $2, $3, $4::jsonb, $5)
-            ON CONFLICT (guild_id) DO NOTHING
-            """,
-            *self._world_mapper.to_row(initial_world),
-        )
-        row = await self._connection.fetchrow(
-            """
-            SELECT *
-            FROM safari_worlds
-            WHERE guild_id = $1
-            FOR UPDATE
-            """,
-            guild_id,
-        )
-
-        assert row is not None
-        return self._world_mapper.from_row(row)
-
-    async def save_world(self, world: SafariWorld) -> SafariWorld:
-        row = await self._connection.fetchrow(
-            """
-            UPDATE safari_worlds
-            SET
-                current_progress = $2,
-                daily_unlock_count = $3,
-                current_influence = $4::jsonb,
-                last_daily_reset_date = $5
-            WHERE guild_id = $1
-            RETURNING *
-            """,
-            *self._world_mapper.to_row(world),
-        )
-
-        if row is None:
-            raise ValueError(f"Safari World for guild {world.guild_id} was not found.")
-        return self._world_mapper.from_row(row)
 
     async def save_unlock(self, unlock: SafariUnlock) -> SafariUnlock:
         if unlock.id is not None:

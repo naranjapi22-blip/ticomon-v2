@@ -25,6 +25,10 @@ from core.safari.domain import (
 )
 from core.safari.unlock import SafariUnlock
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_message import (
+    delete_active_safari_message,
+    remember_active_safari_message,
+)
 from interfaces.discord.safari_timing import (
     SAFARI_SELECTION_SECONDS,
     deadline_after,
@@ -106,9 +110,7 @@ class SafariCog(commands.Cog):
         try:
             saved_unlock = await self.core.safari_unlock_repository.save(unlock)
         except SafariUnlockAlreadyExists:
-            await ctx.send(
-                f"A Safari unlock for level {level} already exists today."
-            )
+            await ctx.send(f"A Safari unlock for level {level} already exists today.")
             return
 
         await ctx.send(
@@ -226,6 +228,7 @@ class SafariCog(commands.Cog):
         ctx: commands.Context,
         result: OpenSafariRegistrationResult,
     ) -> None:
+        await delete_active_safari_message(self.core, ctx.guild.id, ctx.channel)
         view = SafariRegistrationView(
             core=self.core,
             guild_id=ctx.guild.id,
@@ -237,6 +240,7 @@ class SafariCog(commands.Cog):
             view=view,
         )
         view.message = message
+        await remember_active_safari_message(self.core, ctx.guild.id, message)
 
     async def _send_encounter(
         self,

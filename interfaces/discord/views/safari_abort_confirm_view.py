@@ -7,6 +7,7 @@ import discord
 from application.bootstrap.core import CoreServices
 from application.safari import SafariActivityNotFound
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_message import delete_active_safari_message
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,13 @@ class SafariAbortConfirmView(discord.ui.View):
 
         for child in self.children:
             child.disabled = True
+
+        if self.message is not None:
+            await delete_active_safari_message(
+                self.core,
+                self.guild_id,
+                self.message.channel,
+            )
 
         await interaction.response.edit_message(
             content=(

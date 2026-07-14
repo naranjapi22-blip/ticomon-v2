@@ -1,4 +1,3 @@
-import json
 from datetime import UTC, date, datetime, timedelta, timezone
 from uuid import UUID
 
@@ -9,66 +8,9 @@ from core.safari import (
     SafariMapInfluence,
     SafariUnlock,
     SafariUnlockStatus,
-    SafariWorld,
 )
 from infrastructure.safari.daily_world_mapper import SafariDailyWorldMapper
 from infrastructure.safari.unlock_mapper import SafariUnlockMapper
-from infrastructure.safari.world_mapper import SafariWorldMapper
-
-
-def test_world_mapper_round_trip_preserves_state_and_freezes_influence():
-    world = SafariWorld(
-        guild_id=123,
-        current_progress=47,
-        daily_unlock_count=2,
-        current_influence=SafariMapInfluence({"grass": 4, "poison": 3}),
-        last_daily_reset_date=date(2026, 7, 13),
-    )
-
-    row_values = SafariWorldMapper.to_row(world)
-    restored = SafariWorldMapper.from_row(
-        {
-            "guild_id": row_values[0],
-            "current_progress": row_values[1],
-            "daily_unlock_count": row_values[2],
-            "current_influence": row_values[3],
-            "last_daily_reset_date": row_values[4],
-        }
-    )
-
-    assert restored.guild_id == world.guild_id
-    assert restored.current_progress == world.current_progress
-    assert restored.daily_unlock_count == world.daily_unlock_count
-    assert dict(restored.current_influence.amounts) == {
-        "grass": 4,
-        "poison": 3,
-    }
-    assert restored.last_daily_reset_date == world.last_daily_reset_date
-
-    with pytest.raises(TypeError):
-        restored.current_influence.amounts["water"] = 1  # type: ignore[index]
-
-
-def test_world_mapper_preserves_empty_influence():
-    encoded = SafariWorldMapper.encode_influence({})
-
-    assert json.loads(encoded) == {}
-    assert SafariWorldMapper._decode_influence(encoded) == {}
-
-
-@pytest.mark.parametrize(
-    "amounts",
-    [
-        {"Grass": 1},
-        {" grass": 1},
-        {"grass": -1},
-        {"grass": 1.5},
-        {"grass": True},
-    ],
-)
-def test_world_mapper_rejects_invalid_persisted_influence(amounts):
-    with pytest.raises(ValueError):
-        SafariWorldMapper.encode_influence(amounts)
 
 
 def test_daily_world_mapper_round_trip_preserves_state():

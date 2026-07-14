@@ -12,6 +12,7 @@ from application.safari import (
     SafariUnlockUnavailable,
     StartSafariResult,
 )
+from application.safari.activity_state import SafariActivityTracker
 from core.safari import (
     SafariDailyProgressSnapshot,
     SafariGeneratedEncounter,
@@ -102,19 +103,27 @@ def _daily_progress_snapshot(
 @pytest.mark.asyncio
 async def test_safari_command_opens_registration_view() -> None:
     open_registration = AsyncMock(return_value=_registration_result())
+    old_message = AsyncMock()
     core = SimpleNamespace(
         safari_registration_application=SimpleNamespace(open=open_registration),
+        safari_activity_tracker=SafariActivityTracker(),
     )
+    core.safari_activity_tracker.set_message(10, 20, 99)
     cog = SafariCog(core)
     ctx = SimpleNamespace(
         guild=SimpleNamespace(id=10),
         author=SimpleNamespace(id=20),
+        channel=SimpleNamespace(
+            id=20,
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         send=AsyncMock(),
     )
 
     await SafariCog.safari.callback(cog, ctx)
 
     open_registration.assert_awaited_once()
+    old_message.delete.assert_awaited_once()
     kwargs = ctx.send.await_args.kwargs
     assert isinstance(kwargs["view"], SafariRegistrationView)
     assert kwargs["embed"].title.endswith("Safari Registration")
@@ -515,10 +524,12 @@ async def test_safariresume_reconstructs_registration() -> None:
     session = make_session()
     registration = _registration_result().registration
     snapshot = _activity_snapshot(registration)
+    old_message = AsyncMock()
     core = SimpleNamespace(
         safari_activity_application=SimpleNamespace(
             get=AsyncMock(return_value=snapshot),
         ),
+        safari_activity_tracker=SafariActivityTracker(),
         safari_unlock_repository=SimpleNamespace(
             get_available_by_guild_id=AsyncMock(
                 return_value=(_registration_result().unlock,)
@@ -528,15 +539,21 @@ async def test_safariresume_reconstructs_registration() -> None:
         safari_capture_application=SimpleNamespace(),
         safari_route_application=SimpleNamespace(),
     )
+    core.safari_activity_tracker.set_message(session.guild_id, 20, 99)
     cog = SafariCog(core)
     ctx = SimpleNamespace(
         guild=SimpleNamespace(id=session.guild_id),
         author=SimpleNamespace(id=20),
+        channel=SimpleNamespace(
+            id=20,
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         send=AsyncMock(),
     )
 
     await SafariCog.safariresume.callback(cog, ctx)
 
+    old_message.delete.assert_awaited_once()
     assert isinstance(ctx.send.await_args.kwargs["view"], SafariRegistrationView)
 
 
@@ -550,26 +567,34 @@ async def test_safariresume_reconstructs_encounter(monkeypatch) -> None:
     session = make_session()
     encounter = make_encounter((25,))
     session.publish_encounter(encounter)
+    old_message = AsyncMock()
     snapshot = _activity_snapshot(session)
     core = SimpleNamespace(
         safari_activity_application=SimpleNamespace(
             get=AsyncMock(return_value=snapshot),
         ),
+        safari_activity_tracker=SafariActivityTracker(),
         safari_unlock_repository=SimpleNamespace(),
         safari_finish_application=SimpleNamespace(),
         safari_capture_application=SimpleNamespace(),
         safari_route_application=SimpleNamespace(),
     )
+    core.safari_activity_tracker.set_message(session.guild_id, 20, 99)
     cog = SafariCog(core)
     ctx = SimpleNamespace(
         guild=SimpleNamespace(id=session.guild_id),
         author=SimpleNamespace(id=20),
+        channel=SimpleNamespace(
+            id=20,
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
         send=AsyncMock(),
     )
 
     await SafariCog.safariresume.callback(cog, ctx)
 
     kwargs = ctx.send.await_args.kwargs
+    old_message.delete.assert_awaited_once()
     assert isinstance(kwargs["view"], SafariEncounterView)
     assert kwargs["file"].filename == "safari-encounter.png"
 

@@ -73,8 +73,7 @@ async def test_create_safari_schema_emits_daily_tables_and_unlock_audit_in_order
 
     queries = [query for query, _ in connection.calls]
     assert any(
-        "CREATE TABLE IF NOT EXISTS safari_daily_worlds" in query
-        for query in queries
+        "CREATE TABLE IF NOT EXISTS safari_daily_worlds" in query for query in queries
     )
     assert any(
         "CREATE TABLE IF NOT EXISTS safari_daily_active_trainers" in query
@@ -89,6 +88,7 @@ async def test_create_safari_schema_emits_daily_tables_and_unlock_audit_in_order
         in query
         for query in queries
     )
+    assert any("DROP TABLE IF EXISTS safari_worlds" in query for query in queries)
     assert ensure_calls == [True]
     assert queries.index(
         next(

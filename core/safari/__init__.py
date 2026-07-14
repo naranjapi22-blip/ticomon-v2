@@ -81,8 +81,6 @@ from .history import (
 )
 from .map_selector import SafariMapSelector
 from .participant import NotEnoughSafariBalls, SafariParticipant
-from .progress_result import SafariWorldProgressResult
-from .progress_service import SAFARI_UNLOCK_THRESHOLD, SafariWorldProgressService
 from .regional_encounter import SafariGeneratedRegionalEncounter
 from .registration import (
     SafariParticipantLimitReached,
@@ -108,8 +106,6 @@ from .time_of_day_selector import SafariTimeOfDaySelector
 from .unlock import SafariUnlock, SafariUnlockAlreadyConsumed
 from .unlock_repository import SafariUnlockRepository
 from .weather_selector import SafariWeatherSelector
-from .world import SafariWorld
-from .world_repository import SafariWorldRepository
 
 __all__ = [
     "SAFARI_INITIAL_ZONE_BY_MAP",
@@ -193,17 +189,12 @@ __all__ = [
     "SafariUnlock",
     "SafariUnlockAlreadyConsumed",
     "SafariUnlockRepository",
-    "SafariWorld",
-    "SafariWorldRepository",
-    "SafariWorldProgressResult",
-    "SafariWorldProgressService",
     "SafariDailyCaptureResult",
     "SafariDailyProgressService",
     "SafariDailyProgressSnapshot",
     "SafariDailyWorld",
     "SafariDailyActiveTrainerRepository",
     "SafariDailyWorldRepository",
-    "SAFARI_UNLOCK_THRESHOLD",
     "available_events_for",
     "available_extraordinary_events_for",
     "available_regional_events_for",

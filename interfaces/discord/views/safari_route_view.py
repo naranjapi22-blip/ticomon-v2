@@ -223,15 +223,6 @@ class SafariRouteView(discord.ui.View):
         if tracker is not None:
             tracker.clear_timer_task(self.guild_id, self._timer_task)
 
-        if self.message is not None:
-            await self.message.edit(
-                content=(
-                    "Route selected: "
-                    f"{self.format_option_label(result.selected_option)}"
-                ),
-                view=self,
-            )
-
         logger.info(
             "safari_next_encounter_published "
             "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s",
@@ -250,6 +241,10 @@ class SafariRouteView(discord.ui.View):
                 self.guild_id,
                 result.session,
                 self.message.channel,
+                prefix_content=(
+                    "Route selected: "
+                    f"{self.format_option_label(result.selected_option)}"
+                ),
             )
 
     async def _reject_if_ended(self, interaction: discord.Interaction) -> bool:

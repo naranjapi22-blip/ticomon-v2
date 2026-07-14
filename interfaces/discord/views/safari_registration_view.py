@@ -14,6 +14,7 @@ from application.safari import (
 )
 from core.safari.registration import SafariRegistrationClosed
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_message import clear_active_safari_message
 from interfaces.discord.safari_timing import (
     SAFARI_SELECTION_SECONDS,
     deadline_after,
@@ -202,6 +203,7 @@ class SafariRegistrationView(discord.ui.View):
         tracker = getattr(self.core, "safari_activity_tracker", None)
         if tracker is not None:
             tracker.clear(self.guild_id)
+        await clear_active_safari_message(self.core, self.guild_id)
 
         await interaction.response.edit_message(
             content="Safari registration cancelled.",
@@ -220,6 +222,7 @@ class SafariRegistrationView(discord.ui.View):
                 ),
                 view=self,
             )
+        await clear_active_safari_message(self.core, self.guild_id)
 
     async def on_error(
         self,

@@ -11,11 +11,18 @@ class SafariActivityTimingSnapshot:
     route_vote_deadline: datetime | None
 
 
+@dataclass(frozen=True, slots=True)
+class SafariActivityMessageSnapshot:
+    channel_id: int | None
+    message_id: int | None
+
+
 class SafariActivityTracker:
     def __init__(self) -> None:
         self._selection_deadlines: dict[int, datetime] = {}
         self._route_vote_deadlines: dict[int, datetime] = {}
         self._timers: dict[int, asyncio.Task[None]] = {}
+        self._messages: dict[int, SafariActivityMessageSnapshot] = {}
 
     def get(self, guild_id: int) -> SafariActivityTimingSnapshot:
         return SafariActivityTimingSnapshot(
@@ -32,6 +39,23 @@ class SafariActivityTracker:
     def clear_deadlines(self, guild_id: int) -> None:
         self._selection_deadlines.pop(guild_id, None)
         self._route_vote_deadlines.pop(guild_id, None)
+
+    def get_message(self, guild_id: int) -> SafariActivityMessageSnapshot:
+        return self._messages.get(guild_id, SafariActivityMessageSnapshot(None, None))
+
+    def set_message(
+        self,
+        guild_id: int,
+        channel_id: int,
+        message_id: int,
+    ) -> None:
+        self._messages[guild_id] = SafariActivityMessageSnapshot(
+            channel_id=channel_id,
+            message_id=message_id,
+        )
+
+    def clear_message(self, guild_id: int) -> None:
+        self._messages.pop(guild_id, None)
 
     def set_timer_task(self, guild_id: int, task: asyncio.Task[None]) -> None:
         previous = self._timers.get(guild_id)
@@ -56,3 +80,4 @@ class SafariActivityTracker:
     def clear(self, guild_id: int) -> None:
         self.cancel_timer(guild_id)
         self.clear_deadlines(guild_id)
+        self.clear_message(guild_id)

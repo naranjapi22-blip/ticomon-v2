@@ -120,9 +120,6 @@ from infrastructure.safari.neon_safari_daily_world_repository import (
 from infrastructure.safari.neon_safari_unlock_repository import (
     NeonSafariUnlockRepository,
 )
-from infrastructure.safari.neon_safari_world_repository import (
-    NeonSafariWorldRepository,
-)
 from infrastructure.spawn.in_memory_spawn_session_repository import (
     InMemorySpawnSessionRepository,
 )
@@ -171,7 +168,6 @@ class CoreServices:
     trade_repository: NeonTradeRepository
     trade_application: TradeApplicationService
     trade_display_service: TradeDisplayService
-    safari_world_repository: NeonSafariWorldRepository
     safari_unlock_repository: NeonSafariUnlockRepository
 
 
@@ -223,7 +219,6 @@ def build_core(
     safari_activity_tracker = SafariActivityTracker()
     safari_daily_world_repository = NeonSafariDailyWorldRepository()
     safari_daily_active_trainer_repository = NeonSafariDailyActiveTrainerRepository()
-    safari_world_repository = NeonSafariWorldRepository()
     safari_unlock_repository = NeonSafariUnlockRepository()
 
     stat_calculator = StatCalculator()
@@ -409,7 +404,6 @@ def build_core(
         trade_repository=trade_repository,
         trade_application=trade_application,
         trade_display_service=trade_display_service,
-        safari_world_repository=safari_world_repository,
         safari_unlock_repository=safari_unlock_repository,
         safari_daily_progress_application=safari_daily_progress_application,
     )
