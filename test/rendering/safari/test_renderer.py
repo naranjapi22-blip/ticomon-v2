@@ -208,6 +208,40 @@ def test_encounter_renderer_places_sprites_lower() -> None:
     assert first_sprite_row >= placement.y + 60
 
 
+def test_encounter_renderer_uses_zone_context_for_background() -> None:
+    class _FakeAssets:
+        def __init__(self) -> None:
+            self.requested_backgrounds: list[str] = []
+
+        @staticmethod
+        def get_background(_safari_map):
+            return Image.new("RGBA", (1020, 574), (120, 160, 200, 255))
+
+        def get_background_by_name(self, name: str):
+            self.requested_backgrounds.append(name)
+            return Image.new("RGBA", (1020, 574), (120, 160, 200, 255))
+
+        @staticmethod
+        def get_sprite(_species_id, _shiny):
+            return Image.new("RGBA", (48, 48), (255, 255, 255, 255))
+
+        @staticmethod
+        def get_font(_size):
+            return ImageFont.load_default()
+
+    assets = _FakeAssets()
+    session = _session(1)
+    session.safari_map = SafariMap.COAST
+    session.current_segment = SimpleNamespace(
+        zone=SafariZone.TIDAL_POOLS,
+        remaining_encounters=3,
+    )
+
+    SafariEncounterRenderer(assets=assets).render(session)
+
+    assert assets.requested_backgrounds[0] == "poison"
+
+
 def test_encounter_renderer_does_not_draw_slot_badges() -> None:
     class _FakeAssets:
         @staticmethod

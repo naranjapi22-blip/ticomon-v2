@@ -213,6 +213,7 @@ async def test_resolve_route_vote_applies_destination_and_publishes_next_encount
     assert generator.context.weather is session.weather
     assert generator.context.time_of_day is session.time_of_day
     assert generator.context.phase is session.phase
+    assert generator.context.zone is selected_option.destination_zone
     assert generator.context.seen_species_ids == session.seen_species_ids
     assert generator.context.route_allowed_events == frozenset(
         session.current_segment.allowed_events

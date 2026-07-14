@@ -21,6 +21,27 @@ BACKGROUND_BY_MAP: dict[SafariMap, str] = {
     SafariMap.PLAINS: "normal.png",
 }
 
+BACKGROUND_BY_TYPE: dict[str, str] = {
+    "bug": "bug.png",
+    "dark": "dark.png",
+    "dragon": "dragon.png",
+    "electric": "electric.png",
+    "fairy": "fairy.png",
+    "fighting": "fighting.png",
+    "fire": "fire.png",
+    "flying": "flying.png",
+    "ghost": "ghost.png",
+    "grass": "grass.png",
+    "ground": "ground.png",
+    "ice": "ice.png",
+    "normal": "normal.png",
+    "poison": "poison.png",
+    "psychic": "psychic.png",
+    "rock": "rock.png",
+    "steel": "steel.png",
+    "water": "water.png",
+}
+
 
 class SafariAssets:
     @lru_cache(maxsize=8)
@@ -30,6 +51,11 @@ class SafariAssets:
     @lru_cache(maxsize=32)
     def get_background(self, safari_map: SafariMap) -> Image.Image:
         filename = BACKGROUND_BY_MAP.get(safari_map, "safari.png")
+        return self.get_background_by_name(filename)
+
+    @lru_cache(maxsize=32)
+    def get_background_by_name(self, name: str) -> Image.Image:
+        filename = BACKGROUND_BY_TYPE.get(name, name)
         path = FONDOS_ROOT / filename
         if not path.exists():
             path = FONDOS_ROOT / "safari.png"

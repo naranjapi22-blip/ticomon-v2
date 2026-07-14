@@ -125,6 +125,21 @@ def make_species(
     )
 
 
+def make_regional(
+    species_id: int,
+    *,
+    pokeapi_id: int = 10091,
+    types: list[str] | None = None,
+    **metadata,
+):
+    return make_species(
+        species_id,
+        pokeapi_id=pokeapi_id,
+        types=types,
+        **metadata,
+    )
+
+
 def make_generator(species, random_source=None):
     repository = FakeSpeciesRepository(species)
     factory = RecordingOpportunityFactory()
@@ -452,12 +467,12 @@ async def test_herd_preserves_independently_generated_shiny_and_variant_values()
 
 
 @pytest.mark.asyncio
-async def test_solitary_selects_one_weighted_ordinary_species():
-    ordinary_baby = make_species(1, is_baby=True)
-    ordinary = make_species(2)
+async def test_solitary_selects_one_weighted_regional_species():
+    ordinary = make_species(1)
+    regional = make_regional(2)
     random_source = FakeWeightedRandom(selected_ids=(2,))
     generator, _, _, _ = make_generator(
-        (ordinary_baby, ordinary),
+        (ordinary, regional),
         random_source,
     )
 
@@ -465,7 +480,35 @@ async def test_solitary_selects_one_weighted_ordinary_species():
 
     assert encounter.composition == SafariComposition.SOLITARY
     assert [slot.species_id for slot in encounter.slots] == [2]
-    assert not encounter.is_regional_herd
+    assert all(
+        is_regional_species(slot.opportunity.species) for slot in encounter.slots
+    )
+    assert not any(
+        slot.opportunity.species.metadata.is_legendary
+        or slot.opportunity.species.metadata.is_mythical
+        for slot in encounter.slots
+    )
+
+
+@pytest.mark.asyncio
+async def test_solitary_falls_back_to_another_special_when_no_regional_is_available():
+    ordinary_a = make_species(1)
+    ordinary_b = make_species(2)
+    generator, _, _, _ = make_generator(
+        (ordinary_a, ordinary_b),
+        FakeWeightedRandom(),
+    )
+
+    encounter = await generator.generate_with_events(
+        make_context(),
+        (
+            SafariComposition.SOLITARY,
+            SafariComposition.DUEL,
+            SafariComposition.NORMAL,
+        ),
+    )
+
+    assert encounter.encounter.composition == SafariComposition.DUEL
 
 
 @pytest.mark.asyncio
@@ -518,7 +561,11 @@ async def test_baby_nest_fails_with_one_baby_and_does_not_fill_with_non_baby():
     ],
 )
 async def test_all_common_compositions_keep_base_exclusions(composition):
-    valid_species = [make_species(1, is_baby=True), make_species(2, is_baby=True)]
+    valid_species = [
+        make_species(1, is_baby=True),
+        make_species(2, is_baby=True),
+        make_regional(7, is_baby=True),
+    ]
     catalog = (
         *valid_species,
         make_species(3, pokeapi_id=10100, is_baby=True),
@@ -534,7 +581,12 @@ async def test_all_common_compositions_keep_base_exclusions(composition):
         composition,
     )
 
-    assert {slot.species_id for slot in encounter.slots} <= {1, 2}
+    if composition is SafariComposition.SOLITARY:
+        assert all(
+            is_regional_species(slot.opportunity.species) for slot in encounter.slots
+        )
+    else:
+        assert {slot.species_id for slot in encounter.slots} <= {1, 2}
 
 
 @pytest.mark.asyncio
@@ -572,7 +624,7 @@ async def test_fallback_uses_normal_only_after_requested_compositions_fail():
 async def test_fallback_fails_when_normal_cannot_generate_without_relaxing_filters():
     catalog = (
         make_species(1, is_legendary=True),
-        make_species(2, pokeapi_id=10100),
+        make_regional(2),
     )
     generator, _, factory, _ = make_generator(catalog)
 
@@ -581,7 +633,7 @@ async def test_fallback_fails_when_normal_cannot_generate_without_relaxing_filte
         match="no common Safari composition",
     ):
         await generator.generate_from_compositions(
-            make_context(),
+            make_context(seen_species_ids={2}),
             (SafariComposition.BABY_NEST, SafariComposition.SOLITARY),
         )
 
@@ -600,8 +652,10 @@ async def test_unsupported_extraordinary_composition_is_rejected():
 
 @pytest.mark.asyncio
 async def test_common_composition_sequence_respects_seen_species():
-    catalog = tuple(make_species(index) for index in range(1, 11)) + tuple(
-        make_species(index, is_baby=True) for index in range(11, 21)
+    catalog = (
+        tuple(make_species(index) for index in range(1, 11))
+        + (make_regional(21),)
+        + tuple(make_species(index, is_baby=True) for index in range(11, 21))
     )
     generator, _, _, _ = make_generator(catalog)
     seen_species_ids: set[int] = set()

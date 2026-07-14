@@ -358,7 +358,11 @@ class SafariEncounterGenerator:
         weighted_candidates = [
             (species, self._weight_for(species, context, event))
             for species in catalog
-            if self._is_candidate(species, context, event)
+            if (
+                self._is_regional_candidate(species, context, event)
+                if composition == SafariComposition.SOLITARY
+                else self._is_candidate(species, context, event)
+            )
             and (composition != SafariComposition.BABY_NEST or species.metadata.is_baby)
         ]
         selectable_candidates = [
