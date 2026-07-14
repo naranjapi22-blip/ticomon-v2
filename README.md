@@ -18,6 +18,20 @@ Players can discover wild Pokémon, capture them, collect Candies, evolve their 
 
 ---
 
+## Getting Started
+
+- Install dependencies with `poetry install`.
+- Run the bot with `poetry run python main.py`.
+
+For validation before pushing changes:
+
+- `poetry run ruff check .`
+- `poetry run black --check .`
+- `poetry run pytest -q`
+- `python scripts/check_all.py` runs the test suite only.
+
+---
+
 ## Features
 
 - 🎯 Wild Pokémon encounters
@@ -32,6 +46,8 @@ Players can discover wild Pokémon, capture them, collect Candies, evolve their 
 - 📦 Duplicate management
 - 🎲 Dynamic capture chances
 - 🖼️ Animated capture sequences
+- 🤝 Trading
+- 🦁 Safari
 
 ---
 
@@ -84,7 +100,7 @@ core/
 interfaces/
 rendering/
 scripts/
-tests/
+test/
 ```
 
 ---
@@ -105,7 +121,7 @@ tests/
 
 **Version:** Beta
 
-### Completed Systems
+### Implemented
 
 - ✅ Species
 - ✅ Spawn
@@ -124,22 +140,30 @@ tests/
 - ✅ Regional Forms
 - ✅ Duplicate Management
 
+### Integrated and available
+
+- ✅ Trading
+- ✅ Safari
+
 The core gameplay loop is complete.
+
+### In development or pending release
+
+- ⚔️ PvP Battles
+- 👥 Raids
+
+### Planned
+
+- 🤝 Achievements
+- 📅 Daily Quests
+- 🎉 Seasonal Events
+- 🥇 Competitive Rankings
 
 ---
 
 ## Roadmap
 
-Future updates include:
-
-- ⚔️ PvP Battles
-- 🤝 Trading
-- 🏆 Achievements
-- 📅 Daily Quests
-- 🎉 Seasonal Events
-- 🦁 Safari 2.0
-- 👥 Raids
-- 🥇 Competitive Rankings
+Future updates focus on the systems listed above under development or planned.
 
 ---
 
@@ -162,7 +186,8 @@ The project's architecture and design principles are documented in the **Archite
 The ADD explains the philosophy, responsibilities, and decisions behind the architecture used throughout the project.
 
 Safari-specific user, development, and operations notes live in `docs/safari.md`.
-Run `python scripts/check_all.py` or `poetry run pytest -q` before pushing changes.
+Spawn and Safari sessions are in memory; a bot restart clears active sessions and active registrations.
+Persistent data such as trainers, creatures, rewards, and progress remains in PostgreSQL.
 
 ---
 
