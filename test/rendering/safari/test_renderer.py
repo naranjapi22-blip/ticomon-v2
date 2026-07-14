@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from PIL import Image, ImageFont
 
 from application.safari import (
     SafariFinalSummary,
@@ -24,6 +25,7 @@ from core.safari import (
 from core.safari.domain import SafariFinishReason
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.participant import SafariParticipant
+from rendering.safari.layout import layout_slot_cards
 from rendering.safari.renderer import SafariEncounterRenderer, SafariSummaryRenderer
 from test.factories import create_species
 
@@ -148,6 +150,30 @@ def test_encounter_renderer_formats_long_species_names() -> None:
         SafariEncounterRenderer.format_species_name("Dudunsparce-Two-Segment")
         == "Dudunsparce (Two-Segment)"
     )
+
+
+def test_encounter_renderer_keeps_slot_background_transparent() -> None:
+    class _FakeAssets:
+        @staticmethod
+        def get_background(_safari_map):
+            return Image.new("RGBA", (1020, 574), (120, 160, 200, 255))
+
+        @staticmethod
+        def get_sprite(_species_id, _shiny):
+            return Image.new("RGBA", (48, 48), (255, 255, 255, 255))
+
+        @staticmethod
+        def get_font(_size):
+            return ImageFont.load_default()
+
+    session = _session(1)
+    image = SafariEncounterRenderer(assets=_FakeAssets()).render(session)
+    placement = layout_slot_cards(1)[0]
+
+    background_pixel = image.getpixel((10, 10))
+    slot_pixel = image.getpixel((placement.x + 10, placement.y + 100))
+
+    assert slot_pixel == background_pixel
 
 
 def test_summary_renderer_renders_final_banner() -> None:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import textwrap
-from dataclasses import dataclass
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -14,20 +13,6 @@ from .layout import SlotPlacement, layout_slot_cards
 from .narrative import summary_narrative
 
 CANVAS_SIZE = (1020, 574)
-
-
-@dataclass(frozen=True, slots=True)
-class _Palette:
-    border: tuple[int, int, int, int]
-    fill: tuple[int, int, int, int]
-    accent: tuple[int, int, int, int]
-
-
-PALETTE = _Palette(
-    border=(255, 255, 255, 220),
-    fill=(12, 16, 20, 178),
-    accent=(255, 215, 0, 255),
-)
 
 
 class SafariEncounterRenderer:
@@ -71,17 +56,6 @@ class SafariEncounterRenderer:
         card = Image.new("RGBA", (placement.width, placement.height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card)
 
-        shiny = slot.opportunity.is_shiny
-        border_color = PALETTE.accent if shiny else PALETTE.border
-        fill_color = (24, 30, 35, 210) if shiny else PALETTE.fill
-        card_draw.rounded_rectangle(
-            (0, 0, placement.width - 1, placement.height - 1),
-            radius=24,
-            fill=fill_color,
-            outline=border_color,
-            width=3,
-        )
-
         number_font = self.assets.get_font(24)
         name = self.format_species_name(slot.opportunity.species.name)
         name_font = self._name_font_for(name, placement.width)
@@ -89,7 +63,7 @@ class SafariEncounterRenderer:
         card_draw.rounded_rectangle(
             (18, 16, 58, 56),
             radius=12,
-            fill=border_color,
+            fill=(255, 255, 255, 255),
         )
         number_text = str(index)
         bbox = card_draw.textbbox((0, 0), number_text, font=number_font)
@@ -103,7 +77,10 @@ class SafariEncounterRenderer:
             fill=(0, 0, 0, 255),
         )
 
-        sprite = self.assets.get_sprite(slot.opportunity.species.id, shiny).copy()
+        sprite = self.assets.get_sprite(
+            slot.opportunity.species.id,
+            slot.opportunity.is_shiny,
+        ).copy()
         sprite = ImageOps.contain(
             sprite, (placement.width - 40, placement.height - 110)
         )
