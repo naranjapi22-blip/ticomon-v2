@@ -1,17 +1,21 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
 
 from application.safari import ResolveSafariCaptureResult
 from application.safari.activity_state import SafariActivityTracker
+from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import SafariComposition, SafariSessionStatus, SafariThematicEvent
+from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.views.safari_encounter_view import (
     SafariBallCountView,
     SafariEncounterView,
 )
 from interfaces.discord.views.safari_route_view import SafariRouteView
+from test.factories import create_species
 from test.unit.safari.test_session import make_encounter, make_session, make_vote
 
 
@@ -46,6 +50,46 @@ async def test_encounter_view_builds_attachment_message_and_pokedex_button() -> 
         "PokedexButton",
     ]
     assert any(isinstance(child, PokedexButton) for child in view.children)
+
+
+def test_encounter_slot_selector_labels_show_only_species_names() -> None:
+    session = make_session()
+    encounter = SafariEncounter(
+        id=uuid4(),
+        composition=SafariComposition.NORMAL,
+        slots=(
+            SafariEncounterSlot(
+                uuid4(),
+                OpportunityFactory.create(create_species(id=162, name="Furret")),
+            ),
+            SafariEncounterSlot(
+                uuid4(),
+                OpportunityFactory.create(create_species(id=951, name="Klawf")),
+            ),
+            SafariEncounterSlot(
+                uuid4(),
+                OpportunityFactory.create(create_species(id=327, name="Spinda")),
+            ),
+        ),
+    )
+    session.publish_encounter(encounter)
+    view = SafariEncounterView(
+        core=SimpleNamespace(),
+        guild_id=session.guild_id,
+        session=session,
+    )
+
+    selector = view.children[0]
+    assert [option.label for option in selector.options] == [
+        "Furret",
+        "Klawf",
+        "Spinda",
+    ]
+    assert all(not option.label.startswith("Slot") for option in selector.options)
+    assert [option.value for option in selector.options] == [
+        str(slot.id) for slot in encounter.slots
+    ]
+    assert all(option.description is None for option in selector.options)
 
 
 @pytest.mark.parametrize(

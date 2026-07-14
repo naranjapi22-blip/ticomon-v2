@@ -91,10 +91,7 @@ class SafariEncounterRenderer:
         name = self.format_species_name(slot.opportunity.species.name)
         name_font = self._name_font_for(name, placement.width)
 
-        sprite = self.assets.get_sprite(
-            slot.opportunity.species.id,
-            slot.opportunity.is_shiny,
-        ).copy()
+        sprite = self._slot_sprite(slot).copy()
         sprite = ImageOps.contain(
             sprite, (placement.width - 40, placement.height - 124)
         )
@@ -120,6 +117,16 @@ class SafariEncounterRenderer:
         )
 
         canvas.alpha_composite(card, (placement.x, placement.y))
+
+    def _slot_sprite(self, slot) -> Image.Image:
+        species = slot.opportunity.species
+        sprite_loader = getattr(self.assets, "get_species_sprite", None)
+        if sprite_loader is not None:
+            return sprite_loader(species, slot.opportunity.is_shiny)
+        return self.assets.get_sprite(
+            species.pokeapi_id,
+            slot.opportunity.is_shiny,
+        )
 
     @staticmethod
     def format_species_name(name: str) -> str:

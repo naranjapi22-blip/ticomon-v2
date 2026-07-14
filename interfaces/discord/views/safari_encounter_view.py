@@ -155,16 +155,17 @@ class SafariEncounterSlotSelect(discord.ui.Select):
         assert encounter is not None
 
         options = []
-        for index, slot in enumerate(encounter.slots, start=1):
+        for slot in encounter.slots:
             species = slot.opportunity.species
-            description = [view.format_species_name(species.name)]
+            label = view.format_species_name(species.name)
+            description: list[str] = []
             if slot.opportunity.is_shiny:
                 description.append("Shiny")
             if slot.opportunity.initial_form is not None:
                 description.append(slot.opportunity.initial_form.name)
             options.append(
                 discord.SelectOption(
-                    label=f"Slot {index}",
+                    label=label,
                     value=str(slot.id),
                     description=", ".join(description) if description else None,
                 )

@@ -1,6 +1,8 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock
+from uuid import uuid4
 
 import pytest
 
@@ -13,8 +15,12 @@ from application.safari import (
     StartSafariResult,
 )
 from application.safari.activity_state import SafariActivityTracker
+from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
+    SafariComposition,
     SafariDailyProgressSnapshot,
+    SafariEncounter,
+    SafariEncounterSlot,
     SafariGeneratedEncounter,
     SafariThematicEvent,
 )
@@ -32,6 +38,7 @@ from interfaces.discord.views.safari_abort_confirm_view import (
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
 from interfaces.discord.views.safari_registration_view import SafariRegistrationView
 from interfaces.discord.views.safari_route_view import SafariRouteView
+from test.factories import create_species
 from test.unit.safari.test_session import make_encounter, make_session, make_vote
 
 
@@ -567,6 +574,63 @@ async def test_safariresume_reconstructs_encounter(monkeypatch) -> None:
     )
     session = make_session()
     encounter = make_encounter((25,))
+    session.publish_encounter(encounter)
+    old_message = AsyncMock()
+    snapshot = _activity_snapshot(session)
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=snapshot),
+        ),
+        safari_activity_tracker=SafariActivityTracker(),
+        safari_unlock_repository=SimpleNamespace(),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    core.safari_activity_tracker.set_message(session.guild_id, 20, 99)
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=session.guild_id),
+        author=SimpleNamespace(id=20),
+        channel=SimpleNamespace(
+            id=20,
+            fetch_message=AsyncMock(return_value=old_message),
+        ),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    kwargs = ctx.send.await_args.kwargs
+    old_message.delete.assert_awaited_once()
+    assert isinstance(kwargs["view"], SafariEncounterView)
+    assert kwargs["file"].filename == "safari-encounter.png"
+
+
+@pytest.mark.asyncio
+async def test_safariresume_reconstructs_encounter_with_graphic_id_difference(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
+    session = make_session()
+    species = replace(
+        create_species(id=5132, name="Ditto"),
+        pokeapi_id=132,
+    )
+    encounter = SafariEncounter(
+        id=uuid4(),
+        composition=SafariComposition.NORMAL,
+        slots=(
+            SafariEncounterSlot(
+                uuid4(),
+                OpportunityFactory.create(species),
+            ),
+        ),
+    )
     session.publish_encounter(encounter)
     old_message = AsyncMock()
     snapshot = _activity_snapshot(session)

@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageFont
 
 from core.safari.domain import SafariMap
+from core.species.species import Species
 
 ROOT = Path(__file__).resolve().parents[1]
 FONTS_ROOT = ROOT / "assets" / "fonts"
 FONDOS_ROOT = ROOT / "assets" / "fondos"
 REGULAR_ROOT = ROOT / "assets" / "regular"
 SHINY_ROOT = ROOT / "assets" / "shiny"
+PLACEHOLDER_SPECIES_ID = 25
+
+logger = logging.getLogger(__name__)
 
 BACKGROUND_BY_MAP: dict[SafariMap, str] = {
     SafariMap.FOREST: "grass.png",
@@ -67,3 +72,23 @@ class SafariAssets:
         if not path.exists():
             path = REGULAR_ROOT / f"{species_id}.png"
         return Image.open(path).convert("RGBA")
+
+    def get_species_sprite(self, species: Species, shiny: bool) -> Image.Image:
+        species_id = species.pokeapi_id
+        path = (SHINY_ROOT if shiny else REGULAR_ROOT) / f"{species_id}.png"
+
+        try:
+            return self.get_sprite(species_id, shiny)
+        except FileNotFoundError:
+            logger.warning(
+                "safari_sprite_missing species=%s asset_id=%s path=%s",
+                species.name,
+                species_id,
+                path,
+            )
+            fallback_path = (SHINY_ROOT if shiny else REGULAR_ROOT) / (
+                f"{PLACEHOLDER_SPECIES_ID}.png"
+            )
+            if not fallback_path.exists():
+                raise
+            return Image.open(fallback_path).convert("RGBA")

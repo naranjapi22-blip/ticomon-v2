@@ -25,6 +25,7 @@ from core.safari import (
 from core.safari.domain import SafariFinishReason
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.participant import SafariParticipant
+from rendering.safari.assets import SafariAssets
 from rendering.safari.layout import layout_slot_cards
 from rendering.safari.renderer import SafariEncounterRenderer, SafariSummaryRenderer
 from test.factories import create_species
@@ -240,6 +241,57 @@ def test_encounter_renderer_uses_zone_context_for_background() -> None:
     SafariEncounterRenderer(assets=assets).render(session)
 
     assert assets.requested_backgrounds[0] == "poison"
+
+
+def test_encounter_renderer_uses_pokeapi_id_not_internal_id() -> None:
+    class _FakeAssets:
+        def __init__(self) -> None:
+            self.requested_sprite_ids: list[int] = []
+
+        @staticmethod
+        def get_background(_safari_map):
+            return Image.new("RGBA", (1020, 574), (120, 160, 200, 255))
+
+        def get_sprite(self, species_id, _shiny):
+            self.requested_sprite_ids.append(species_id)
+            return Image.new("RGBA", (48, 48), (255, 255, 255, 255))
+
+        @staticmethod
+        def get_font(_size):
+            return ImageFont.load_default()
+
+    assets = _FakeAssets()
+    species = SimpleNamespace(id=5132, pokeapi_id=132, name="Ditto")
+    session = SimpleNamespace(
+        current_encounter=SimpleNamespace(
+            slots=(
+                SimpleNamespace(
+                    id=uuid4(),
+                    opportunity=SimpleNamespace(
+                        species=species,
+                        is_shiny=False,
+                    ),
+                ),
+            )
+        ),
+        safari_map=SafariMap.COAST,
+        current_segment=SimpleNamespace(zone=None),
+    )
+
+    SafariEncounterRenderer(assets=assets).render(session)
+
+    assert assets.requested_sprite_ids == [132]
+
+
+def test_safari_assets_falls_back_to_placeholder_sprite(caplog) -> None:
+    species = SimpleNamespace(id=5132, pokeapi_id=999999, name="Missingno")
+
+    with caplog.at_level("WARNING"):
+        sprite = SafariAssets().get_species_sprite(species, False)
+
+    assert sprite.size == SafariAssets().get_sprite(25, False).size
+    assert "safari_sprite_missing" in caplog.text
+    assert "asset_id=999999" in caplog.text
 
 
 def test_encounter_renderer_does_not_draw_slot_badges() -> None:
