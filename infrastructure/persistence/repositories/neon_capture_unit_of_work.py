@@ -8,6 +8,7 @@ from core.candy.candy_inventory import CandyInventory
 from core.capture.application.capture_unit_of_work import (
     CaptureTransaction,
     CaptureUnitOfWork,
+    SaveUnlockResult,
 )
 from core.creature.creature import Creature
 from core.creature.creature_mapper import CreatureMapper
@@ -247,9 +248,31 @@ class _NeonCaptureTransaction(CaptureTransaction):
         )
         return int(result.split()[-1]) if result else 0
 
-    async def save_unlock(self, unlock: SafariUnlock) -> SafariUnlock:
+    async def save_unlock(self, unlock: SafariUnlock) -> SaveUnlockResult:
         if unlock.id is not None:
-            raise ValueError("New Safari unlocks cannot already have an id.")
+            row = await self._connection.fetchrow(
+                """
+                UPDATE safari_unlocks
+                SET
+                    guild_id = $1,
+                    level = $2,
+                    encounter_count = $3,
+                    balls_per_participant = $4,
+                    cycle_date = $5,
+                    map_influence = $6::jsonb,
+                    status = $7,
+                    unlocked_at = $8,
+                    consumed_at = $9,
+                    consumed_session_id = $10
+                WHERE id = $11
+                RETURNING *
+                """,
+                *self._unlock_mapper.to_row(unlock),
+                unlock.id,
+            )
+            if row is None:
+                raise ValueError(f"Safari unlock {unlock.id} was not found.")
+            return SaveUnlockResult(self._unlock_mapper.from_row(row), created=False)
 
         row = await self._connection.fetchrow(
             """
@@ -266,10 +289,31 @@ class _NeonCaptureTransaction(CaptureTransaction):
                 consumed_session_id
             )
             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+            ON CONFLICT (guild_id, cycle_date, level) DO NOTHING
             RETURNING *
             """,
             *self._unlock_mapper.to_row(unlock),
         )
+        created = row is not None
+        if row is None:
+            row = await self._connection.fetchrow(
+                """
+                SELECT *
+                FROM safari_unlocks
+                WHERE guild_id = $1
+                  AND cycle_date = $2
+                  AND level = $3
+                """,
+                unlock.guild_id,
+                (
+                    unlock.cycle_date
+                    or self._unlock_mapper.as_utc(unlock.unlocked_at).date()
+                ),
+                unlock.level,
+            )
+        if row is None:
+            raise ValueError(
+                "Safari unlock was not found after insert or conflict resolution."
+            )
 
-        assert row is not None
-        return self._unlock_mapper.from_row(row)
+        return SaveUnlockResult(self._unlock_mapper.from_row(row), created=created)

@@ -1,11 +1,18 @@
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from datetime import date, datetime
 
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature import Creature
 from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
+
+
+@dataclass(slots=True)
+class SaveUnlockResult:
+    unlock: SafariUnlock
+    created: bool
 
 
 class CaptureTransaction(ABC):
@@ -70,7 +77,7 @@ class CaptureTransaction(ABC):
 
     @abstractmethod
     @abstractmethod
-    async def save_unlock(self, unlock: SafariUnlock) -> SafariUnlock:
+    async def save_unlock(self, unlock: SafariUnlock) -> SaveUnlockResult:
         """Appends an unlock to the persistent FIFO queue."""
 
 

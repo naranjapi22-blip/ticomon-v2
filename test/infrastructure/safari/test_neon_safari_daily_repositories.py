@@ -9,6 +9,9 @@ from core.safari import (
     SafariUnlock,
     SafariUnlockStatus,
 )
+from infrastructure.persistence.repositories.neon_capture_unit_of_work import (
+    NeonCaptureUnitOfWork,
+)
 from infrastructure.safari.neon_safari_daily_active_trainer_repository import (
     NeonSafariDailyActiveTrainerRepository,
 )
@@ -215,6 +218,58 @@ async def test_unlock_repository_consume_next_can_filter_cycle(monkeypatch):
 
     assert result is not None
     assert "cycle_date = $4" in connection.calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_capture_unit_of_work_save_unlock_is_idempotent(monkeypatch):
+    first_input = SafariUnlock(
+        id=None,
+        guild_id=123,
+        level=1,
+        encounter_count=5,
+        balls_per_participant=9,
+        unlocked_at=datetime(2026, 7, 14, 12, tzinfo=UTC),
+        cycle_date=date(2026, 7, 14),
+        map_influence=SafariMapInfluence({"grass": 2}),
+    )
+    duplicate_input = SafariUnlock(
+        id=None,
+        guild_id=123,
+        level=1,
+        encounter_count=5,
+        balls_per_participant=9,
+        unlocked_at=datetime(2026, 7, 14, 12, tzinfo=UTC),
+        cycle_date=date(2026, 7, 14),
+        map_influence=SafariMapInfluence({"grass": 2}),
+    )
+    connection = _Connection(
+        fetchrow_results=[
+            _unlock_row(first_input),
+            None,
+            _unlock_row(first_input),
+        ],
+    )
+
+    async def fake_get_pool():
+        return _Pool(connection)
+
+    monkeypatch.setattr(
+        "infrastructure.persistence.repositories.neon_capture_unit_of_work.get_pool",
+        fake_get_pool,
+    )
+
+    async with NeonCaptureUnitOfWork().transaction() as transaction:
+        first = await transaction.save_unlock(first_input)
+        second = await transaction.save_unlock(duplicate_input)
+
+    assert first.created is True
+    assert second.created is False
+    assert first.unlock == first_input
+    assert second.unlock == first_input
+    assert (
+        "ON CONFLICT (guild_id, cycle_date, level) DO NOTHING" in connection.calls[0][0]
+    )
+    assert "SELECT *" in connection.calls[2][0]
 
 
 def _replace_pool(monkeypatch, module_name: str, connection: _Connection) -> None:

@@ -12,6 +12,7 @@ from core.capture.application.capture_service import CaptureApplicationService
 from core.capture.application.capture_unit_of_work import (
     CaptureTransaction,
     CaptureUnitOfWork,
+    SaveUnlockResult,
 )
 from core.capture.domain.capture_attempt import CaptureAttempt
 from core.capture.domain.capture_ball import CaptureBall
@@ -55,6 +56,7 @@ class _Transaction(CaptureTransaction):
         self.saved_creature = None
         self.saved_daily_world = None
         self.saved_unlocks = []
+        self.saved_unlock_results = []
         self.active_trainers: set[int] = set()
 
     async def save_creature(self, creature):
@@ -103,7 +105,10 @@ class _Transaction(CaptureTransaction):
     async def save_unlock(self, unlock):
         self._record("unlock")
         self.saved_unlocks.append(unlock)
-        return replace(unlock, id=len(self.saved_unlocks))
+        saved_unlock = replace(unlock, id=len(self.saved_unlocks))
+        result = SaveUnlockResult(saved_unlock, created=True)
+        self.saved_unlock_results.append(result)
+        return result
 
     def _record(self, operation):
         self.events.append(operation)
@@ -151,7 +156,9 @@ class _MultipleUnlockProgressService:
         active_player_count,
     ):
         world.daily_capture_count += 1
-        unlocks = tuple(_unlock(index) for index in range(2))
+        unlocks = tuple(
+            _unlock(index, map_influence=world.current_influence) for index in range(2)
+        )
         snapshot = SafariDailyProgressSnapshot(
             guild_id=world.guild_id,
             cycle_date=world.cycle_date,
@@ -171,6 +178,44 @@ class _MultipleUnlockProgressService:
             snapshot=snapshot,
             created_unlocks=unlocks,
             newly_reached_levels=(1, 2),
+        )
+
+
+class _SingleUnlockProgressService:
+    def register_capture(
+        self,
+        world,
+        species_types,
+        captured_at,
+        *,
+        active_player_count,
+    ):
+        world.daily_capture_count += 1
+        world.daily_unlock_count += 1
+        influence = dict(world.current_influence.amounts)
+        for type_name in species_types:
+            influence[type_name] = influence.get(type_name, 0) + 1
+        world.current_influence = SafariMapInfluence(influence)
+        unlock = _unlock(0, map_influence=world.current_influence)
+        snapshot = SafariDailyProgressSnapshot(
+            guild_id=world.guild_id,
+            cycle_date=world.cycle_date,
+            active_player_count=active_player_count,
+            effective_active_players=min(max(active_player_count, 5), 20),
+            daily_capture_target=min(max(active_player_count, 5), 20) * 16,
+            daily_capture_count=world.daily_capture_count,
+            daily_unlock_count=1,
+            thresholds=(16, 32, 48, 64, 80),
+            next_threshold=None,
+            captures_remaining=0,
+            all_unlocked=False,
+            current_influence=world.current_influence,
+        )
+        return SafariDailyCaptureResult(
+            world=world,
+            snapshot=snapshot,
+            created_unlocks=(unlock,),
+            newly_reached_levels=(1,),
         )
 
 
@@ -220,13 +265,18 @@ async def test_success_updates_existing_world_and_persists_threshold_unlock():
         daily_unlock_count=0,
         current_influence=SafariMapInfluence({"grass": 2}),
     )
-    service, transaction, _ = await _service(success=True, world=world)
+    service, transaction, _ = await _service(
+        success=True,
+        world=world,
+        progress_service=_SingleUnlockProgressService(),
+    )
 
     await service.capture(TRAINER_ID, GUILD_ID)
 
     assert world.daily_capture_count == 2
     assert world.daily_unlock_count == 1
     assert len(transaction.saved_unlocks) == 1
+    assert transaction.saved_unlock_results[0].created is True
     assert dict(transaction.saved_unlocks[0].map_influence.amounts) == {
         "grass": 2,
         "fire": 1,
@@ -244,6 +294,10 @@ async def test_all_unlocks_from_progress_result_are_saved_in_order():
     await service.capture(TRAINER_ID, GUILD_ID)
 
     assert [unlock.level for unlock in transaction.saved_unlocks] == [1, 2]
+    assert [result.created for result in transaction.saved_unlock_results] == [
+        True,
+        True,
+    ]
 
 
 @pytest.mark.asyncio
@@ -302,6 +356,9 @@ async def test_persistence_failure_rolls_back_and_keeps_spawn(
         success=True,
         world=world,
         fail_at=failure,
+        progress_service=(
+            _SingleUnlockProgressService() if failure == "unlock" else None
+        ),
     )
 
     with pytest.raises(RuntimeError, match=failure):
@@ -384,7 +441,7 @@ async def _service(
     return service, transaction, spawn
 
 
-def _unlock(index):
+def _unlock(index, *, map_influence=None):
     return SafariUnlock(
         id=None,
         guild_id=GUILD_ID,
@@ -392,4 +449,5 @@ def _unlock(index):
         encounter_count=5,
         balls_per_participant=9,
         unlocked_at=NOW,
+        map_influence=map_influence or SafariMapInfluence(),
     )

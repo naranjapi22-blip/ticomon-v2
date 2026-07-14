@@ -18,6 +18,7 @@ from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_unit_of_work import (
     CaptureTransaction,
     CaptureUnitOfWork,
+    SaveUnlockResult,
 )
 from core.capture.attempt_service import CaptureAttemptService
 from core.capture.domain.capture_ball import CaptureBall
@@ -105,7 +106,7 @@ class _Transaction(CaptureTransaction):
         self._inventories[trainer_id] = inventory
 
     async def save_unlock(self, unlock):
-        raise NotImplementedError
+        return SaveUnlockResult(unlock, created=True)
 
     def _record(self, operation: str) -> None:
         self.events.append(operation)
