@@ -13,6 +13,7 @@ from application.safari import (
     SafariSessionNotFound,
 )
 from core.safari import SafariRouteOption, SafariRouteVote, SafariSession
+from interfaces.discord.files import image_to_discord_file
 from interfaces.discord.safari_errors import safari_error_message
 from interfaces.discord.safari_timing import (
     SAFARI_PHASE_ENDED_MESSAGE,
@@ -24,6 +25,7 @@ from interfaces.discord.safari_timing import (
 from interfaces.discord.views.safari_encounter_view import (
     publish_current_encounter,
 )
+from rendering.safari.assets import SafariAssets
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,10 @@ class SafariRouteView(discord.ui.View):
             f"Vote for the next route. Resolves in {SAFARI_ROUTE_VOTE_SECONDS} seconds."
         )
 
+    def build_file(self) -> discord.File:
+        image = SafariAssets().get_background_by_name("safari.png")
+        return image_to_discord_file(image, "safari.png")
+
     @staticmethod
     def format_option_label(option: SafariRouteOption) -> str:
         destination = option.destination_zone.value.replace("_", " ").title()
@@ -103,7 +109,7 @@ class SafariRouteView(discord.ui.View):
         self._timer_task = asyncio.create_task(self._run_route_timeout())
         if tracker is not None:
             tracker.set_timer_task(self.guild_id, self._timer_task)
-        logger.info(
+        logger.debug(
             "safari_route_timer_started guild_id=%s session_id=%s deadline=%s",
             self.guild_id,
             self.session.id,
@@ -223,7 +229,7 @@ class SafariRouteView(discord.ui.View):
         if tracker is not None:
             tracker.clear_timer_task(self.guild_id, self._timer_task)
 
-        logger.info(
+        logger.debug(
             "safari_next_encounter_published "
             "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s",
             self.guild_id,

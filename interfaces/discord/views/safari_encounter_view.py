@@ -71,7 +71,7 @@ async def publish_current_encounter(
     )
     view.message = message
     await remember_active_safari_message(core, guild_id, message)
-    logger.info(
+    logger.debug(
         "safari_next_encounter_published "
         "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s",
         guild_id,
@@ -115,8 +115,10 @@ async def publish_current_route_vote(
     content = view.build_content()
     if prefix_content:
         content = f"{prefix_content}\n\n{content}"
+    file = view.build_file()
     message = await channel.send(
         content=content,
+        file=file,
         view=view,
     )
     view.message = message
@@ -144,7 +146,6 @@ async def publish_final_summary(
         kwargs["content"] = prefix_content
     message = await channel.send(**kwargs)
     view.message = message
-    await remember_active_safari_message(core, guild_id, message)
     return view
 
 
@@ -258,7 +259,7 @@ class SafariEncounterView(discord.ui.View):
         self._timer_task = asyncio.create_task(self._run_selection_timeout())
         if tracker is not None:
             tracker.set_timer_task(self.guild_id, self._timer_task)
-        logger.info(
+        logger.debug(
             "safari_selection_timer_started "
             "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s "
             "deadline=%s",
@@ -312,7 +313,8 @@ class SafariEncounterView(discord.ui.View):
             trainer_id=interaction.user.id,
             slot_id=slot_id,
             slot_name=self.format_species_name(slot.opportunity.species.name),
-            remaining_balls=min(3, remaining_balls),
+            remaining_balls=remaining_balls,
+            selectable_balls=min(3, remaining_balls),
         )
         await interaction.response.send_message(
             embed=view.build_embed(),
@@ -364,10 +366,13 @@ class SafariEncounterView(discord.ui.View):
         species_name = self.format_species_name(
             selection_result.slot.opportunity.species.name
         )
+        selected_label = (
+            "Safari Ball" if selection_result.balls_selected == 1 else "Safari Balls"
+        )
         await interaction.response.send_message(
             content=(
                 f"Selection confirmed: {species_name} "
-                f"with {selection_result.balls_selected} Safari Balls.\n"
+                f"with {selection_result.balls_selected} {selected_label}.\n"
                 f"{result.balls_available} Safari Balls remaining."
             ),
             ephemeral=True,
@@ -465,7 +470,7 @@ class SafariEncounterView(discord.ui.View):
         if tracker is not None:
             tracker.clear_timer_task(self.guild_id, self._timer_task)
 
-        logger.info(
+        logger.debug(
             "safari_encounter_transition_started "
             "guild_id=%s session_id=%s encounter_id=%s next_status=%s "
             "encounter_index=%s",
@@ -664,6 +669,7 @@ class SafariBallCountView(discord.ui.View):
         slot_id: UUID,
         slot_name: str,
         remaining_balls: int,
+        selectable_balls: int,
     ) -> None:
         super().__init__(timeout=120)
 
@@ -673,9 +679,10 @@ class SafariBallCountView(discord.ui.View):
         self.slot_id = slot_id
         self.slot_name = slot_name
         self.remaining_balls = remaining_balls
+        self.selectable_balls = selectable_balls
         self.message: discord.Message | None = None
 
-        for count in range(1, remaining_balls + 1):
+        for count in range(1, selectable_balls + 1):
             self.add_item(SafariBallCountButton(count, self))
         self.add_item(SafariBallDeclineButton(self))
 

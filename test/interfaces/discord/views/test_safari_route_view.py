@@ -31,6 +31,7 @@ async def test_route_view_renders_options() -> None:
     ]
     assert all(":" not in option.label for option in view.children[0].options)
     assert view.children[0].__class__.__name__ == "SafariRouteOptionSelect"
+    assert view.build_file().filename == "safari.png"
 
 
 @pytest.mark.asyncio

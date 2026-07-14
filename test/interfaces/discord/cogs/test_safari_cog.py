@@ -630,7 +630,9 @@ async def test_safariresume_reconstructs_route_vote(monkeypatch) -> None:
 
     await SafariCog.safariresume.callback(cog, ctx)
 
-    assert isinstance(ctx.send.await_args.kwargs["view"], SafariRouteView)
+    kwargs = ctx.send.await_args.kwargs
+    assert isinstance(kwargs["view"], SafariRouteView)
+    assert kwargs["file"].filename == "safari.png"
 
 
 @pytest.mark.asyncio
@@ -710,7 +712,9 @@ async def test_safariresume_resolves_expired_encounter(monkeypatch) -> None:
 
     await SafariCog.safariresume.callback(cog, ctx)
 
-    assert isinstance(ctx.send.await_args.kwargs["view"], SafariRouteView)
+    kwargs = ctx.send.await_args.kwargs
+    assert isinstance(kwargs["view"], SafariRouteView)
+    assert kwargs["file"].filename == "safari.png"
 
 
 @pytest.mark.asyncio

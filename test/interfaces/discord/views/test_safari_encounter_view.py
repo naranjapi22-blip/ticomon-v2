@@ -39,6 +39,7 @@ async def test_encounter_view_builds_attachment_message_and_pokedex_button() -> 
 
     assert content.startswith("Safari Encounter")
     assert "Choose a Pokémon and the number of Safari Balls." in content
+    assert "Resolves in 30 seconds." in content
     assert file.filename == "safari-encounter.png"
     assert [child.__class__.__name__ for child in view.children] == [
         "SafariEncounterSlotSelect",
@@ -123,13 +124,20 @@ async def test_ball_count_view_uses_player_facing_copy() -> None:
         trainer_id=1,
         slot_id=session.current_encounter.slots[0].id,
         slot_name="Starmie",
-        remaining_balls=3,
+        remaining_balls=7,
+        selectable_balls=3,
     )
 
     embed = selection_view.build_embed()
 
     assert embed.title == "Choose Safari Balls"
-    assert embed.description == ("Selected Pokémon: **Starmie**\n" "Remaining Balls: 3")
+    assert embed.description == ("Selected Pokémon: **Starmie**\n" "Remaining Balls: 7")
+    assert [child.label for child in selection_view.children[:-1]] == [
+        "1 Ball",
+        "2 Balls",
+        "3 Balls",
+    ]
+    assert selection_view.children[-1].label == "Decline"
 
 
 @pytest.mark.asyncio
@@ -144,7 +152,7 @@ async def test_selection_flow_confirms_immediately() -> None:
                     participant=session.participants_by_trainer[1],
                     slot=session.current_encounter.slots[0],
                     balls_selected=1,
-                    balls_available=2,
+                    balls_available=7,
                     selection=SimpleNamespace(
                         slot_id=session.current_encounter.slots[0].id,
                         ball_count=1,
@@ -164,7 +172,7 @@ async def test_selection_flow_confirms_immediately() -> None:
                         is_confirmed=True,
                     ),
                     balls_spent=1,
-                    balls_available=2,
+                    balls_available=6,
                     state=None,
                 )
             ),
@@ -186,6 +194,14 @@ async def test_selection_flow_confirms_immediately() -> None:
     assert interaction.response.send_message.await_count == 1
     assert (
         "Selection confirmed:"
+        in interaction.response.send_message.await_args.kwargs["content"]
+    )
+    assert (
+        "1 Safari Ball"
+        in interaction.response.send_message.await_args.kwargs["content"]
+    )
+    assert (
+        "6 Safari Balls remaining."
         in interaction.response.send_message.await_args.kwargs["content"]
     )
     assert interaction.response.edit_message.await_count == 0
@@ -247,6 +263,7 @@ async def test_selection_timeout_transitions_to_route_view(monkeypatch) -> None:
         view.message.channel.send.await_args.kwargs["view"],
         SafariRouteView,
     )
+    assert view.message.channel.send.await_args.kwargs["file"].filename == "safari.png"
 
 
 @pytest.mark.asyncio
@@ -304,6 +321,10 @@ async def test_selection_timeout_transitions_to_next_encounter(monkeypatch) -> N
     assert view.message.channel.send.await_args.kwargs["file"].filename == (
         "safari-encounter.png"
     )
+    assert (
+        view.core.safari_activity_tracker.get_message(session.guild_id).message_id
+        is None
+    )
     start_selection_timer.assert_called_once()
     view.core.safari_route_application.open_route_vote.assert_not_awaited()
 
@@ -360,6 +381,10 @@ async def test_selection_timeout_transitions_to_summary() -> None:
     assert view.message.channel.send.await_count == 1
     assert view.message.channel.send.await_args.kwargs["embeds"][0].title == (
         "Safari Complete"
+    )
+    assert (
+        view.core.safari_activity_tracker.get_message(session.guild_id).message_id
+        is None
     )
 
 

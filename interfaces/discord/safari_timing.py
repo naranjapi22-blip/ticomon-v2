@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-SAFARI_SELECTION_SECONDS = 45
+SAFARI_SELECTION_SECONDS = 30
 SAFARI_ROUTE_VOTE_SECONDS = 30
 SAFARI_VIEW_FALLBACK_SECONDS = 300
 SAFARI_PHASE_ENDED_MESSAGE = "This phase has already ended."
