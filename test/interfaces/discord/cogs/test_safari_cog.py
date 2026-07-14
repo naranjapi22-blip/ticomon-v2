@@ -84,15 +84,16 @@ def _daily_progress_snapshot(
     next_threshold: int | None,
     captures_remaining: int,
 ) -> SafariDailyProgressSnapshot:
+    effective_active_players = min(max(active_player_count, 5), 20)
     return SafariDailyProgressSnapshot(
         guild_id=10,
         cycle_date=datetime(2026, 7, 13, tzinfo=UTC).date(),
         active_player_count=active_player_count,
-        effective_active_players=max(active_player_count, 1),
+        effective_active_players=effective_active_players,
         daily_capture_target=daily_capture_target,
         daily_capture_count=daily_capture_count,
         daily_unlock_count=daily_unlock_count,
-        thresholds=(2, 4, 8, 12, 16),
+        thresholds=(16, 32, 48, 64, 80),
         next_threshold=next_threshold,
         captures_remaining=captures_remaining,
         all_unlocked=daily_unlock_count >= 5,
@@ -152,10 +153,10 @@ async def test_safari_command_reports_registration_errors() -> None:
                 return_value=_daily_progress_snapshot(
                     active_player_count=0,
                     daily_capture_count=0,
-                    daily_capture_target=16,
+                    daily_capture_target=80,
                     daily_unlock_count=0,
-                    next_threshold=2,
-                    captures_remaining=2,
+                    next_threshold=16,
+                    captures_remaining=16,
                 )
             )
         ),
@@ -172,9 +173,9 @@ async def test_safari_command_reports_registration_errors() -> None:
     ctx.send.assert_awaited_once_with(
         "Daily Safari Progress\n\n"
         "Active trainers: 0\n"
-        "Captures today: 0 / 16\n"
+        "Captures today: 0 / 80\n"
         "Safaris unlocked: 0 / 5\n"
-        "Next Safari: 2 captures remaining."
+        "Next Safari: 16 captures remaining."
     )
     core.safari_daily_progress_application.get.assert_awaited_once_with(10)
 
@@ -211,8 +212,8 @@ async def test_safari_command_reports_unlock_progress() -> None:
                     daily_capture_count=27,
                     daily_capture_target=80,
                     daily_unlock_count=2,
-                    next_threshold=36,
-                    captures_remaining=9,
+                    next_threshold=48,
+                    captures_remaining=21,
                 )
             )
         ),
@@ -231,7 +232,7 @@ async def test_safari_command_reports_unlock_progress() -> None:
         "Active trainers: 5\n"
         "Captures today: 27 / 80\n"
         "Safaris unlocked: 2 / 5\n"
-        "Next Safari: 9 captures remaining."
+        "Next Safari: 21 captures remaining."
     )
     core.safari_daily_progress_application.get.assert_awaited_once_with(10)
 

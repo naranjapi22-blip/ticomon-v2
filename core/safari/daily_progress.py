@@ -7,7 +7,7 @@ from math import ceil
 from core.safari.domain import SAFARI_LEVEL_CONFIGS, SafariMapInfluence
 from core.safari.unlock import SafariUnlock
 
-_SAFARI_DAILY_LEVEL_PERCENTAGES = (0.10, 0.25, 0.45, 0.70, 1.00)
+_SAFARI_DAILY_LEVEL_PERCENTAGES = (0.20, 0.40, 0.60, 0.80, 1.00)
 _SAFARI_DAILY_MAX_UNLOCKS = len(_SAFARI_DAILY_LEVEL_PERCENTAGES)
 
 
@@ -74,7 +74,8 @@ class SafariDailyProgressService:
     def calculate_daily_target(self, active_player_count: int) -> int:
         if active_player_count < 0:
             raise ValueError("active_player_count cannot be negative.")
-        return max(active_player_count, 1) * 16
+        effective_players = min(max(active_player_count, 5), 20)
+        return effective_players * 16
 
     def calculate_thresholds(
         self,
@@ -156,7 +157,7 @@ class SafariDailyProgressService:
             guild_id=world.guild_id,
             cycle_date=world.cycle_date,
             active_player_count=active_player_count,
-            effective_active_players=max(active_player_count, 1),
+            effective_active_players=min(max(active_player_count, 5), 20),
             daily_capture_target=daily_capture_target,
             daily_capture_count=world.daily_capture_count,
             daily_unlock_count=world.daily_unlock_count,
