@@ -465,8 +465,7 @@ class SafariCaptureApplicationService:
         session: SafariSession,
     ) -> tuple[SafariComposition, ...]:
         if (
-            session.total_encounters >= 9
-            and session.completed_encounter_count + 2 == session.total_encounters
+            session.completed_encounter_count + 2 == session.total_encounters
             and not session.has_special_encounter_history
         ):
             return (

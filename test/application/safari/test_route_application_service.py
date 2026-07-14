@@ -225,7 +225,7 @@ async def test_resolve_route_vote_forces_special_final_encounter_when_needed():
     activity = _TrackingActivityRepository()
     session = _route_ready_session()
     session._total_encounters = 9
-    session._completed_encounter_count = 8
+    session._completed_encounter_count = 7
     session._encounter_history = tuple()  # type: ignore[assignment]
     await activity.save_session(session)
     generator = _EncounterGenerator()
@@ -238,6 +238,18 @@ async def test_resolve_route_vote_forces_special_final_encounter_when_needed():
     await service.resolve_route_vote(session.guild_id)
 
     assert generator.compositions == (
+        SafariComposition.SOLITARY,
+        SafariComposition.NORMAL,
+    )
+
+
+def test_resolve_route_vote_forces_special_final_encounter_for_short_safari():
+    session = make_session((SafariParticipant(1, 9, 9),))
+    session._total_encounters = 5
+    session._completed_encounter_count = 3
+    session._encounter_history = tuple()  # type: ignore[assignment]
+
+    assert SafariRouteApplicationService._encounter_compositions_for(session) == (
         SafariComposition.SOLITARY,
         SafariComposition.NORMAL,
     )

@@ -119,6 +119,7 @@ class _EncounterGenerator:
         self.events = events
         self.error = error
         self.context = None
+        self.compositions = None
 
     async def generate_with_events(self, context, compositions):
         if self.events is not None:
@@ -126,7 +127,7 @@ class _EncounterGenerator:
         if self.error is not None:
             raise self.error
         self.context = context
-        assert compositions == (SafariComposition.NORMAL,)
+        self.compositions = compositions
         opportunity = OpportunityFactory.create(create_species(id=25))
         encounter = SafariEncounter(
             uuid4(),
@@ -374,6 +375,17 @@ async def test_start_for_testing_allows_a_single_participant():
     assert unlock.status is SafariUnlockStatus.CONSUMED
     assert await activity.get_session(100) is result.session
     assert result.session.participants_by_trainer[10].initial_balls == 9
+    assert result.generated_encounter.encounter.composition == SafariComposition.NORMAL
+
+
+@pytest.mark.asyncio
+async def test_start_for_testing_helper_forces_special_single_encounter_sequence():
+    compositions = StartSafariApplicationService._encounter_compositions_for(1)
+
+    assert compositions == (
+        SafariComposition.SOLITARY,
+        SafariComposition.NORMAL,
+    )
 
 
 @pytest.mark.asyncio

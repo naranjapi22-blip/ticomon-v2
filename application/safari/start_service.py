@@ -241,10 +241,21 @@ class StartSafariApplicationService:
         )
         generated = await self._encounter_generator.generate_with_events(
             context,
-            (SafariComposition.NORMAL,),
+            self._encounter_compositions_for(unlock.encounter_count),
         )
         session.publish_encounter(generated.encounter)
         return session, generated
+
+    @staticmethod
+    def _encounter_compositions_for(
+        encounter_count: int,
+    ) -> tuple[SafariComposition, ...]:
+        if encounter_count <= 1:
+            return (
+                SafariComposition.SOLITARY,
+                SafariComposition.NORMAL,
+            )
+        return (SafariComposition.NORMAL,)
 
     @staticmethod
     def _validate_unlock_configuration(unlock: SafariUnlock) -> None:
