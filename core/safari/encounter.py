@@ -14,6 +14,7 @@ from core.safari.domain import (
     SafariComposition,
     SafariEncounterStatus,
     SafariSlotStatus,
+    SafariThematicEvent,
 )
 
 
@@ -74,6 +75,7 @@ class SafariEncounter:
         composition: SafariComposition,
         slots: Collection[SafariEncounterSlot],
         is_regional_herd: bool = False,
+        event: SafariThematicEvent = SafariThematicEvent.NONE,
     ) -> None:
         _require_non_empty_uuid(id, "id")
         copied_slots = tuple(slots)
@@ -89,6 +91,7 @@ class SafariEncounter:
         self._slots = copied_slots
         self._slot_by_id = {slot.id: slot for slot in copied_slots}
         self._is_regional_herd = is_regional_herd
+        self._event = event
         self._eligible_participant_ids: frozenset[int] | None = None
         self._selections_by_trainer: dict[int, SafariCaptureSelection] = {}
         self._declined_participant_ids: set[int] = set()
@@ -109,6 +112,10 @@ class SafariEncounter:
     @property
     def is_regional_herd(self) -> bool:
         return self._is_regional_herd
+
+    @property
+    def event(self) -> SafariThematicEvent:
+        return self._event
 
     @property
     def eligible_participant_ids(self) -> frozenset[int]:

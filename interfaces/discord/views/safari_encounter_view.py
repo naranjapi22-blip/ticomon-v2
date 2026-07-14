@@ -17,6 +17,7 @@ from application.safari import (
     SafariSessionNotFound,
 )
 from core.safari import (
+    SafariComposition,
     SafariEncounter,
     SafariRouteOption,
     SafariSession,
@@ -221,12 +222,20 @@ class SafariEncounterView(discord.ui.View):
                 self.session.weather.value.title(),
             )
         )
-        return (
-            f"Safari Encounter {progress}/{self.session.total_encounters}\n"
-            f"{context}\n"
-            "Choose a Pokémon and the number of Safari Balls.\n"
-            f"Resolves in {SAFARI_SELECTION_SECONDS} seconds."
+        lines = [
+            f"Safari Encounter {progress}/{self.session.total_encounters}",
+            context,
+        ]
+        special_encounter = self._special_encounter_text()
+        if special_encounter is not None:
+            lines.append(special_encounter)
+        lines.extend(
+            (
+                "Choose a Pokémon and the number of Safari Balls.",
+                f"Resolves in {SAFARI_SELECTION_SECONDS} seconds.",
+            )
         )
+        return "\n".join(lines)
 
     async def build_file(self) -> discord.File:
         image = await asyncio.to_thread(self.renderer.render, self.session)
@@ -532,6 +541,51 @@ class SafariEncounterView(discord.ui.View):
                 ephemeral=True,
             )
         return True
+
+    def _special_encounter_text(self) -> str | None:
+        encounter = self._encounter()
+        labels: list[str] = []
+
+        composition_label = self._composition_label(encounter)
+        if composition_label is not None:
+            labels.append(composition_label)
+
+        event_label = self._event_label(encounter.event)
+        if event_label is not None:
+            labels.append(event_label)
+
+        if not labels:
+            return None
+        return "Special Encounter: " + " · ".join(labels)
+
+    @staticmethod
+    def _composition_label(encounter: SafariEncounter) -> str | None:
+        if encounter.composition is SafariComposition.NORMAL:
+            return "Regional Herd" if encounter.is_regional_herd else None
+        if encounter.composition is SafariComposition.SOLITARY:
+            return "Solitary Pokémon"
+        if encounter.composition is SafariComposition.DUEL:
+            return "Duel"
+        if encounter.composition is SafariComposition.HERD:
+            return "Herd"
+        if encounter.composition is SafariComposition.BABY_NEST:
+            return "Baby Nest"
+        if encounter.composition is SafariComposition.REGIONAL:
+            return (
+                "Regional Herd" if encounter.is_regional_herd else "Regional Encounter"
+            )
+        if encounter.composition is SafariComposition.LEGENDARY:
+            return "Legendary Pokémon"
+        if encounter.composition is SafariComposition.MYTHICAL:
+            return "Mythical Pokémon"
+        return None
+
+    @staticmethod
+    def _event_label(event) -> str | None:
+        value = getattr(event, "value", "NONE")
+        if value == "NONE":
+            return None
+        return str(value).replace("_", " ").title()
 
     def _assert_not_ended(self) -> None:
         if self._phase_ended:

@@ -61,10 +61,10 @@ class SafariEncounterRenderer:
             slot.opportunity.is_shiny,
         ).copy()
         sprite = ImageOps.contain(
-            sprite, (placement.width - 40, placement.height - 110)
+            sprite, (placement.width - 40, placement.height - 124)
         )
         sprite_x = (placement.width - sprite.width) // 2
-        sprite_y = 52
+        sprite_y = 68
         card.paste(sprite, (sprite_x, sprite_y), sprite)
 
         wrapped_name = self._wrap_name(
@@ -74,7 +74,7 @@ class SafariEncounterRenderer:
             (0, 0), wrapped_name, font=name_font, spacing=2
         )
         text_x = (placement.width - (bbox[2] - bbox[0])) // 2
-        text_y = placement.height - 56
+        text_y = placement.height - 44
         card_draw.multiline_text(
             (text_x, text_y),
             wrapped_name,

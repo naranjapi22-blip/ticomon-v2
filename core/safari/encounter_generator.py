@@ -372,6 +372,7 @@ class SafariEncounterGenerator:
             selected_species,
             composition,
             is_regional_herd=False,
+            event=event,
         )
 
     def _generate_regional_from_catalog(
@@ -422,6 +423,7 @@ class SafariEncounterGenerator:
             selected_species,
             SafariComposition.REGIONAL,
             is_regional_herd=regional_form == SafariRegionalEncounterForm.HERD,
+            event=event,
         )
 
     def _generate_extraordinary_from_catalog(
@@ -453,6 +455,7 @@ class SafariEncounterGenerator:
             selected,
             composition,
             is_regional_herd=False,
+            event=event,
         )
 
     def _build_encounter(
@@ -461,6 +464,7 @@ class SafariEncounterGenerator:
         composition: SafariComposition,
         *,
         is_regional_herd: bool,
+        event: SafariThematicEvent = SafariThematicEvent.NONE,
     ) -> SafariEncounter:
         slots = tuple(
             SafariEncounterSlot(
@@ -474,6 +478,7 @@ class SafariEncounterGenerator:
             composition=composition,
             slots=slots,
             is_regional_herd=is_regional_herd,
+            event=event,
         )
 
     @staticmethod
@@ -490,6 +495,7 @@ class SafariEncounterGenerator:
             composition=encounter.composition,
             slots=slots,
             is_regional_herd=encounter.is_regional_herd,
+            event=encounter.event,
         )
 
     def _select_species(

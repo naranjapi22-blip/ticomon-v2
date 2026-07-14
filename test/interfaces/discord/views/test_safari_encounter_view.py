@@ -5,7 +5,7 @@ import pytest
 
 from application.safari import ResolveSafariCaptureResult
 from application.safari.activity_state import SafariActivityTracker
-from core.safari import SafariSessionStatus
+from core.safari import SafariComposition, SafariSessionStatus, SafariThematicEvent
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.views.safari_encounter_view import (
     SafariBallCountView,
@@ -45,6 +45,51 @@ async def test_encounter_view_builds_attachment_message_and_pokedex_button() -> 
         "PokedexButton",
     ]
     assert any(isinstance(child, PokedexButton) for child in view.children)
+
+
+@pytest.mark.parametrize(
+    ("composition", "event", "expected"),
+    [
+        (
+            SafariComposition.SOLITARY,
+            SafariThematicEvent.NONE,
+            "Special Encounter: Solitary Pokémon",
+        ),
+        (
+            SafariComposition.DUEL,
+            SafariThematicEvent.NONE,
+            "Special Encounter: Duel",
+        ),
+        (
+            SafariComposition.HERD,
+            SafariThematicEvent.NONE,
+            "Special Encounter: Herd",
+        ),
+        (
+            SafariComposition.NORMAL,
+            SafariThematicEvent.FISHING,
+            "Special Encounter: Fishing",
+        ),
+    ],
+)
+def test_encounter_view_labels_special_encounters(
+    composition,
+    event,
+    expected,
+) -> None:
+    session = make_session()
+    encounter = make_encounter(
+        composition=composition,
+        event=event,
+    )
+    session.publish_encounter(encounter)
+    view = SafariEncounterView(
+        core=SimpleNamespace(),
+        guild_id=session.guild_id,
+        session=session,
+    )
+
+    assert expected in view.build_content()
 
 
 @pytest.mark.asyncio

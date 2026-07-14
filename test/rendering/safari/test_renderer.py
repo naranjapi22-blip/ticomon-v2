@@ -176,6 +176,38 @@ def test_encounter_renderer_keeps_slot_background_transparent() -> None:
     assert slot_pixel == background_pixel
 
 
+def test_encounter_renderer_places_sprites_lower() -> None:
+    class _FakeAssets:
+        @staticmethod
+        def get_background(_safari_map):
+            return Image.new("RGBA", (1020, 574), (120, 160, 200, 255))
+
+        @staticmethod
+        def get_sprite(_species_id, _shiny):
+            return Image.new("RGBA", (48, 48), (255, 255, 255, 255))
+
+        @staticmethod
+        def get_font(_size):
+            return ImageFont.load_default()
+
+    session = _session(1)
+    image = SafariEncounterRenderer(assets=_FakeAssets()).render(session)
+    placement = layout_slot_cards(1)[0]
+    background_pixel = image.getpixel((10, 10))
+
+    first_sprite_row = None
+    for y in range(placement.y, placement.y + placement.height):
+        for x in range(placement.x, placement.x + placement.width):
+            if image.getpixel((x, y)) != background_pixel:
+                first_sprite_row = y
+                break
+        if first_sprite_row is not None:
+            break
+
+    assert first_sprite_row is not None
+    assert first_sprite_row >= placement.y + 60
+
+
 def test_encounter_renderer_does_not_draw_slot_badges() -> None:
     class _FakeAssets:
         @staticmethod
@@ -201,9 +233,10 @@ def test_encounter_renderer_does_not_draw_slot_badges() -> None:
 
 
 def test_encounter_renderer_keeps_long_names_readable() -> None:
-    assert SafariEncounterRenderer.format_species_name(
-        "Dudunsparce-Three-Segment"
-    ) == "Dudunsparce (Three-Segment)"
+    assert (
+        SafariEncounterRenderer.format_species_name("Dudunsparce-Three-Segment")
+        == "Dudunsparce (Three-Segment)"
+    )
 
 
 def test_summary_renderer_renders_final_banner() -> None:

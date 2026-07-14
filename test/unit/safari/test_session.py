@@ -29,6 +29,7 @@ from core.safari import (
     SafariSessionClosed,
     SafariSessionStatus,
     SafariSlotStatus,
+    SafariThematicEvent,
     SafariTimeOfDay,
     SafariWeather,
     SafariZone,
@@ -84,6 +85,7 @@ def make_encounter(
     shiny: bool = False,
     composition: SafariComposition = SafariComposition.NORMAL,
     is_regional_herd: bool = False,
+    event: SafariThematicEvent = SafariThematicEvent.NONE,
 ) -> SafariEncounter:
     slots = []
     for species_id in species_ids:
@@ -101,6 +103,7 @@ def make_encounter(
         composition,
         slots,
         is_regional_herd=is_regional_herd,
+        event=event,
     )
 
 
