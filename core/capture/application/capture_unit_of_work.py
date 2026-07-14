@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
-from datetime import date
+from datetime import date, datetime
 
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature import Creature
+from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
 from core.safari.world import SafariWorld
 
@@ -24,6 +25,49 @@ class CaptureTransaction(ABC):
         inventory: CandyInventory,
     ) -> None:
         """Persists the trainer candy inventory within this transaction."""
+
+    async def get_or_create_daily_world(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> SafariDailyWorld:
+        """Locks and returns the daily world for a guild and cycle."""
+
+        raise NotImplementedError
+
+    async def save_daily_world(self, world: SafariDailyWorld) -> None:
+        """Persists the daily world state within this transaction."""
+
+        raise NotImplementedError
+
+    async def register_daily_active_trainer_if_absent(
+        self,
+        guild_id: int,
+        cycle_date: date,
+        trainer_id: int,
+        first_capture_at: datetime,
+    ) -> bool:
+        """Registers a trainer as active for the cycle if needed."""
+
+        raise NotImplementedError
+
+    async def count_daily_active_trainers(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> int:
+        """Returns the number of unique active trainers for the cycle."""
+
+        raise NotImplementedError
+
+    async def expire_available_unlocks_before(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> int:
+        """Expires available unlocks from prior cycles."""
+
+        raise NotImplementedError
 
     @abstractmethod
     async def get_or_create_world(

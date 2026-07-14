@@ -18,11 +18,12 @@ from core.capture.domain.capture_ball import CaptureBall
 from core.capture.domain.capture_result import CaptureResult
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
+    SafariDailyCaptureResult,
+    SafariDailyProgressService,
+    SafariDailyProgressSnapshot,
+    SafariDailyWorld,
     SafariMapInfluence,
     SafariUnlock,
-    SafariWorld,
-    SafariWorldProgressResult,
-    SafariWorldProgressService,
 )
 from core.spawn.exceptions import NoActiveSpawnSession
 from core.spawn.session import SpawnSession
@@ -47,13 +48,14 @@ class _CaptureService:
 
 class _Transaction(CaptureTransaction):
     def __init__(self, *, world=None, fail_at=None, events=None) -> None:
-        self.world = world
+        self.daily_world = world
         self.fail_at = fail_at
         self.events = events if events is not None else []
         self.inventory = CandyInventory()
         self.saved_creature = None
-        self.saved_world = None
+        self.saved_daily_world = None
         self.saved_unlocks = []
+        self.active_trainers: set[int] = set()
 
     async def save_creature(self, creature):
         self._record("creature")
@@ -67,16 +69,42 @@ class _Transaction(CaptureTransaction):
     async def save_candy_inventory(self, trainer_id, inventory):
         self._record("candies_save")
 
+    async def get_or_create_daily_world(self, guild_id, cycle_date):
+        self._record("daily_world_get")
+        if self.daily_world is None:
+            self.daily_world = SafariDailyWorld.create(guild_id, cycle_date)
+        return self.daily_world
+
+    async def save_daily_world(self, world):
+        self._record("daily_world_save")
+        self.saved_daily_world = world
+
+    async def register_daily_active_trainer_if_absent(
+        self,
+        guild_id,
+        cycle_date,
+        trainer_id,
+        first_capture_at,
+    ):
+        self._record("daily_active_register")
+        if trainer_id in self.active_trainers:
+            return False
+        self.active_trainers.add(trainer_id)
+        return True
+
+    async def count_daily_active_trainers(self, guild_id, cycle_date):
+        self._record("daily_active_count")
+        return len(self.active_trainers)
+
+    async def expire_available_unlocks_before(self, guild_id, cycle_date):
+        self._record("unlock_expire")
+        return 0
+
     async def get_or_create_world(self, guild_id, reset_date):
-        self._record("world_get")
-        if self.world is None:
-            self.world = SafariWorld.create(guild_id, reset_date)
-        return self.world
+        raise NotImplementedError
 
     async def save_world(self, world):
-        self._record("world_save")
-        self.saved_world = world
-        return world
+        raise NotImplementedError
 
     async def save_unlock(self, unlock):
         self._record("unlock")
@@ -120,13 +148,35 @@ class _SpawnRepository(InMemorySpawnSessionRepository):
 
 
 class _MultipleUnlockProgressService:
-    def register_capture(self, world, species_types, captured_at):
-        world.current_progress += 1
+    def register_capture(
+        self,
+        world,
+        species_types,
+        captured_at,
+        *,
+        active_player_count,
+    ):
+        world.daily_capture_count += 1
         unlocks = tuple(_unlock(index) for index in range(2))
-        return SafariWorldProgressResult(
-            created_unlocks=unlocks,
-            current_progress=world.current_progress,
+        snapshot = SafariDailyProgressSnapshot(
+            guild_id=world.guild_id,
+            cycle_date=world.cycle_date,
+            active_player_count=active_player_count,
+            effective_active_players=max(active_player_count, 1),
+            daily_capture_target=max(active_player_count, 1) * 16,
+            daily_capture_count=world.daily_capture_count,
             daily_unlock_count=world.daily_unlock_count,
+            thresholds=(1, 2, 3, 4, 5),
+            next_threshold=None,
+            captures_remaining=0,
+            all_unlocked=False,
+            current_influence=world.current_influence,
+        )
+        return SafariDailyCaptureResult(
+            world=world,
+            snapshot=snapshot,
+            created_unlocks=unlocks,
+            newly_reached_levels=(1, 2),
         )
 
 
@@ -153,32 +203,34 @@ async def test_success_persists_creature_candies_and_creates_world():
     assert result.creature.collection_number == 4
     assert transaction.inventory.get_amount(CandyType.FIRE) == 1
     assert transaction.inventory.get_amount(CandyType.WATER) == 1
-    assert transaction.saved_world is not None
-    assert transaction.saved_world.guild_id == GUILD_ID
-    assert transaction.saved_world.current_progress == 1
-    assert dict(transaction.saved_world.current_influence.amounts) == {
+    assert transaction.saved_daily_world is not None
+    assert transaction.saved_daily_world.guild_id == GUILD_ID
+    assert transaction.saved_daily_world.daily_capture_count == 1
+    assert dict(transaction.saved_daily_world.current_influence.amounts) == {
         "fire": 1,
         "water": 1,
     }
     assert transaction.saved_unlocks == []
+    assert "world_get" not in transaction.events
+    assert "world_save" not in transaction.events
     assert transaction.events[-2:] == ["commit", "clear"]
     assert await spawn.get_active(GUILD_ID) is None
 
 
 @pytest.mark.asyncio
 async def test_success_updates_existing_world_and_persists_threshold_unlock():
-    world = SafariWorld(
+    world = SafariDailyWorld(
         guild_id=GUILD_ID,
-        current_progress=99,
+        cycle_date=NOW.date(),
+        daily_capture_count=1,
         daily_unlock_count=0,
         current_influence=SafariMapInfluence({"grass": 2}),
-        last_daily_reset_date=NOW.date(),
     )
     service, transaction, _ = await _service(success=True, world=world)
 
     await service.capture(TRAINER_ID, GUILD_ID)
 
-    assert world.current_progress == 0
+    assert world.daily_capture_count == 2
     assert world.daily_unlock_count == 1
     assert len(transaction.saved_unlocks) == 1
     assert dict(transaction.saved_unlocks[0].map_influence.amounts) == {
@@ -210,14 +262,17 @@ async def test_all_unlocks_from_progress_result_are_saved_in_order():
             ["begin", "creature", "candies_get", "candies_save", "rollback"],
         ),
         (
-            "world_save",
+            "daily_world_save",
             [
                 "begin",
                 "creature",
                 "candies_get",
                 "candies_save",
-                "world_get",
-                "world_save",
+                "daily_world_get",
+                "unlock_expire",
+                "daily_active_register",
+                "daily_active_count",
+                "daily_world_save",
                 "rollback",
             ],
         ),
@@ -228,8 +283,11 @@ async def test_all_unlocks_from_progress_result_are_saved_in_order():
                 "creature",
                 "candies_get",
                 "candies_save",
-                "world_get",
-                "world_save",
+                "daily_world_get",
+                "unlock_expire",
+                "daily_active_register",
+                "daily_active_count",
+                "daily_world_save",
                 "unlock",
                 "rollback",
             ],
@@ -240,11 +298,11 @@ async def test_persistence_failure_rolls_back_and_keeps_spawn(
     failure,
     expected_events,
 ):
-    world = SafariWorld(
+    world = SafariDailyWorld(
         guild_id=GUILD_ID,
-        current_progress=99,
+        cycle_date=NOW.date(),
+        daily_capture_count=1,
         daily_unlock_count=0,
-        last_daily_reset_date=NOW.date(),
     )
     service, transaction, spawn = await _service(
         success=True,
@@ -256,6 +314,8 @@ async def test_persistence_failure_rolls_back_and_keeps_spawn(
         await service.capture(TRAINER_ID, GUILD_ID)
 
     assert transaction.events == expected_events
+    assert "world_get" not in transaction.events
+    assert "world_save" not in transaction.events
     assert "clear" not in transaction.events
     assert await spawn.get_active(GUILD_ID) is not None
 
@@ -323,8 +383,8 @@ async def _service(
         capture_service=_CaptureService(capture_result),
         unit_of_work=unit_of_work,
         reward_policy=RewardPolicy(),
-        world_progress_service=progress_service or SafariWorldProgressService(),
         spawn_session_repository=spawn,
+        daily_progress_service=progress_service or SafariDailyProgressService(),
         clock=lambda: NOW,
     )
     return service, transaction, spawn

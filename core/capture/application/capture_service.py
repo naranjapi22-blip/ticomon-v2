@@ -8,7 +8,7 @@ from core.capture.application.capture_application_result import (
 )
 from core.capture.application.capture_unit_of_work import CaptureUnitOfWork
 from core.capture.service import CaptureService
-from core.safari.progress_service import SafariWorldProgressService
+from core.safari.daily_progress import SafariDailyProgressService
 from core.spawn.exceptions import (
     NoActiveSpawnSession,
     NoSelectedOpportunity,
@@ -26,14 +26,16 @@ class CaptureApplicationService:
         capture_service: CaptureService,
         unit_of_work: CaptureUnitOfWork,
         reward_policy: RewardPolicy,
-        world_progress_service: SafariWorldProgressService,
         spawn_session_repository: SpawnSessionRepository,
+        daily_progress_service: SafariDailyProgressService | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._capture_service = capture_service
         self._unit_of_work = unit_of_work
         self._reward_policy = reward_policy
-        self._world_progress_service = world_progress_service
+        self._daily_progress_service = (
+            daily_progress_service or SafariDailyProgressService()
+        )
         self._spawn_session_repository = spawn_session_repository
         self._clock = clock or (lambda: datetime.now(UTC))
 
@@ -81,16 +83,32 @@ class CaptureApplicationService:
                 inventory.add(reward)
                 await transaction.save_candy_inventory(trainer_id, inventory)
 
-                world = await transaction.get_or_create_world(
+                cycle_date = captured_at.date()
+                daily_world = await transaction.get_or_create_daily_world(
                     guild_id,
-                    captured_at.date(),
+                    cycle_date,
                 )
-                progress = self._world_progress_service.register_capture(
-                    world=world,
+                await transaction.expire_available_unlocks_before(
+                    guild_id,
+                    cycle_date,
+                )
+                await transaction.register_daily_active_trainer_if_absent(
+                    guild_id,
+                    cycle_date,
+                    trainer_id,
+                    captured_at,
+                )
+                active_player_count = await transaction.count_daily_active_trainers(
+                    guild_id,
+                    cycle_date,
+                )
+                progress = self._daily_progress_service.register_capture(
+                    world=daily_world,
                     species_types=creature.species.types,
                     captured_at=captured_at,
+                    active_player_count=active_player_count,
                 )
-                await transaction.save_world(world)
+                await transaction.save_daily_world(progress.world)
 
                 for unlock in progress.created_unlocks:
                     await transaction.save_unlock(unlock)

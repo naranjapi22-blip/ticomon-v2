@@ -62,9 +62,9 @@ from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari.capture_resolution import SafariCaptureResolver
+from core.safari.daily_progress import SafariDailyProgressService
 from core.safari.encounter_generator import SafariEncounterGenerator
 from core.safari.map_selector import SafariMapSelector
-from core.safari.progress_service import SafariWorldProgressService
 from core.safari.route_option_factory import SafariRouteOptionFactory
 from core.safari.time_of_day_selector import SafariTimeOfDaySelector
 from core.safari.weather_selector import SafariWeatherSelector
@@ -229,8 +229,8 @@ def build_core(
         ),
         unit_of_work=NeonCaptureUnitOfWork(),
         reward_policy=reward_policy,
-        world_progress_service=SafariWorldProgressService(),
         spawn_session_repository=spawn_session_repository,
+        daily_progress_service=SafariDailyProgressService(),
     )
 
     safari_random = random.Random()

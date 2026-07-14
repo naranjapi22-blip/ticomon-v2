@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime
 
 from core.candy.candy_inventory import CandyInventory
 from core.capture.application.capture_unit_of_work import (
@@ -11,10 +11,12 @@ from core.capture.application.capture_unit_of_work import (
 )
 from core.creature.creature import Creature
 from core.creature.creature_mapper import CreatureMapper
+from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
 from core.safari.world import SafariWorld
 from infrastructure.db_config import get_pool
 from infrastructure.persistence.mappers.candy_mapper import CandyMapper
+from infrastructure.safari.daily_world_mapper import SafariDailyWorldMapper
 from infrastructure.safari.unlock_mapper import SafariUnlockMapper
 from infrastructure.safari.world_mapper import SafariWorldMapper
 
@@ -34,6 +36,7 @@ class _NeonCaptureTransaction(CaptureTransaction):
         self._connection = connection
         self._creature_mapper = CreatureMapper()
         self._candy_mapper = CandyMapper()
+        self._daily_world_mapper = SafariDailyWorldMapper()
         self._world_mapper = SafariWorldMapper()
         self._unlock_mapper = SafariUnlockMapper()
 
@@ -126,6 +129,124 @@ class _NeonCaptureTransaction(CaptureTransaction):
                 """,
                 [(trainer_id, candy_type.value, amount) for candy_type, amount in rows],
             )
+
+    async def get_or_create_daily_world(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> SafariDailyWorld:
+        await self._connection.execute(
+            """
+            INSERT INTO safari_daily_worlds (
+                guild_id,
+                cycle_date,
+                daily_capture_count,
+                daily_unlock_count,
+                current_influence
+            )
+            VALUES ($1, $2, $3, $4, $5::jsonb)
+            ON CONFLICT (guild_id, cycle_date) DO NOTHING
+            """,
+            *self._daily_world_mapper.to_row(
+                SafariDailyWorld.create(guild_id, cycle_date)
+            ),
+        )
+        row = await self._connection.fetchrow(
+            """
+            SELECT *
+            FROM safari_daily_worlds
+            WHERE guild_id = $1
+              AND cycle_date = $2
+            FOR UPDATE
+            """,
+            guild_id,
+            cycle_date,
+        )
+        assert row is not None
+        return self._daily_world_mapper.from_row(row)
+
+    async def save_daily_world(self, world: SafariDailyWorld) -> None:
+        await self._connection.execute(
+            """
+            INSERT INTO safari_daily_worlds (
+                guild_id,
+                cycle_date,
+                daily_capture_count,
+                daily_unlock_count,
+                current_influence
+            )
+            VALUES ($1, $2, $3, $4, $5::jsonb)
+            ON CONFLICT (guild_id, cycle_date) DO UPDATE
+            SET
+                daily_capture_count = EXCLUDED.daily_capture_count,
+                daily_unlock_count = EXCLUDED.daily_unlock_count,
+                current_influence = EXCLUDED.current_influence
+            """,
+            *self._daily_world_mapper.to_row(world),
+        )
+
+    async def register_daily_active_trainer_if_absent(
+        self,
+        guild_id: int,
+        cycle_date: date,
+        trainer_id: int,
+        first_capture_at: datetime,
+    ) -> bool:
+        row = await self._connection.fetchrow(
+            """
+            INSERT INTO safari_daily_active_trainers (
+                guild_id,
+                cycle_date,
+                trainer_id,
+                first_capture_at
+            )
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (guild_id, cycle_date, trainer_id) DO NOTHING
+            RETURNING trainer_id
+            """,
+            guild_id,
+            cycle_date,
+            trainer_id,
+            first_capture_at.astimezone(UTC)
+            if first_capture_at.tzinfo is not None
+            else first_capture_at.replace(tzinfo=UTC),
+        )
+        return row is not None
+
+    async def count_daily_active_trainers(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> int:
+        value = await self._connection.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM safari_daily_active_trainers
+            WHERE guild_id = $1
+              AND cycle_date = $2
+            """,
+            guild_id,
+            cycle_date,
+        )
+        return int(value or 0)
+
+    async def expire_available_unlocks_before(
+        self,
+        guild_id: int,
+        cycle_date: date,
+    ) -> int:
+        result = await self._connection.execute(
+            """
+            UPDATE safari_unlocks
+            SET status = 'EXPIRED'
+            WHERE guild_id = $1
+              AND cycle_date < $2
+              AND status = 'AVAILABLE'
+            """,
+            guild_id,
+            cycle_date,
+        )
+        return int(result.split()[-1]) if result else 0
 
     async def get_or_create_world(
         self,
