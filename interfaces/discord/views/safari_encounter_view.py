@@ -397,6 +397,10 @@ class SafariEncounterView(discord.ui.View):
                 tracker.clear_timer_task(self.guild_id, self._timer_task)
 
     async def _resolve_selection_timeout(self) -> None:
+        encounter = self._encounter()
+        encounter_id = encounter.id
+        encounter_index = self.session.completed_encounter_count + 1
+        session_id = self.session.id
         try:
             await self.core.safari_capture_application.close_capture_selection(
                 self.guild_id,
@@ -412,7 +416,7 @@ class SafariEncounterView(discord.ui.View):
             logger.warning(
                 "safari_selection_timeout_skipped guild_id=%s session_id=%s error=%s",
                 self.guild_id,
-                self.session.id,
+                session_id,
                 type(error).__name__,
             )
             return
@@ -420,7 +424,7 @@ class SafariEncounterView(discord.ui.View):
             logger.exception(
                 "safari_selection_timeout_resolution_failed guild_id=%s session_id=%s",
                 self.guild_id,
-                self.session.id,
+                session_id,
             )
             return
 
@@ -435,10 +439,10 @@ class SafariEncounterView(discord.ui.View):
             "guild_id=%s session_id=%s encounter_id=%s next_status=%s "
             "encounter_index=%s",
             self.guild_id,
-            self.session.id,
-            self._encounter().id,
+            session_id,
+            encounter_id,
             result.next_session_status.name,
-            self.session.completed_encounter_count + 1,
+            encounter_index,
         )
 
         if self.message is not None:
@@ -450,10 +454,10 @@ class SafariEncounterView(discord.ui.View):
                 "guild_id=%s session_id=%s encounter_id=%s next_status=%s "
                 "encounter_index=%s",
                 self.guild_id,
-                self.session.id,
-                self._encounter().id,
+                session_id,
+                encounter_id,
                 result.next_session_status.name,
-                self.session.completed_encounter_count + 1,
+                encounter_index,
             )
 
         if result.next_session_status is SafariSessionStatus.ROUTE_DECISION:
