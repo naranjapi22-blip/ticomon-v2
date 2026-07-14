@@ -102,9 +102,10 @@ async def test_complete_safari_flow_in_memory():
         encounter_generator=encounter_generator,
         random_source=random.Random(42),
     )
+    tracker = SafariActivityTracker()
     finish_service = FinishSafariApplicationService(
         activity_repository=activity_repository,
-        activity_tracker=SafariActivityTracker(),
+        activity_tracker=tracker,
         clock=lambda: NOW,
     )
 
@@ -179,3 +180,5 @@ async def test_complete_safari_flow_in_memory():
     assert finished.summary.totals.attempts_executed >= 0
     assert await activity_repository.get_activity(100) is None
     assert await activity_repository.get_session(100) is None
+    assert tracker.get(100).selection_deadline is None
+    assert tracker.get(100).route_vote_deadline is None

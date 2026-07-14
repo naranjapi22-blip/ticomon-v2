@@ -261,6 +261,7 @@ async def test_finish_builds_summary_and_clears_activity():
     assert result.summary.totals.balls_committed == 3
     assert await activity.get_session(session.guild_id) is None
     assert tracker.get(session.guild_id).selection_deadline is None
+    assert tracker.get(session.guild_id).route_vote_deadline is None
 
     with pytest.raises(SafariSessionNotFound):
         await service.finish(session.guild_id)
@@ -395,7 +396,7 @@ async def test_finish_rejects_active_session_and_keeps_activity():
 
 
 @pytest.mark.asyncio
-async def test_finish_does_not_clear_when_summary_build_fails():
+async def test_finish_clears_activity_when_summary_build_fails():
     class _FailingFinishService(FinishSafariApplicationService):
         def _build_summary(self, session, finished_at):
             raise RuntimeError("summary")
@@ -413,4 +414,6 @@ async def test_finish_does_not_clear_when_summary_build_fails():
     with pytest.raises(RuntimeError, match="summary"):
         await service.finish(session.guild_id)
 
-    assert await activity.get_session(session.guild_id) is session
+    assert await activity.get_session(session.guild_id) is None
+    assert tracker.get(session.guild_id).selection_deadline is None
+    assert tracker.get(session.guild_id).route_vote_deadline is None

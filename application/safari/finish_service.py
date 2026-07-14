@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Callable
@@ -53,28 +54,43 @@ class FinishSafariApplicationService:
         async with self._activity_repository.lock(guild_id):
             session = await self._require_session(guild_id)
             self._require_finalized(session)
-            finished_at = self._clock()
-            summary = self._build_summary(session, finished_at)
             try:
-                await self._activity_repository.clear_session(guild_id)
-                self._activity_tracker.clear(guild_id)
-            except Exception:
-                logger.exception(
-                    "failed to release safari activity guild_id=%s session_id=%s",
+                finished_at = self._clock()
+                summary = self._build_summary(session, finished_at)
+                logger.info(
+                    "safari_finished guild_id=%s session_id=%s finish_reason=%s "
+                    "encounters=%s participants=%s",
                     guild_id,
                     session.id,
+                    summary.finish_reason.value,
+                    summary.totals.encounters_completed,
+                    len(summary.ranking),
                 )
-                raise
-            logger.info(
-                "safari_finished guild_id=%s session_id=%s finish_reason=%s "
-                "encounters=%s participants=%s",
-                guild_id,
-                session.id,
-                summary.finish_reason.value,
-                summary.totals.encounters_completed,
-                len(summary.ranking),
-            )
-            return FinishSafariResult(session=session, summary=summary)
+                return FinishSafariResult(session=session, summary=summary)
+            finally:
+                suppress_cleanup_errors = sys.exc_info()[0] is not None
+                cleanup_error: Exception | None = None
+                try:
+                    await self._activity_repository.clear_session(guild_id)
+                except Exception as error:
+                    cleanup_error = error
+                    logger.exception(
+                        "failed to release safari activity guild_id=%s session_id=%s",
+                        guild_id,
+                        session.id,
+                    )
+                try:
+                    self._activity_tracker.clear(guild_id)
+                except Exception as error:
+                    if cleanup_error is None:
+                        cleanup_error = error
+                    logger.exception(
+                        "failed to clear safari tracker guild_id=%s session_id=%s",
+                        guild_id,
+                        session.id,
+                    )
+                if cleanup_error is not None and not suppress_cleanup_errors:
+                    raise cleanup_error
 
     async def _require_session(self, guild_id: int) -> SafariSession:
         session = await self._activity_repository.get_session(guild_id)
