@@ -335,6 +335,9 @@ def build_core(
         creature_repository=creature_repository,
     )
     logger.info("Application services initialized")
+    logger.warning(
+        "Safari sessions are currently in-memory and do not survive bot restarts."
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,

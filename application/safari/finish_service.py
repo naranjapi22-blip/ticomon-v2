@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Callable
@@ -33,6 +34,8 @@ from core.safari.history import (
 )
 from core.safari.session import SafariSession
 
+logger = logging.getLogger(__name__)
+
 
 class FinishSafariApplicationService:
     def __init__(
@@ -49,7 +52,24 @@ class FinishSafariApplicationService:
             self._require_finalized(session)
             finished_at = self._clock()
             summary = self._build_summary(session, finished_at)
-            await self._activity_repository.clear_session(guild_id)
+            try:
+                await self._activity_repository.clear_session(guild_id)
+            except Exception:
+                logger.exception(
+                    "failed to release safari activity guild_id=%s session_id=%s",
+                    guild_id,
+                    session.id,
+                )
+                raise
+            logger.info(
+                "safari_finished guild_id=%s session_id=%s finish_reason=%s "
+                "encounters=%s participants=%s",
+                guild_id,
+                session.id,
+                summary.finish_reason.value,
+                summary.totals.encounters_completed,
+                len(summary.ranking),
+            )
             return FinishSafariResult(session=session, summary=summary)
 
     async def _require_session(self, guild_id: int) -> SafariSession:

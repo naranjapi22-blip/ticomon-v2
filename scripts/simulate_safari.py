@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=CatalogSource.AUTO.value,
     )
     parser.add_argument("--global-shiny-chance", type=float, default=0.001)
+    parser.add_argument("--progress-interval", type=int, default=10_000)
     parser.add_argument("--output", type=Path)
     return parser
 
@@ -66,7 +67,49 @@ async def main() -> int:
         global_shiny_chance=args.global_shiny_chance,
         species_source=CatalogSource(args.species_source),
     )
-    report = await SafariSimulationRunner(config).run()
+    total_scenarios = (
+        len(config.levels) * len(config.participant_counts) * len(config.strategy_names)
+    )
+    completed_scenarios = 0
+
+    def progress_callback(
+        completed: int,
+        total: int,
+        strategy_name: str,
+        level: int,
+        participant_count: int,
+    ) -> None:
+        if (
+            completed == total
+            or args.progress_interval <= 0
+            or completed % args.progress_interval == 0
+        ):
+            print(
+                f"{completed:,} / {total:,} completed "
+                f"(level={level}, participants={participant_count}, "
+                f"strategy={strategy_name})",
+                flush=True,
+            )
+
+    def scenario_progress_callback(
+        completed: int,
+        total: int,
+        strategy_name: str,
+        level: int,
+        participant_count: int,
+    ) -> None:
+        nonlocal completed_scenarios
+        progress_callback(completed, total, strategy_name, level, participant_count)
+        if completed == total:
+            completed_scenarios += 1
+            print(
+                f"scenario {completed_scenarios:,} / {total_scenarios:,} complete",
+                flush=True,
+            )
+
+    report = await SafariSimulationRunner(config).run(
+        progress_callback=scenario_progress_callback,
+    )
     print(render_console_report(report))
     if args.output is not None:
         args.output.write_text(

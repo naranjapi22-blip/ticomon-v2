@@ -5,7 +5,7 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 from uuid import uuid4
 
 from application.safari import (
@@ -60,6 +60,8 @@ from simulation.safari.strategies import (
     DEFAULT_PLAYER_STRATEGIES,
     SafariPlayerStrategy,
 )
+
+SafariSimulationProgressCallback = Callable[[int, int, str, int, int], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +134,11 @@ class SafariSimulationRunner:
             strategy.name: strategy for strategy in DEFAULT_PLAYER_STRATEGIES
         }
 
-    async def run(self) -> SafariSimulationReport:
+    async def run(
+        self,
+        *,
+        progress_callback: SafariSimulationProgressCallback | None = None,
+    ) -> SafariSimulationReport:
         catalog, catalog_source = await self._load_species_catalog()
         scenarios: list[SafariScenarioReport] = []
         anomalies: list[str] = []
@@ -147,6 +153,7 @@ class SafariSimulationRunner:
                         participant_count=participant_count,
                         strategy=strategy,
                         catalog=catalog,
+                        progress_callback=progress_callback,
                     )
                     scenarios.append(
                         SafariScenarioReport(
@@ -173,6 +180,7 @@ class SafariSimulationRunner:
         participant_count: int,
         strategy: SafariPlayerStrategy,
         catalog: Sequence[Species],
+        progress_callback: SafariSimulationProgressCallback | None = None,
     ) -> ScenarioMetrics:
         metrics = ScenarioMetrics(
             level=level,
@@ -195,6 +203,14 @@ class SafariSimulationRunner:
                 run_index=run_index,
             )
             metrics.record_run(trace)
+            if progress_callback is not None:
+                progress_callback(
+                    run_index + 1,
+                    self._config.simulations,
+                    strategy.name,
+                    level,
+                    participant_count,
+                )
 
         self._append_balance_checks(metrics)
         return metrics

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 from datetime import datetime
 
@@ -22,6 +23,8 @@ from core.safari.route import SafariRouteOption
 from core.safari.route_option_factory import SafariRouteOptionFactory
 from core.safari.route_vote import SafariRouteVote
 from core.safari.session import SafariSession, SafariSessionStatus
+
+logger = logging.getLogger(__name__)
 
 
 class SafariRouteApplicationService:
@@ -56,6 +59,12 @@ class SafariRouteApplicationService:
             vote = SafariRouteVote(options, opened_at)
             session.start_route_vote(vote)
             await self._activity_repository.save_session(session)
+            logger.info(
+                "safari_route_vote_opened guild_id=%s session_id=%s options=%s",
+                guild_id,
+                session.id,
+                len(vote.options),
+            )
             return OpenSafariRouteVoteResult(
                 session=session,
                 vote=vote,
@@ -74,6 +83,15 @@ class SafariRouteApplicationService:
             replaced = trainer_id in vote.votes_by_trainer
             session.cast_route_vote(trainer_id, option_id)
             await self._activity_repository.save_session(session)
+            logger.debug(
+                "safari_route_vote_cast guild_id=%s session_id=%s trainer_id=%s "
+                "option_id=%s replaced=%s",
+                guild_id,
+                session.id,
+                trainer_id,
+                option_id,
+                replaced,
+            )
             return CastSafariRouteVoteResult(
                 session=session,
                 vote=vote,
@@ -94,6 +112,12 @@ class SafariRouteApplicationService:
             next_encounter = await self._generate_next_encounter(session)
             session.publish_encounter(next_encounter.encounter)
             await self._activity_repository.save_session(session)
+            logger.info(
+                "safari_route_resolved guild_id=%s session_id=%s selected_option=%s",
+                guild_id,
+                session.id,
+                vote_result.selected_option.id,
+            )
             return ResolveSafariRouteVoteResult(
                 session=session,
                 vote_result=vote_result,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import discord
 
 from application.bootstrap.core import CoreServices
@@ -9,8 +11,11 @@ from application.safari import (
     SafariSessionNotFound,
 )
 from core.safari import SafariRouteOption, SafariRouteVote, SafariSession
+from interfaces.discord.safari_errors import safari_error_message
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
 from rendering.safari.narrative import route_narrative
+
+logger = logging.getLogger(__name__)
 
 
 class SafariRouteOptionSelect(discord.ui.Select):
@@ -120,10 +125,16 @@ class SafariRouteView(discord.ui.View):
             SafariRouteVoteNotFound,
             SafariRouteVoteUnavailable,
         ) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         self.vote = result.vote
@@ -146,13 +157,21 @@ class SafariRouteView(discord.ui.View):
             SafariRouteVoteNotFound,
             SafariRouteVoteUnavailable,
         ) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         self.session = result.session
+        for child in self.children:
+            child.disabled = True
         view = SafariEncounterView(
             core=self.core,
             guild_id=self.guild_id,
@@ -179,3 +198,22 @@ class SafariRouteView(discord.ui.View):
 
         if self.message is not None:
             await self.message.edit(view=self)
+
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: Exception,
+        item: discord.ui.Item[discord.ui.View],
+    ) -> None:
+        logger.exception(
+            "safari_route_view_error guild_id=%s user_id=%s item=%s",
+            self.guild_id,
+            getattr(interaction.user, "id", None),
+            getattr(item, "label", item.__class__.__name__),
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Safari route interaction failed. Please try again.",
+                ephemeral=True,
+            )

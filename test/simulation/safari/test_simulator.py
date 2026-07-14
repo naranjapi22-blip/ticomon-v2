@@ -214,6 +214,34 @@ async def test_same_seed_produces_same_report():
 
 
 @pytest.mark.asyncio
+async def test_runner_reports_progress_during_runs():
+    config = SafariSimulationConfig(
+        simulations=3,
+        levels=(1,),
+        participant_counts=(2,),
+        strategy_names=("conservative",),
+        seed=42,
+        global_shiny_chance=0.0,
+        species_source=CatalogSource.AUTO,
+    )
+    progress_updates: list[tuple[int, int, str, int, int]] = []
+
+    report = await SafariSimulationRunner(
+        config,
+        species_catalog=_species_catalog(),
+    ).run(
+        progress_callback=lambda *args: progress_updates.append(args),
+    )
+
+    assert report.scenarios[0].metrics.runs == 3
+    assert progress_updates == [
+        (1, 3, "conservative", 1, 2),
+        (2, 3, "conservative", 1, 2),
+        (3, 3, "conservative", 1, 2),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_different_seeds_can_change_the_report():
     base = SafariSimulationConfig(
         simulations=2,

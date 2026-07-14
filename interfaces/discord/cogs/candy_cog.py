@@ -1,7 +1,11 @@
+import logging
+
 from discord import Embed
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
+
+logger = logging.getLogger(__name__)
 
 
 class CandyCog(commands.Cog):
@@ -25,18 +29,11 @@ class CandyCog(commands.Cog):
         )
 
         application_emojis = await ctx.bot.fetch_application_emojis()
-
-        print("APPLICATION ID:", ctx.bot.application_id)
-        print("APPLICATION EMOJIS COUNT:", len(application_emojis))
-
-        for emoji in application_emojis:
-            print(
-                "APPLICATION EMOJI:",
-                emoji.name,
-                emoji.id,
-                str(emoji),
-                emoji.is_application_owned(),
-            )
+        logger.debug(
+            "fetched application emojis application_id=%s count=%s",
+            ctx.bot.application_id,
+            len(application_emojis),
+        )
 
         emojis_by_name = {emoji.name: emoji for emoji in application_emojis}
 
@@ -61,13 +58,6 @@ class CandyCog(commands.Cog):
 
                 emoji = emojis_by_name.get(
                     emoji_name,
-                )
-
-                print(
-                    "LOOKING FOR:",
-                    emoji_name,
-                    "FOUND:",
-                    emoji,
                 )
 
                 emoji_text = str(emoji) if emoji is not None else "🍬"

@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -34,6 +35,8 @@ from core.safari.time_of_day_selector import SafariTimeOfDaySelector
 from core.safari.unlock import SafariUnlock
 from core.safari.unlock_repository import SafariUnlockRepository
 from core.safari.weather_selector import SafariWeatherSelector
+
+logger = logging.getLogger(__name__)
 
 
 class StartSafariApplicationService:
@@ -97,8 +100,40 @@ class StartSafariApplicationService:
                     "The Safari unlock reserved by this registration is unavailable."
                 )
 
-            await self._activity_repository.save_session(session)
+            logger.info(
+                "safari_unlocked guild_id=%s unlock_id=%s session_id=%s level=%s "
+                "encounter_count=%s participants=%s",
+                guild_id,
+                consumed_unlock.id,
+                session.id,
+                session.level,
+                session.total_encounters,
+                len(session.participants_by_trainer),
+            )
+
+            try:
+                await self._activity_repository.save_session(session)
+            except Exception:
+                logger.exception(
+                    "failed to persist safari session after unlock consumption "
+                    "guild_id=%s session_id=%s unlock_id=%s",
+                    guild_id,
+                    session.id,
+                    consumed_unlock.id,
+                )
+                raise
+
             registration.consume()
+            logger.info(
+                "safari_started guild_id=%s session_id=%s unlock_id=%s "
+                "participants=%s encounter_count=%s level=%s",
+                guild_id,
+                session.id,
+                consumed_unlock.id,
+                len(session.participants_by_trainer),
+                session.total_encounters,
+                session.level,
+            )
             return StartSafariResult(session, consumed_unlock, generated)
 
     async def _available_registered_unlock(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -19,8 +20,11 @@ from application.safari import (
 from core.safari import SafariEncounter, SafariSession, SafariSessionStatus
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.files import image_to_discord_file
+from interfaces.discord.safari_errors import safari_error_message
 from rendering.safari import SafariEncounterRenderer
 from rendering.safari.narrative import encounter_narrative
+
+logger = logging.getLogger(__name__)
 
 
 class SafariEncounterSlotSelect(discord.ui.Select):
@@ -207,10 +211,16 @@ class SafariEncounterView(discord.ui.View):
                 ball_count,
             )
         except (SafariSessionNotFound, SafariCaptureSelectionUnavailable) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         confirmation = SafariCaptureConfirmationView(
@@ -279,14 +289,22 @@ class SafariEncounterView(discord.ui.View):
             SafariCaptureSelectionUnavailable,
             SafariSessionNotFound,
         ) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         self.session = result.session
         if result.next_session_status is SafariSessionStatus.ROUTE_DECISION:
+            for child in self.children:
+                child.disabled = True
             from interfaces.discord.views.safari_route_view import SafariRouteView
 
             route_vote = await self.core.safari_route_application.open_route_vote(
@@ -309,6 +327,8 @@ class SafariEncounterView(discord.ui.View):
             return
 
         if result.next_session_status is SafariSessionStatus.ENCOUNTER:
+            for child in self.children:
+                child.disabled = True
             view = SafariEncounterView(
                 core=self.core,
                 guild_id=self.guild_id,
@@ -354,6 +374,25 @@ class SafariEncounterView(discord.ui.View):
 
         if self.message is not None:
             await self.message.edit(view=self)
+
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: Exception,
+        item: discord.ui.Item[discord.ui.View],
+    ) -> None:
+        logger.exception(
+            "safari_encounter_view_error guild_id=%s user_id=%s item=%s",
+            self.guild_id,
+            getattr(interaction.user, "id", None),
+            getattr(item, "label", item.__class__.__name__),
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Safari encounter interaction failed. Please try again.",
+                ephemeral=True,
+            )
 
     def _encounter(self) -> SafariEncounter:
         encounter = self.session.current_encounter
@@ -479,10 +518,16 @@ class SafariCaptureConfirmationView(discord.ui.View):
             SafariCaptureSelectionNotFound,
             SafariCaptureSelectionUnavailable,
         ) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         for child in self.children:
@@ -521,10 +566,16 @@ class SafariCaptureConfirmationView(discord.ui.View):
         try:
             await self.parent_view.decline_selection(interaction.user.id)
         except (SafariSessionNotFound, SafariCaptureSelectionUnavailable) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         for child in self.children:

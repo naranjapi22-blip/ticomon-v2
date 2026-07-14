@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 import discord
@@ -12,7 +13,10 @@ from application.safari import (
     StartSafariResult,
 )
 from core.safari.registration import SafariRegistrationClosed
+from interfaces.discord.safari_errors import safari_error_message
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
+
+logger = logging.getLogger(__name__)
 
 
 class SafariRegistrationView(discord.ui.View):
@@ -80,18 +84,21 @@ class SafariRegistrationView(discord.ui.View):
             )
         except SafariRegistrationNotFound:
             await interaction.response.send_message(
-                "Safari registration is no longer available.",
+                safari_error_message(SafariRegistrationNotFound()),
                 ephemeral=True,
             )
             return
         except SafariRegistrationClosed:
             await interaction.response.send_message(
-                "Safari registration is already closed.",
+                safari_error_message(SafariRegistrationClosed()),
                 ephemeral=True,
             )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         await interaction.response.edit_message(
@@ -115,26 +122,31 @@ class SafariRegistrationView(discord.ui.View):
             )
         except SafariRegistrationNotFound:
             await interaction.response.send_message(
-                "Safari registration is no longer available.",
+                safari_error_message(SafariRegistrationNotFound()),
                 ephemeral=True,
             )
             return
         except SafariInsufficientParticipants:
             await interaction.response.send_message(
-                "Safari requires at least two participants.",
+                safari_error_message(SafariInsufficientParticipants()),
                 ephemeral=True,
             )
             return
         except SafariUnlockUnavailable:
             await interaction.response.send_message(
-                "The Safari unlock is no longer available.",
+                safari_error_message(SafariUnlockUnavailable()),
                 ephemeral=True,
             )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
+        for child in self.children:
+            child.disabled = True
         view = SafariEncounterView(
             core=self.core,
             guild_id=self.guild_id,
@@ -161,12 +173,15 @@ class SafariRegistrationView(discord.ui.View):
             await self.core.safari_registration_application.cancel(self.guild_id)
         except SafariRegistrationNotFound:
             await interaction.response.send_message(
-                "Safari registration is no longer available.",
+                safari_error_message(SafariRegistrationNotFound()),
                 ephemeral=True,
             )
             return
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.response.send_message(
+                safari_error_message(error),
+                ephemeral=True,
+            )
             return
 
         for child in self.children:
@@ -184,3 +199,22 @@ class SafariRegistrationView(discord.ui.View):
 
         if self.message is not None:
             await self.message.edit(view=self)
+
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: Exception,
+        item: discord.ui.Item[discord.ui.View],
+    ) -> None:
+        logger.exception(
+            "safari_registration_view_error guild_id=%s user_id=%s item=%s",
+            self.guild_id,
+            getattr(interaction.user, "id", None),
+            getattr(item, "label", item.__class__.__name__),
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Safari registration failed. Please try again.",
+                ephemeral=True,
+            )

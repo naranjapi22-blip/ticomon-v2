@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from application.safari.exceptions import (
@@ -14,6 +15,8 @@ from core.safari.activity_repository import SafariActivityRepository
 from core.safari.domain import SAFARI_MAX_PARTICIPANTS
 from core.safari.registration import SafariRegistration
 from core.safari.unlock_repository import SafariUnlockRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SafariRegistrationApplicationService:
@@ -53,6 +56,15 @@ class SafariRegistrationApplicationService:
                 opened_at=opened_at,
             )
             await self._activity_repository.save_registration(registration)
+            logger.info(
+                "safari_registration_opened guild_id=%s unlock_id=%s trainer_id=%s "
+                "participant_count=%s capacity=%s",
+                guild_id,
+                unlock.id,
+                trainer_id,
+                registration.participant_count,
+                SAFARI_MAX_PARTICIPANTS,
+            )
             return OpenSafariRegistrationResult(
                 registration=registration,
                 unlock=unlock,
@@ -74,6 +86,14 @@ class SafariRegistrationApplicationService:
 
             already_registered = trainer_id in registration.participant_ids
             registration.join(trainer_id, SAFARI_MAX_PARTICIPANTS)
+            logger.debug(
+                "safari_participant_joined guild_id=%s trainer_id=%s added=%s "
+                "participant_count=%s",
+                guild_id,
+                trainer_id,
+                not already_registered,
+                registration.participant_count,
+            )
             return JoinSafariRegistrationResult(
                 added=not already_registered,
                 participant_count=registration.participant_count,
@@ -92,4 +112,5 @@ class SafariRegistrationApplicationService:
 
             registration.cancel()
             await self._activity_repository.clear_registration(guild_id)
+            logger.info("safari_registration_cancelled guild_id=%s", guild_id)
             return CancelSafariRegistrationResult(registration)

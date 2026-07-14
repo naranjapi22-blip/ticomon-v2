@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -53,6 +54,8 @@ from core.safari.history import (
 from core.safari.participant import NotEnoughSafariBalls, SafariParticipant
 from core.safari.session import SafariSession
 
+logger = logging.getLogger(__name__)
+
 
 class SafariCaptureApplicationService:
     def __init__(
@@ -89,6 +92,15 @@ class SafariCaptureApplicationService:
 
             session.select_capture(trainer_id, slot_id, ball_count)
             await self._activity_repository.save_session(session)
+            logger.debug(
+                "safari_selection_opened guild_id=%s trainer_id=%s slot_id=%s "
+                "balls=%s remaining_balls=%s",
+                guild_id,
+                trainer_id,
+                slot_id,
+                ball_count,
+                participant.remaining_balls,
+            )
 
             return SelectSafariCaptureResult(
                 session=session,
@@ -114,6 +126,14 @@ class SafariCaptureApplicationService:
 
             session.decline_capture(trainer_id)
             await self._activity_repository.save_session(session)
+            logger.debug(
+                "safari_selection_declined guild_id=%s trainer_id=%s "
+                "slot_id=%s remaining_balls=%s",
+                guild_id,
+                trainer_id,
+                selection.slot_id if selection is not None else None,
+                participant.remaining_balls,
+            )
 
             return DeclineSafariCaptureResult(
                 session=session,
@@ -145,6 +165,15 @@ class SafariCaptureApplicationService:
 
             confirmed = encounter.selection_for(trainer_id)
             assert confirmed is not None
+            logger.debug(
+                "safari_selection_confirmed guild_id=%s trainer_id=%s slot_id=%s "
+                "balls_spent=%s remaining_balls=%s",
+                guild_id,
+                trainer_id,
+                confirmed.slot_id,
+                confirmed.ball_count,
+                participant.remaining_balls,
+            )
 
             return ConfirmSafariCaptureSelectionResult(
                 session=session,
@@ -181,6 +210,15 @@ class SafariCaptureApplicationService:
                     session.decline_capture(trainer_id)
 
             await self._activity_repository.save_session(session)
+            logger.debug(
+                "safari_selection_closed guild_id=%s session_id=%s confirmed=%s "
+                "declined=%s status=%s",
+                guild_id,
+                session.id,
+                len(confirmed_ids),
+                len(encounter.declined_participant_ids),
+                encounter.status.value,
+            )
             return self._close_result(session, encounter)
 
     async def resolve_capture(
@@ -201,16 +239,37 @@ class SafariCaptureApplicationService:
                 resolution,
                 slot_application_results,
             )
-            session.apply_persisted_encounter_result(
-                persisted_result,
-                history_entry=history_entry,
+            try:
+                session.apply_persisted_encounter_result(
+                    persisted_result,
+                    history_entry=history_entry,
+                )
+                if (
+                    next_encounter is not None
+                    and session.status is SafariSessionStatus.ENCOUNTER
+                ):
+                    session.publish_encounter(next_encounter.encounter)
+                await self._activity_repository.save_session(session)
+            except Exception:
+                logger.exception(
+                    "failed to apply safari encounter result guild_id=%s "
+                    "session_id=%s encounter_id=%s",
+                    guild_id,
+                    session.id,
+                    encounter.id,
+                )
+                raise
+
+            logger.info(
+                "safari_encounter_resolved guild_id=%s session_id=%s encounter_id=%s "
+                "captured=%s escaped=%s next_status=%s",
+                guild_id,
+                session.id,
+                encounter.id,
+                sum(1 for result in slot_application_results if result.creature),
+                sum(1 for result in slot_application_results if not result.creature),
+                session.status.value,
             )
-            if (
-                next_encounter is not None
-                and session.status is SafariSessionStatus.ENCOUNTER
-            ):
-                session.publish_encounter(next_encounter.encounter)
-            await self._activity_repository.save_session(session)
 
             return ResolveSafariCaptureResult(
                 session=session,
