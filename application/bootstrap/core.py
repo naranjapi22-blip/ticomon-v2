@@ -154,6 +154,7 @@ class CoreServices:
     trade_repository: NeonTradeRepository
     trade_application: TradeApplicationService
     trade_display_service: TradeDisplayService
+    safari_unlock_repository: NeonSafariUnlockRepository
 
 
 def build_core(
@@ -368,4 +369,5 @@ def build_core(
         trade_repository=trade_repository,
         trade_application=trade_application,
         trade_display_service=trade_display_service,
+        safari_unlock_repository=safari_unlock_repository,
     )

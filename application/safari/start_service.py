@@ -65,6 +65,30 @@ class StartSafariApplicationService:
         guild_id: int,
         started_at: datetime,
     ) -> StartSafariResult:
+        return await self._start(
+            guild_id,
+            started_at,
+            minimum_participants=SAFARI_MIN_PARTICIPANTS,
+        )
+
+    async def start_for_testing(
+        self,
+        guild_id: int,
+        started_at: datetime,
+    ) -> StartSafariResult:
+        return await self._start(
+            guild_id,
+            started_at,
+            minimum_participants=1,
+        )
+
+    async def _start(
+        self,
+        guild_id: int,
+        started_at: datetime,
+        *,
+        minimum_participants: int,
+    ) -> StartSafariResult:
         async with self._activity_repository.lock(guild_id):
             registration = await self._activity_repository.get_registration(guild_id)
             if registration is None:
@@ -75,9 +99,11 @@ class StartSafariApplicationService:
                 raise SafariParticipantLimitReached(
                     "Safari registration participant limit exceeded."
                 )
-            if not registration.has_minimum(SAFARI_MIN_PARTICIPANTS):
+            if not registration.has_minimum(minimum_participants):
                 raise SafariInsufficientParticipants(
                     "Safari requires at least two participants."
+                    if minimum_participants > 1
+                    else "Safari requires at least one participant."
                 )
 
             unlock = await self._available_registered_unlock(registration)

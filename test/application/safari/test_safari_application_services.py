@@ -343,6 +343,22 @@ async def test_start_requires_global_minimum_without_consuming_unlock():
 
 
 @pytest.mark.asyncio
+async def test_start_for_testing_allows_a_single_participant():
+    activity = InMemorySafariActivityRepository()
+    unlock = _unlock()
+    unlocks = _UnlockRepository((unlock,))
+    await activity.save_registration(SafariRegistration(100, 1, (10,), NOW))
+    service, _ = _start_service(activity, unlocks)
+
+    result = await service.start_for_testing(100, NOW)
+
+    assert result.unlock.id == unlock.id
+    assert unlock.status is SafariUnlockStatus.CONSUMED
+    assert await activity.get_session(100) is result.session
+    assert result.session.participants_by_trainer[10].initial_balls == 9
+
+
+@pytest.mark.asyncio
 async def test_start_rejects_registration_above_global_capacity():
     activity = InMemorySafariActivityRepository()
     unlock = _unlock()
