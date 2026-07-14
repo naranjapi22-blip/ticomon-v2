@@ -20,11 +20,9 @@ async def test_route_view_renders_options() -> None:
         options=vote.options,
     )
 
-    embed = view.build_embed()
-
-    assert embed.title == "Safari Route Vote"
-    assert embed.description == "Vote for the next route."
-    assert len(embed.fields) == 0
+    assert view.build_content() == (
+        "Safari Route Vote\n" "Vote for the next route. Resolves in 30 seconds."
+    )
     assert [option.label for option in view.children[0].options] == [
         f"{'Stay at' if option.stays_in_same_zone else 'Advance to'} "
         f"{option.destination_zone.value.replace('_', ' ').title()}"
@@ -35,7 +33,7 @@ async def test_route_view_renders_options() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cast_vote_refreshes_route_view() -> None:
+async def test_cast_vote_is_silent() -> None:
     session = make_session()
     vote = make_vote(session.current_segment.zone)
     cast_route_vote = AsyncMock(
@@ -58,7 +56,6 @@ async def test_cast_vote_refreshes_route_view() -> None:
         vote=vote,
         options=vote.options,
     )
-    view.refresh = AsyncMock()
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=101),
         response=SimpleNamespace(
@@ -77,7 +74,6 @@ async def test_cast_vote_refreshes_route_view() -> None:
     )
     interaction.response.send_message.assert_not_awaited()
     interaction.response.defer.assert_awaited_once()
-    assert view.refresh.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -112,13 +108,22 @@ async def test_route_timeout_opens_next_encounter(monkeypatch) -> None:
         vote=vote,
         options=vote.options,
     )
-    view.message = AsyncMock()
+    view.message = SimpleNamespace(
+        channel=SimpleNamespace(send=AsyncMock()),
+        edit=AsyncMock(),
+    )
 
     await view._resolve_route_timeout()
 
+    assert view.message.edit.await_args.kwargs["content"] == (
+        f"Route selected: {view.format_option_label(vote.options[0])}"
+    )
     assert isinstance(
-        view.message.edit.await_args.kwargs["view"],
+        view.message.channel.send.await_args.kwargs["view"],
         SafariEncounterView,
+    )
+    assert view.message.channel.send.await_args.kwargs["file"].filename == (
+        "safari-encounter.png"
     )
 
 
@@ -139,5 +144,5 @@ async def test_route_timeout_edits_expired_note() -> None:
 
     assert (
         view.message.edit.await_args.kwargs["content"]
-        == "This Safari interface expired. Use !safariresume to continue."
+        == "This phase has already ended."
     )

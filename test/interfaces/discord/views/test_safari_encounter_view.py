@@ -1,4 +1,4 @@
-﻿from types import SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -8,7 +8,6 @@ from core.safari import SafariSessionStatus
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
 from interfaces.discord.views.safari_route_view import SafariRouteView
-from interfaces.discord.views.safari_summary import SafariSummaryView
 from test.unit.safari.test_session import make_encounter, make_session, make_vote
 
 
@@ -29,17 +28,14 @@ def _encounter_view(
 
 
 @pytest.mark.asyncio
-async def test_encounter_view_renders_slots_and_pokedex_button() -> None:
+async def test_encounter_view_builds_attachment_message_and_pokedex_button() -> None:
     view, _ = _encounter_view()
 
-    embed = view.build_embed()
+    content, file = await view.build_message()
 
-    assert embed.title.startswith("Safari Encounter")
-    assert (
-        embed.description == "Choose a Pokémon and the number of Safari Balls to use."
-    )
-    assert embed.image.url == "attachment://safari-encounter.png"
-    assert len(embed.fields) == 0
+    assert content.startswith("Safari Encounter")
+    assert "Choose a Pokémon and the number of Safari Balls." in content
+    assert file.filename == "safari-encounter.png"
     assert [child.__class__.__name__ for child in view.children] == [
         "SafariEncounterSlotSelect",
         "PokedexButton",
@@ -66,9 +62,8 @@ async def test_choose_slot_opens_ball_count_view() -> None:
 
 
 @pytest.mark.asyncio
-async def test_selection_flow_refreshes_the_parent_view() -> None:
+async def test_selection_flow_confirms_immediately() -> None:
     view, session = _encounter_view()
-    view.refresh = AsyncMock()
     view.core = SimpleNamespace(
         safari_capture_application=SimpleNamespace(
             select_capture=AsyncMock(
@@ -116,10 +111,13 @@ async def test_selection_flow_refreshes_the_parent_view() -> None:
     )
 
     await view.select_balls(interaction, session.current_encounter.slots[0].id, 1)
-    await view.decline_selection(1)
 
-    assert view.refresh.await_count == 2
     assert interaction.response.send_message.await_count == 1
+    assert (
+        "Selection confirmed:"
+        in interaction.response.send_message.await_args.kwargs["content"]
+    )
+    assert interaction.response.edit_message.await_count == 0
 
 
 @pytest.mark.asyncio
@@ -131,7 +129,10 @@ async def test_selection_timeout_transitions_to_route_view(monkeypatch) -> None:
     )
     view, session = _encounter_view()
     route_vote = make_vote(session.current_segment.zone)
-    view.message = AsyncMock()
+    view.message = SimpleNamespace(
+        channel=SimpleNamespace(send=AsyncMock()),
+        edit=AsyncMock(),
+    )
     view.core = SimpleNamespace(
         safari_capture_application=SimpleNamespace(
             close_capture_selection=AsyncMock(),
@@ -161,29 +162,24 @@ async def test_selection_timeout_transitions_to_route_view(monkeypatch) -> None:
 
     await view._resolve_selection_timeout()
 
-    kwargs = view.message.edit.await_args.kwargs
+    assert view.message.channel.send.await_count == 2
+    assert (
+        "Encounter Results"
+        in view.message.channel.send.await_args_list[0].kwargs["content"]
+    )
     assert isinstance(
-        kwargs["view"],
+        view.message.channel.send.await_args_list[1].kwargs["view"],
         SafariRouteView,
     )
-    assert kwargs["attachments"] == []
 
 
 @pytest.mark.asyncio
-async def test_selection_timeout_transitions_to_summary(monkeypatch) -> None:
-    monkeypatch.setattr(
-        SafariRouteView,
-        "start_route_timer",
-        lambda self: None,
-    )
+async def test_selection_timeout_transitions_to_summary() -> None:
     view, session = _encounter_view(remaining_encounters=1)
-    monkeypatch.setattr(SafariSummaryView, "build_embeds", lambda self: tuple())
-    monkeypatch.setattr(
-        SafariSummaryView,
-        "build_file",
-        AsyncMock(return_value=SimpleNamespace(filename="safari-summary.png")),
+    view.message = SimpleNamespace(
+        channel=SimpleNamespace(send=AsyncMock()),
+        edit=AsyncMock(),
     )
-    view.message = AsyncMock()
     view.core = SimpleNamespace(
         safari_capture_application=SimpleNamespace(
             close_capture_selection=AsyncMock(),
@@ -209,6 +205,7 @@ async def test_selection_timeout_transitions_to_summary(monkeypatch) -> None:
                         time_of_day=session.time_of_day,
                         finish_reason=SimpleNamespace(value="completed"),
                         totals=SimpleNamespace(encounters_completed=1),
+                        ranking=(),
                     )
                 )
             )
@@ -217,12 +214,10 @@ async def test_selection_timeout_transitions_to_summary(monkeypatch) -> None:
 
     await view._resolve_selection_timeout()
 
-    kwargs = view.message.edit.await_args.kwargs
-    assert isinstance(
-        kwargs["view"],
-        SafariSummaryView,
+    assert view.message.channel.send.await_count == 2
+    assert view.message.channel.send.await_args_list[1].kwargs["embeds"][0].title == (
+        "Safari Complete"
     )
-    assert kwargs["attachments"][0].filename == "safari-summary.png"
 
 
 @pytest.mark.asyncio
@@ -234,5 +229,26 @@ async def test_encounter_timeout_edits_expired_note() -> None:
 
     assert (
         view.message.edit.await_args.kwargs["content"]
-        == "This Safari interface expired. Use !safariresume to continue."
+        == "This phase has already ended."
+    )
+
+
+@pytest.mark.asyncio
+async def test_expired_encounter_rejects_old_callback() -> None:
+    view, session = _encounter_view()
+    view._phase_ended = True
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=1),
+        response=SimpleNamespace(
+            is_done=lambda: False,
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+        ),
+    )
+
+    await view.choose_slot(interaction, session.current_encounter.slots[0].id)
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "This phase has already ended.",
+        ephemeral=True,
     )

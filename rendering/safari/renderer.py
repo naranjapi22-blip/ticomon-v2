@@ -11,7 +11,7 @@ from core.safari.domain import SafariMap
 
 from .assets import SafariAssets
 from .layout import SlotPlacement, layout_slot_cards
-from .narrative import encounter_narrative, summary_narrative
+from .narrative import summary_narrative
 
 CANVAS_SIZE = (1020, 574)
 
@@ -42,31 +42,11 @@ class SafariEncounterRenderer:
         canvas = self._background(session.safari_map)
         draw = ImageDraw.Draw(canvas)
 
-        self._draw_header(
-            draw,
-            session.safari_map.value.title(),
-            session.weather.value.title(),
-            session.time_of_day.value.title(),
-            session.phase.value.title(),
-            session.completed_encounter_count + 1,
-            session.total_encounters,
-        )
-
-        narrative = encounter_narrative(
-            session.safari_map,
-            session.weather,
-            session.time_of_day,
-            session.phase,
-        )
-        self._draw_narrative(draw, narrative)
-
         placements = layout_slot_cards(len(encounter.slots))
         for index, (slot, placement) in enumerate(
             zip(encounter.slots, placements), start=1
         ):
             self._draw_slot_card(draw, canvas, slot, placement, index)
-
-        self._draw_footer(draw, session.current_segment.remaining_encounters)
         return canvas
 
     def _background(self, safari_map: SafariMap) -> Image.Image:
@@ -75,79 +55,10 @@ class SafariEncounterRenderer:
 
         overlay = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
-        overlay_draw.rectangle((0, 0, CANVAS_SIZE[0], 140), fill=(0, 0, 0, 92))
         overlay_draw.rectangle(
-            (0, CANVAS_SIZE[1] - 78, CANVAS_SIZE[0], CANVAS_SIZE[1]),
-            fill=(0, 0, 0, 96),
+            (0, 0, CANVAS_SIZE[0], CANVAS_SIZE[1]), fill=(0, 0, 0, 52)
         )
         return Image.alpha_composite(background, overlay)
-
-    def _draw_header(
-        self,
-        draw: ImageDraw.ImageDraw,
-        safari_map: str,
-        weather: str,
-        time_of_day: str,
-        phase: str,
-        encounter_number: int,
-        total_encounters: int,
-    ) -> None:
-        title_font = self.assets.get_font(28)
-        body_font = self.assets.get_font(16)
-        small_font = self.assets.get_font(13)
-
-        draw.text((32, 18), f"{safari_map} Safari", font=title_font, fill="white")
-        draw.text(
-            (32, 58),
-            f"{weather} • {time_of_day} • Phase {phase}",
-            font=body_font,
-            fill=(235, 240, 245, 255),
-        )
-        draw.text(
-            (32, 82),
-            f"Encounter {encounter_number} / {total_encounters}",
-            font=body_font,
-            fill=(235, 240, 245, 255),
-        )
-
-        bar_x = 32
-        bar_y = 112
-        bar_w = 440
-        bar_h = 14
-        progress = max(0.0, min(1.0, encounter_number / max(total_encounters, 1)))
-        draw.rounded_rectangle(
-            (bar_x, bar_y, bar_x + bar_w, bar_y + bar_h),
-            radius=7,
-            fill=(255, 255, 255, 42),
-        )
-        draw.rounded_rectangle(
-            (bar_x, bar_y, bar_x + int(bar_w * progress), bar_y + bar_h),
-            radius=7,
-            fill=PALETTE.accent,
-        )
-
-        draw.text(
-            (bar_x + bar_w + 18, bar_y - 1),
-            f"{int(progress * 100)}%",
-            font=small_font,
-            fill="white",
-        )
-
-    def _draw_narrative(self, draw: ImageDraw.ImageDraw, narrative: str) -> None:
-        font = self.assets.get_font(15)
-        wrapped = "\n".join(textwrap.wrap(narrative, width=96))
-        draw.multiline_text((32, 145), wrapped, font=font, fill=(248, 248, 248, 235))
-
-    def _draw_footer(
-        self, draw: ImageDraw.ImageDraw, remaining_encounters: int
-    ) -> None:
-        font = self.assets.get_font(15)
-        draw.text(
-            (32, CANVAS_SIZE[1] - 54),
-            f"{remaining_encounters} encounter(s) left in the current route segment.",
-            font=font,
-            fill="white",
-        )
 
     def _draw_slot_card(
         self,
@@ -171,12 +82,12 @@ class SafariEncounterRenderer:
             width=3,
         )
 
-        number_font = self.assets.get_font(22)
-        name_font = self.assets.get_font(18)
-        tag_font = self.assets.get_font(12)
+        number_font = self.assets.get_font(24)
+        name = self.format_species_name(slot.opportunity.species.name)
+        name_font = self._name_font_for(name, placement.width)
 
         card_draw.rounded_rectangle(
-            (16, 14, 56, 54),
+            (18, 16, 58, 56),
             radius=12,
             fill=border_color,
         )
@@ -184,8 +95,8 @@ class SafariEncounterRenderer:
         bbox = card_draw.textbbox((0, 0), number_text, font=number_font)
         card_draw.text(
             (
-                16 + (40 - (bbox[2] - bbox[0])) // 2,
-                14 + (40 - (bbox[3] - bbox[1])) // 2 - 2,
+                18 + (40 - (bbox[2] - bbox[0])) // 2,
+                16 + (40 - (bbox[3] - bbox[1])) // 2 - 2,
             ),
             number_text,
             font=number_font,
@@ -193,62 +104,57 @@ class SafariEncounterRenderer:
         )
 
         sprite = self.assets.get_sprite(slot.opportunity.species.id, shiny).copy()
-        sprite = ImageOps.contain(sprite, (placement.width - 70, placement.height - 90))
+        sprite = ImageOps.contain(
+            sprite, (placement.width - 40, placement.height - 110)
+        )
         sprite_x = (placement.width - sprite.width) // 2
-        sprite_y = 42
+        sprite_y = 52
         card.paste(sprite, (sprite_x, sprite_y), sprite)
 
-        species_name = slot.opportunity.species.name.title()
-        name = self._wrap_name(species_name, width=18)
-        bbox = card_draw.multiline_textbbox((0, 0), name, font=name_font, spacing=2)
+        wrapped_name = self._wrap_name(
+            name, width=self._name_wrap_width(placement.width)
+        )
+        bbox = card_draw.multiline_textbbox(
+            (0, 0), wrapped_name, font=name_font, spacing=2
+        )
         text_x = (placement.width - (bbox[2] - bbox[0])) // 2
-        text_y = placement.height - 60
+        text_y = placement.height - 56
         card_draw.multiline_text(
             (text_x, text_y),
-            name,
+            wrapped_name,
             font=name_font,
             fill="white",
             align="center",
             spacing=2,
         )
 
-        tag_x = placement.width // 2
-        tag_y = placement.height - 28
-        tag = "Shiny" if shiny else "Wild"
-        if slot.opportunity.initial_form is not None:
-            tag = f"{slot.opportunity.initial_form.name.title()} • {tag}"
-        self._draw_tag(card_draw, tag_x, tag_y, tag, tag_font)
-
         canvas.alpha_composite(card, (placement.x, placement.y))
 
-    def _draw_tag(
-        self,
-        draw: ImageDraw.ImageDraw,
-        center_x: int,
-        center_y: int,
-        text: str,
-        font,
-    ) -> None:
-        bbox = draw.textbbox((0, 0), text, font=font)
-        width = bbox[2] - bbox[0] + 24
-        height = bbox[3] - bbox[1] + 14
-        left = center_x - width // 2
-        top = center_y - height // 2
-        draw.rounded_rectangle(
-            (left, top, left + width, top + height),
-            radius=12,
-            fill=(0, 0, 0, 120),
-            outline=(255, 255, 255, 80),
-        )
-        draw.text(
-            (
-                left + 12,
-                top + 7,
-            ),
-            text,
-            font=font,
-            fill="white",
-        )
+    @staticmethod
+    def format_species_name(name: str) -> str:
+        parts = [part for part in name.replace("_", "-").split("-") if part]
+        if len(parts) >= 2 and len(parts[0]) > 3:
+            suffix = "-".join(part.title() for part in parts[1:])
+            return f"{parts[0].title()} ({suffix})"
+        return " ".join(part.title() for part in parts) or name.title()
+
+    def _name_font_for(self, name: str, width: int):
+        font_size = 24
+        while font_size > 14:
+            font = self.assets.get_font(font_size)
+            bbox = font.getbbox(name)
+            if bbox[2] - bbox[0] <= width - 34:
+                return font
+            font_size -= 2
+        return self.assets.get_font(14)
+
+    @staticmethod
+    def _name_wrap_width(width: int) -> int:
+        if width >= 600:
+            return 24
+        if width >= 400:
+            return 20
+        return 18
 
     @staticmethod
     def _wrap_name(name: str, width: int) -> str:

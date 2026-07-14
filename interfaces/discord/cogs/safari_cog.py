@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 
 from discord.ext import commands
@@ -14,6 +13,7 @@ from application.safari import (
 )
 from application.safari.results import OpenSafariRegistrationResult
 from core.safari import (
+    SAFARI_UNLOCK_THRESHOLD,
     SafariRegistration,
     SafariSession,
     SafariSessionStatus,
@@ -39,8 +39,6 @@ from interfaces.discord.views.safari_registration_view import (
 from interfaces.discord.views.safari_route_view import SafariRouteView
 from interfaces.discord.views.safari_summary import SafariSummaryView
 
-logger = logging.getLogger(__name__)
-
 
 class SafariCog(commands.Cog):
     def __init__(self, core: CoreServices) -> None:
@@ -52,11 +50,6 @@ class SafariCog(commands.Cog):
             await ctx.send("Safari can only be used in a server.")
             return
 
-        logger.debug(
-            "safari_command_invoked guild_id=%s trainer_id=%s",
-            ctx.guild.id,
-            ctx.author.id,
-        )
         try:
             result = await self.core.safari_registration_application.open(
                 ctx.guild.id,
@@ -64,10 +57,12 @@ class SafariCog(commands.Cog):
                 datetime.now(UTC),
             )
         except SafariUnlockUnavailable:
-            await ctx.send("No Safari unlock is available for this guild.")
+            await self._show_unlock_progress(ctx)
             return
         except SafariActivityAlreadyExists:
-            await ctx.send("A Safari activity is already active for this guild.")
+            await ctx.send(
+                "A Safari is already active.\nUse !safariresume to continue it."
+            )
             return
         except ValueError as error:
             await ctx.send(f"Safari could not be opened: {safari_error_message(error)}")
@@ -129,12 +124,6 @@ class SafariCog(commands.Cog):
                 "You must be the server owner or have administrator permissions."
             )
             return
-
-        logger.debug(
-            "safari_test_command_invoked guild_id=%s trainer_id=%s",
-            ctx.guild.id,
-            ctx.author.id,
-        )
 
         try:
             await self.core.safari_registration_application.open(
@@ -235,6 +224,7 @@ class SafariCog(commands.Cog):
             registration_result=result,
         )
         message = await ctx.send(
+            content=view.build_content(),
             embed=view.build_embed(),
             view=view,
         )
@@ -253,9 +243,9 @@ class SafariCog(commands.Cog):
             session=session,
             selection_deadline=selection_deadline,
         )
-        file = await view.build_file()
+        content, file = await view.build_message()
         message = await ctx.send(
-            embed=view.build_embed(),
+            content=content,
             file=file,
             view=view,
         )
@@ -327,7 +317,7 @@ class SafariCog(commands.Cog):
             route_vote_deadline=deadline,
         )
         message = await ctx.send(
-            embed=view.build_embed(),
+            content=view.build_content(),
             view=view,
         )
         view.message = message
@@ -392,8 +382,7 @@ class SafariCog(commands.Cog):
     async def _show_summary(self, ctx: commands.Context) -> None:
         finish_result = await self.core.safari_finish_application.finish(ctx.guild.id)
         view = SafariSummaryView(finish_result)
-        file = await view.build_file()
-        message = await self._send_summary_view(ctx, view, file)
+        message = await self._send_summary_view(ctx, view)
         view.message = message
 
     async def _build_registration_result(
@@ -439,11 +428,10 @@ class SafariCog(commands.Cog):
         ctx: commands.Context,
         view: SafariEncounterView,
     ) -> object:
-        file = await view.build_file()
         return await ctx.send(
-            embed=view.build_embed(),
+            content=view.build_content(),
             view=view,
-            file=file,
+            file=await view.build_file(),
         )
 
     async def _send_route_view(
@@ -452,7 +440,7 @@ class SafariCog(commands.Cog):
         view: SafariRouteView,
     ) -> object:
         return await ctx.send(
-            embed=view.build_embed(),
+            content=view.build_content(),
             view=view,
         )
 
@@ -460,10 +448,25 @@ class SafariCog(commands.Cog):
         self,
         ctx: commands.Context,
         view: SafariSummaryView,
-        file,
     ) -> object:
         return await ctx.send(
             embeds=view.build_embeds(),
             view=view,
-            file=file,
+        )
+
+    async def _show_unlock_progress(self, ctx: commands.Context) -> None:
+        world_repository = getattr(self.core, "safari_world_repository", None)
+        current_progress = 0
+        if world_repository is not None:
+            world = await world_repository.get_by_guild_id(ctx.guild.id)
+            if world is not None:
+                current_progress = world.current_progress
+
+        remaining = max(0, SAFARI_UNLOCK_THRESHOLD - current_progress)
+        await ctx.send(
+            (
+                "Safari is not unlocked yet.\n\n"
+                f"Safari progress: {current_progress} / {SAFARI_UNLOCK_THRESHOLD}\n"
+                f"{remaining} progress points remaining."
+            )
         )

@@ -143,6 +143,13 @@ def test_encounter_renderer_renders_supported_slot_counts(slot_count: int) -> No
     assert image.getbbox() is not None
 
 
+def test_encounter_renderer_formats_long_species_names() -> None:
+    assert (
+        SafariEncounterRenderer.format_species_name("Dudunsparce-Two-Segment")
+        == "Dudunsparce (Two-Segment)"
+    )
+
+
 def test_summary_renderer_renders_final_banner() -> None:
     image = SafariSummaryRenderer().render(_summary())
 

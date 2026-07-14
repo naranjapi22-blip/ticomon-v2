@@ -139,8 +139,8 @@ async def test_start_button_opens_encounter_view(monkeypatch) -> None:
         kwargs["view"],
         SafariEncounterView,
     )
+    assert kwargs["content"].startswith("Safari Encounter")
     assert kwargs["attachments"][0].filename == "safari-encounter.png"
-    assert kwargs["view"].build_embed().image.url == "attachment://safari-encounter.png"
 
 
 @pytest.mark.asyncio

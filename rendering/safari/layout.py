@@ -15,29 +15,29 @@ def layout_slot_cards(slot_count: int) -> tuple[SlotPlacement, ...]:
     if slot_count <= 0:
         return ()
     if slot_count == 1:
-        return (SlotPlacement(280, 178, 460, 230),)
+        return (SlotPlacement(185, 136, 650, 360),)
     if slot_count == 2:
         return (
-            SlotPlacement(95, 178, 410, 230),
-            SlotPlacement(515, 178, 410, 230),
+            SlotPlacement(40, 150, 450, 300),
+            SlotPlacement(530, 150, 450, 300),
         )
     if slot_count == 3:
         return (
-            SlotPlacement(40, 182, 300, 210),
-            SlotPlacement(360, 182, 300, 210),
-            SlotPlacement(680, 182, 300, 210),
+            SlotPlacement(30, 165, 310, 260),
+            SlotPlacement(355, 165, 310, 260),
+            SlotPlacement(680, 165, 310, 260),
         )
     if slot_count == 4:
         return (
-            SlotPlacement(100, 150, 390, 180),
-            SlotPlacement(530, 150, 390, 180),
-            SlotPlacement(100, 350, 390, 180),
-            SlotPlacement(530, 350, 390, 180),
+            SlotPlacement(25, 120, 460, 210),
+            SlotPlacement(535, 120, 460, 210),
+            SlotPlacement(25, 330, 460, 210),
+            SlotPlacement(535, 330, 460, 210),
         )
     return (
-        SlotPlacement(60, 152, 290, 160),
-        SlotPlacement(365, 152, 290, 160),
-        SlotPlacement(670, 152, 290, 160),
-        SlotPlacement(110, 334, 390, 160),
-        SlotPlacement(520, 334, 390, 160),
+        SlotPlacement(25, 124, 310, 210),
+        SlotPlacement(355, 124, 310, 210),
+        SlotPlacement(685, 124, 310, 210),
+        SlotPlacement(135, 344, 350, 190),
+        SlotPlacement(535, 344, 350, 190),
     )

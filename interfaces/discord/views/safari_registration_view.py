@@ -37,6 +37,12 @@ class SafariRegistrationView(discord.ui.View):
         self.registration_result = registration_result
         self.message: discord.Message | None = None
 
+    def build_content(self) -> str:
+        return (
+            "Safari Ready\n"
+            f"A level {self.registration_result.level} Safari is available."
+        )
+
     def build_embed(self) -> discord.Embed:
         registration = self.registration_result.registration
         participant_ids = sorted(registration.participant_ids)
@@ -158,9 +164,9 @@ class SafariRegistrationView(discord.ui.View):
             selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
         )
         view.message = self.message
-        file = await view.build_file()
+        content, file = await view.build_message()
         await interaction.response.edit_message(
-            embed=view.build_embed(),
+            content=content,
             view=view,
             attachments=[file],
         )

@@ -118,7 +118,11 @@ async def test_safari_command_reports_registration_errors() -> None:
 
     await SafariCog.safari.callback(cog, ctx)
 
-    ctx.send.assert_awaited_once_with("No Safari unlock is available for this guild.")
+    ctx.send.assert_awaited_once_with(
+        "Safari is not unlocked yet.\n\n"
+        "Safari progress: 0 / 100\n"
+        "100 progress points remaining."
+    )
 
 
 @pytest.mark.asyncio
@@ -137,7 +141,32 @@ async def test_safari_command_reports_existing_activity() -> None:
     await SafariCog.safari.callback(cog, ctx)
 
     ctx.send.assert_awaited_once_with(
-        "A Safari activity is already active for this guild."
+        "A Safari is already active.\nUse !safariresume to continue it."
+    )
+
+
+@pytest.mark.asyncio
+async def test_safari_command_reports_unlock_progress() -> None:
+    open_registration = AsyncMock(side_effect=SafariUnlockUnavailable())
+    core = SimpleNamespace(
+        safari_registration_application=SimpleNamespace(open=open_registration),
+        safari_world_repository=SimpleNamespace(
+            get_by_guild_id=AsyncMock(return_value=SimpleNamespace(current_progress=14))
+        ),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safari.callback(cog, ctx)
+
+    ctx.send.assert_awaited_once_with(
+        "Safari is not unlocked yet.\n\n"
+        "Safari progress: 14 / 100\n"
+        "86 progress points remaining."
     )
 
 
