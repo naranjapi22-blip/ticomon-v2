@@ -6,6 +6,7 @@ import pytest
 
 from application.safari import (
     OpenSafariRegistrationResult,
+    SafariRegistrationStillOpen,
     StartSafariResult,
 )
 from core.safari import SafariGeneratedEncounter, SafariThematicEvent
@@ -76,6 +77,7 @@ async def test_registration_view_renders_registration_state() -> None:
         "Start Safari",
         "Cancel Safari",
     ]
+    assert view.timeout is None
 
 
 @pytest.mark.asyncio
@@ -144,6 +146,37 @@ async def test_start_button_opens_encounter_view(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_button_reports_registration_still_open() -> None:
+    view = SafariRegistrationView(
+        core=SimpleNamespace(
+            start_safari_application=SimpleNamespace(
+                start=AsyncMock(side_effect=SafariRegistrationStillOpen(11)),
+            ),
+            safari_registration_application=SimpleNamespace(
+                join=AsyncMock(),
+                cancel=AsyncMock(),
+            ),
+        ),
+        guild_id=10,
+        registration_result=_registration_result(),
+    )
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(
+            send_message=AsyncMock(),
+            edit_message=AsyncMock(),
+        ),
+    )
+
+    await view.children[1].callback(interaction)
+
+    interaction.response.send_message.assert_awaited_once_with(
+        "Safari registration is still open. The expedition can start in 11 seconds.",
+        ephemeral=True,
+    )
+    interaction.response.edit_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_cancel_button_disables_registration_view() -> None:
     view = SafariRegistrationView(
         core=SimpleNamespace(
@@ -165,20 +198,3 @@ async def test_cancel_button_disables_registration_view() -> None:
 
     interaction.response.edit_message.assert_awaited_once()
     assert all(child.disabled for child in view.children)
-
-
-@pytest.mark.asyncio
-async def test_registration_view_timeout_edits_expired_note() -> None:
-    view = SafariRegistrationView(
-        core=SimpleNamespace(),
-        guild_id=10,
-        registration_result=_registration_result(),
-    )
-    view.message = AsyncMock()
-
-    await view.on_timeout()
-
-    assert (
-        view.message.edit.await_args.kwargs["content"]
-        == "This Safari interface expired. Use !safariresume to continue."
-    )

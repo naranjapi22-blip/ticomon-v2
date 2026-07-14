@@ -9,6 +9,7 @@ from application.bootstrap.core import CoreServices
 from application.safari import (
     SafariInsufficientParticipants,
     SafariRegistrationNotFound,
+    SafariRegistrationStillOpen,
     SafariUnlockUnavailable,
     StartSafariResult,
 )
@@ -31,7 +32,7 @@ class SafariRegistrationView(discord.ui.View):
         guild_id: int,
         registration_result,
     ) -> None:
-        super().__init__(timeout=300)
+        super().__init__(timeout=None)
 
         self.core = core
         self.guild_id = guild_id
@@ -146,6 +147,12 @@ class SafariRegistrationView(discord.ui.View):
         except SafariUnlockUnavailable:
             await interaction.response.send_message(
                 safari_error_message(SafariUnlockUnavailable()),
+                ephemeral=True,
+            )
+            return
+        except SafariRegistrationStillOpen as error:
+            await interaction.response.send_message(
+                safari_error_message(error),
                 ephemeral=True,
             )
             return
