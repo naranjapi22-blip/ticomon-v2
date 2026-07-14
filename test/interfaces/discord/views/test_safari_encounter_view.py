@@ -6,7 +6,10 @@ import pytest
 from application.safari import ResolveSafariCaptureResult
 from core.safari import SafariSessionStatus
 from interfaces.discord.buttons.pokedex_button import PokedexButton
-from interfaces.discord.views.safari_encounter_view import SafariEncounterView
+from interfaces.discord.views.safari_encounter_view import (
+    SafariBallCountView,
+    SafariEncounterView,
+)
 from interfaces.discord.views.safari_route_view import SafariRouteView
 from test.unit.safari.test_session import make_encounter, make_session, make_vote
 
@@ -59,6 +62,28 @@ async def test_choose_slot_opens_ball_count_view() -> None:
     kwargs = interaction.response.send_message.await_args.kwargs
     assert kwargs["ephemeral"] is True
     assert kwargs["view"].__class__.__name__ == "SafariBallCountView"
+    embed = kwargs["embed"]
+    assert embed.title == "Choose Safari Balls"
+    assert "Selected Pokémon:" in embed.description
+    assert "Remaining Balls:" in embed.description
+
+
+@pytest.mark.asyncio
+async def test_ball_count_view_uses_player_facing_copy() -> None:
+    view, session = _encounter_view()
+    selection_view = SafariBallCountView(
+        core=SimpleNamespace(),
+        parent_view=view,
+        trainer_id=1,
+        slot_id=session.current_encounter.slots[0].id,
+        slot_name="Starmie",
+        remaining_balls=3,
+    )
+
+    embed = selection_view.build_embed()
+
+    assert embed.title == "Choose Safari Balls"
+    assert embed.description == ("Selected Pokémon: **Starmie**\n" "Remaining Balls: 3")
 
 
 @pytest.mark.asyncio

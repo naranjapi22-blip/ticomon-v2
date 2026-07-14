@@ -610,8 +610,8 @@ class SafariBallCountView(discord.ui.View):
         return discord.Embed(
             title="Choose Safari Balls",
             description=(
-                f"Selected slot: **{self.slot_name}**\n"
-                f"Available Balls: {self.remaining_balls}"
+                f"Selected Pokémon: **{self.slot_name}**\n"
+                f"Remaining Balls: {self.remaining_balls}"
             ),
             color=discord.Color.blurple(),
         )
