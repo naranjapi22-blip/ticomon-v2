@@ -10,6 +10,7 @@ from application.safari import (
     OpenSafariRegistrationResult,
     ResolveSafariCaptureResult,
     SafariActivityAlreadyExists,
+    SafariRegistrationStillOpen,
     SafariUnlockAlreadyExists,
     SafariUnlockUnavailable,
     StartSafariResult,
@@ -135,6 +136,84 @@ async def test_safari_command_opens_registration_view() -> None:
     kwargs = ctx.send.await_args.kwargs
     assert isinstance(kwargs["view"], SafariRegistrationView)
     assert kwargs["embed"].title.endswith("Safari Registration")
+
+
+@pytest.mark.asyncio
+async def test_safari_command_starts_open_registration_after_wait(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(
+                return_value=SimpleNamespace(
+                    activity=_registration_result().registration,
+                    timing=SimpleNamespace(
+                        selection_deadline=None,
+                        route_vote_deadline=None,
+                    ),
+                )
+            )
+        ),
+        start_safari_application=SimpleNamespace(
+            start=AsyncMock(return_value=_start_result()),
+        ),
+        safari_registration_application=SimpleNamespace(open=AsyncMock()),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10),
+        author=SimpleNamespace(id=20),
+        channel=SimpleNamespace(
+            id=20,
+            fetch_message=AsyncMock(),
+        ),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safari.callback(cog, ctx)
+
+    core.start_safari_application.start.assert_awaited_once_with(10, ANY)
+    assert ctx.send.await_count == 1
+    assert ctx.send.await_args.kwargs["content"].startswith("Safari Encounter")
+
+
+@pytest.mark.asyncio
+async def test_safari_command_reports_registration_still_open() -> None:
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(
+                return_value=SimpleNamespace(
+                    activity=_registration_result().registration,
+                    timing=SimpleNamespace(
+                        selection_deadline=None,
+                        route_vote_deadline=None,
+                    ),
+                )
+            )
+        ),
+        start_safari_application=SimpleNamespace(
+            start=AsyncMock(
+                side_effect=SafariRegistrationStillOpen(42),
+            ),
+        ),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safari.callback(cog, ctx)
+
+    ctx.send.assert_awaited_once_with(
+        "Safari registration is still open. The expedition can start in 42 seconds."
+    )
 
 
 @pytest.mark.asyncio

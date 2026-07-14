@@ -20,3 +20,11 @@ def remaining_seconds(deadline: datetime | None) -> float:
         return 0.0
 
     return max(0.0, (deadline - datetime.now(UTC)).total_seconds())
+
+
+def format_registration_wait_message(remaining_seconds: int) -> str:
+    suffix = "second" if remaining_seconds == 1 else "seconds"
+    return (
+        "Safari registration is still open. "
+        f"The expedition can start in {remaining_seconds} {suffix}."
+    )

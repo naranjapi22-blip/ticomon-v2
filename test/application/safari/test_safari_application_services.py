@@ -1,16 +1,18 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 
 from application.safari import (
+    SAFARI_MINIMUM_REGISTRATION_SECONDS,
     AbortSafariApplicationService,
     GetSafariActivityApplicationService,
     SafariActivityAlreadyExists,
     SafariInsufficientParticipants,
     SafariRegistrationApplicationService,
     SafariRegistrationNotFound,
+    SafariRegistrationStillOpen,
     SafariUnlockUnavailable,
     StartSafariApplicationService,
 )
@@ -41,6 +43,7 @@ from infrastructure.safari.in_memory_safari_activity_repository import (
 from test.factories import create_species
 
 NOW = datetime(2026, 7, 13, 12, tzinfo=UTC)
+STARTABLE_AT = NOW - timedelta(seconds=SAFARI_MINIMUM_REGISTRATION_SECONDS)
 SESSION_ID = UUID("11111111-1111-1111-1111-111111111111")
 
 
@@ -188,6 +191,7 @@ async def test_open_reserves_available_unlock_without_consuming_it():
 
     assert result.registration.unlock_id == unlock.id
     assert result.registration.participant_ids == frozenset({10})
+    assert result.registration.opened_at == NOW
     assert result.capacity == SAFARI_MAX_PARTICIPANTS
     assert unlock.status is SafariUnlockStatus.AVAILABLE
     assert unlocks.consumed_ids == []
@@ -242,13 +246,14 @@ async def test_join_is_idempotent_and_enforces_global_capacity():
     tracker = SafariActivityTracker()
     unlocks = _UnlockRepository((_unlock(),))
     service = SafariRegistrationApplicationService(activity, unlocks, tracker)
-    await service.open(100, 1, NOW)
+    registration = (await service.open(100, 1, NOW)).registration
 
     first = await service.join(100, 2)
     duplicate = await service.join(100, 2)
     for trainer_id in range(3, SAFARI_MAX_PARTICIPANTS + 1):
         await service.join(100, trainer_id)
 
+    assert registration.opened_at == NOW
     assert first.added
     assert not duplicate.added
     assert duplicate.participant_count == 2
@@ -288,6 +293,24 @@ async def test_cancel_clears_activity_and_preserves_unlock():
 
 
 @pytest.mark.asyncio
+async def test_cancel_and_reopen_refreshes_opening_timestamp():
+    activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
+    unlock = _unlock()
+    unlocks = _UnlockRepository((unlock,))
+    service = SafariRegistrationApplicationService(activity, unlocks, tracker)
+
+    first = await service.open(100, 1, NOW)
+    await service.cancel(100)
+    reopened_at = NOW + timedelta(minutes=5)
+    second = await service.open(100, 2, reopened_at)
+
+    assert first.registration.opened_at == NOW
+    assert second.registration.opened_at == reopened_at
+    assert second.registration.opened_at != first.registration.opened_at
+
+
+@pytest.mark.asyncio
 async def test_start_builds_complete_session_then_consumes_exact_unlock_and_stores_it():
     events = []
     activity = _TrackingActivityRepository(events)
@@ -295,7 +318,7 @@ async def test_start_builds_complete_session_then_consumes_exact_unlock_and_stor
     reserved = _unlock(2)
     other = _unlock(1)
     unlocks = _UnlockRepository((other, reserved), events)
-    registration = SafariRegistration(100, 2, (20, 10), NOW)
+    registration = SafariRegistration(100, 2, (20, 10), STARTABLE_AT)
     await activity.save_registration(registration)
     generator = _EncounterGenerator(events)
     service, map_selector = _start_service(
@@ -347,11 +370,48 @@ async def test_start_builds_complete_session_then_consumes_exact_unlock_and_stor
 
 
 @pytest.mark.asyncio
+async def test_start_rejects_registration_before_minimum_window():
+    activity = InMemorySafariActivityRepository()
+    unlock = _unlock()
+    unlocks = _UnlockRepository((unlock,))
+    opened_at = NOW - timedelta(
+        seconds=SAFARI_MINIMUM_REGISTRATION_SECONDS - 1,
+        microseconds=900000,
+    )
+    await activity.save_registration(SafariRegistration(100, 1, (10, 20), opened_at))
+    service, _ = _start_service(activity, unlocks)
+
+    with pytest.raises(SafariRegistrationStillOpen) as exc_info:
+        await service.start(100, NOW)
+
+    assert exc_info.value.remaining_seconds == 1
+    assert unlock.status is SafariUnlockStatus.AVAILABLE
+    assert await activity.get_registration(100) is not None
+    assert await activity.get_session(100) is None
+
+
+@pytest.mark.asyncio
+async def test_start_allows_registration_once_minimum_window_is_reached():
+    activity = InMemorySafariActivityRepository()
+    unlock = _unlock()
+    unlocks = _UnlockRepository((unlock,))
+    opened_at = NOW - timedelta(seconds=SAFARI_MINIMUM_REGISTRATION_SECONDS)
+    await activity.save_registration(SafariRegistration(100, 1, (10, 20), opened_at))
+    service, _ = _start_service(activity, unlocks)
+
+    result = await service.start(100, NOW)
+
+    assert result.session is not None
+    assert unlock.status is SafariUnlockStatus.CONSUMED
+    assert await activity.get_session(100) is result.session
+
+
+@pytest.mark.asyncio
 async def test_start_requires_global_minimum_without_consuming_unlock():
     activity = InMemorySafariActivityRepository()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
-    await activity.save_registration(SafariRegistration(100, 1, (10,), NOW))
+    await activity.save_registration(SafariRegistration(100, 1, (10,), STARTABLE_AT))
     service, _ = _start_service(activity, unlocks)
 
     assert SAFARI_MIN_PARTICIPANTS == 2
@@ -366,7 +426,7 @@ async def test_start_for_testing_allows_a_single_participant():
     activity = InMemorySafariActivityRepository()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
-    await activity.save_registration(SafariRegistration(100, 1, (10,), NOW))
+    await activity.save_registration(SafariRegistration(100, 1, (10,), STARTABLE_AT))
     service, _ = _start_service(activity, unlocks)
 
     result = await service.start_for_testing(100, NOW)
@@ -392,7 +452,7 @@ async def test_start_for_testing_helper_forces_special_single_encounter_sequence
 async def test_get_activity_snapshot_exposes_deadlines():
     activity = InMemorySafariActivityRepository()
     tracker = SafariActivityTracker()
-    registration = SafariRegistration(100, 1, (10,), NOW)
+    registration = SafariRegistration(100, 1, (10,), STARTABLE_AT)
     await activity.save_registration(registration)
     tracker.set_selection_deadline(100, NOW)
 
@@ -408,7 +468,7 @@ async def test_get_activity_snapshot_exposes_deadlines():
 async def test_abort_clears_registration_and_timer_state():
     activity = InMemorySafariActivityRepository()
     tracker = SafariActivityTracker()
-    registration = SafariRegistration(100, 1, (10,), NOW)
+    registration = SafariRegistration(100, 1, (10,), STARTABLE_AT)
     await activity.save_registration(registration)
     tracker.set_selection_deadline(100, NOW)
 
@@ -426,7 +486,12 @@ async def test_start_rejects_registration_above_global_capacity():
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
     await activity.save_registration(
-        SafariRegistration(100, 1, range(1, SAFARI_MAX_PARTICIPANTS + 2), NOW)
+        SafariRegistration(
+            100,
+            1,
+            range(1, SAFARI_MAX_PARTICIPANTS + 2),
+            STARTABLE_AT,
+        )
     )
     service, _ = _start_service(activity, unlocks)
 
@@ -440,7 +505,7 @@ async def test_generation_failure_preserves_registration_and_unlock():
     activity = InMemorySafariActivityRepository()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
-    registration = SafariRegistration(100, 1, (10, 20), NOW)
+    registration = SafariRegistration(100, 1, (10, 20), STARTABLE_AT)
     await activity.save_registration(registration)
     generator = _EncounterGenerator(
         error=SafariEncounterGenerationError("empty catalog")
@@ -461,7 +526,7 @@ async def test_invalid_unlock_configuration_fails_before_generation_or_consumpti
     unlock = _unlock()
     unlock.encounter_count = 7
     unlocks = _UnlockRepository((unlock,))
-    await activity.save_registration(SafariRegistration(100, 1, (10, 20), NOW))
+    await activity.save_registration(SafariRegistration(100, 1, (10, 20), STARTABLE_AT))
     generator = _EncounterGenerator()
     service, _ = _start_service(activity, unlocks, generator)
 
@@ -481,7 +546,7 @@ async def test_unavailable_unlock_at_atomic_consume_does_not_store_session():
     activity = InMemorySafariActivityRepository()
     unlock = _unlock()
     unlocks = _LostUnlockRepository((unlock,))
-    registration = SafariRegistration(100, 1, (10, 20), NOW)
+    registration = SafariRegistration(100, 1, (10, 20), STARTABLE_AT)
     await activity.save_registration(registration)
     service, _ = _start_service(activity, unlocks)
 
@@ -502,7 +567,7 @@ async def test_in_memory_save_failure_occurs_after_consumption_and_is_not_rolled
     activity = _FailingActivityRepository()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
-    registration = SafariRegistration(100, 1, (10, 20), NOW)
+    registration = SafariRegistration(100, 1, (10, 20), STARTABLE_AT)
     await activity.save_registration(registration)
     service, _ = _start_service(activity, unlocks)
 
@@ -519,7 +584,7 @@ async def test_in_memory_save_failure_occurs_after_consumption_and_is_not_rolled
 async def test_concurrent_starts_create_one_session_and_consume_once():
     activity = InMemorySafariActivityRepository()
     unlocks = _UnlockRepository((_unlock(),))
-    await activity.save_registration(SafariRegistration(100, 1, (10, 20), NOW))
+    await activity.save_registration(SafariRegistration(100, 1, (10, 20), STARTABLE_AT))
     service, _ = _start_service(activity, unlocks)
 
     results = await asyncio.gather(

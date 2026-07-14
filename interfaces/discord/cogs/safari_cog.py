@@ -9,6 +9,7 @@ from application.safari import (
     SafariActivityAlreadyExists,
     SafariActivitySnapshot,
     SafariRegistrationNotFound,
+    SafariRegistrationStillOpen,
     SafariUnlockAlreadyExists,
     SafariUnlockUnavailable,
 )
@@ -55,6 +56,51 @@ class SafariCog(commands.Cog):
         if ctx.guild is None:
             await ctx.send("Safari can only be used in a server.")
             return
+
+        activity_application = getattr(self.core, "safari_activity_application", None)
+        snapshot = (
+            await activity_application.get(ctx.guild.id)
+            if activity_application is not None
+            else None
+        )
+        if snapshot is not None:
+            activity = snapshot.activity
+            if isinstance(activity, SafariRegistration):
+                try:
+                    result = await self.core.start_safari_application.start(
+                        ctx.guild.id,
+                        datetime.now(UTC),
+                    )
+                except SafariRegistrationStillOpen as error:
+                    await ctx.send(safari_error_message(error))
+                    return
+                except SafariRegistrationNotFound:
+                    await ctx.send("No Safari activity is available to resume.")
+                    return
+                except SafariUnlockUnavailable:
+                    await ctx.send(
+                        "No Safari unlock is available. "
+                        "Use !safariunlock [level] first."
+                    )
+                    return
+                except ValueError as error:
+                    await ctx.send(
+                        f"Safari could not be opened: {safari_error_message(error)}"
+                    )
+                    return
+
+                await self._send_encounter(
+                    ctx,
+                    result.session,
+                    selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
+                )
+                return
+
+            if isinstance(activity, SafariSession):
+                await ctx.send(
+                    "A Safari is already active.\nUse !safariresume to continue it."
+                )
+                return
 
         try:
             result = await self.core.safari_registration_application.open(

@@ -13,6 +13,7 @@ from .exceptions import (
     SafariInsufficientParticipants,
     SafariInvalidUnlockConfiguration,
     SafariRegistrationNotFound,
+    SafariRegistrationStillOpen,
     SafariRouteVoteNotFound,
     SafariRouteVoteUnavailable,
     SafariSessionNotFinished,
@@ -50,7 +51,10 @@ from .results import (
     StartSafariResult,
 )
 from .route_service import SafariRouteApplicationService
-from .start_service import StartSafariApplicationService
+from .start_service import (
+    SAFARI_MINIMUM_REGISTRATION_SECONDS,
+    StartSafariApplicationService,
+)
 
 __all__ = [
     "CancelSafariRegistrationResult",
@@ -90,10 +94,12 @@ __all__ = [
     "SafariRouteVoteUnavailable",
     "SafariRegistrationApplicationService",
     "SafariRegistrationNotFound",
+    "SafariRegistrationStillOpen",
     "SafariSessionNotFinished",
     "SafariSessionNotFound",
     "SafariUnlockAlreadyExists",
     "SafariUnlockUnavailable",
+    "SAFARI_MINIMUM_REGISTRATION_SECONDS",
     "StartSafariApplicationService",
     "StartSafariResult",
     "SelectSafariCaptureResult",

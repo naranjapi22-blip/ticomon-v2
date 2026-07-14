@@ -9,6 +9,7 @@ from application.safari import (
     SafariInsufficientParticipants,
     SafariInvalidUnlockConfiguration,
     SafariRegistrationNotFound,
+    SafariRegistrationStillOpen,
     SafariRouteVoteNotFound,
     SafariRouteVoteUnavailable,
     SafariSessionNotFinished,
@@ -17,6 +18,7 @@ from application.safari import (
 )
 from application.safari.exceptions import SafariApplicationError
 from core.safari.registration import SafariRegistrationClosed
+from interfaces.discord.safari_timing import format_registration_wait_message
 
 
 def safari_error_message(error: Exception) -> str:
@@ -30,6 +32,8 @@ def safari_error_message(error: Exception) -> str:
         return "Safari registration is no longer available."
     if isinstance(error, SafariRegistrationClosed):
         return "Safari registration is already closed."
+    if isinstance(error, SafariRegistrationStillOpen):
+        return format_registration_wait_message(error.remaining_seconds)
     if isinstance(error, SafariInsufficientParticipants):
         return "Safari requires at least two participants."
     if isinstance(error, SafariInvalidUnlockConfiguration):

@@ -22,6 +22,12 @@ class SafariRegistrationNotFound(SafariApplicationError):
     pass
 
 
+class SafariRegistrationStillOpen(SafariApplicationError):
+    def __init__(self, remaining_seconds: int) -> None:
+        self.remaining_seconds = remaining_seconds
+        super().__init__("Safari registration is still open.")
+
+
 class SafariSessionNotFound(SafariApplicationError):
     pass
 

@@ -1,12 +1,14 @@
 import logging
 from collections.abc import Callable
 from datetime import datetime
+from math import ceil
 from uuid import UUID, uuid4
 
 from application.safari.exceptions import (
     SafariInsufficientParticipants,
     SafariInvalidUnlockConfiguration,
     SafariRegistrationNotFound,
+    SafariRegistrationStillOpen,
     SafariUnlockUnavailable,
 )
 from application.safari.results import StartSafariResult
@@ -37,6 +39,8 @@ from core.safari.unlock_repository import SafariUnlockRepository
 from core.safari.weather_selector import SafariWeatherSelector
 
 logger = logging.getLogger(__name__)
+
+SAFARI_MINIMUM_REGISTRATION_SECONDS = 60
 
 
 class StartSafariApplicationService:
@@ -69,6 +73,7 @@ class StartSafariApplicationService:
             guild_id,
             started_at,
             minimum_participants=SAFARI_MIN_PARTICIPANTS,
+            minimum_registration_seconds=SAFARI_MINIMUM_REGISTRATION_SECONDS,
         )
 
     async def start_for_testing(
@@ -80,6 +85,7 @@ class StartSafariApplicationService:
             guild_id,
             started_at,
             minimum_participants=1,
+            minimum_registration_seconds=0,
         )
 
     async def _start(
@@ -88,6 +94,7 @@ class StartSafariApplicationService:
         started_at: datetime,
         *,
         minimum_participants: int,
+        minimum_registration_seconds: int,
     ) -> StartSafariResult:
         async with self._activity_repository.lock(guild_id):
             registration = await self._activity_repository.get_registration(guild_id)
@@ -95,6 +102,11 @@ class StartSafariApplicationService:
                 raise SafariRegistrationNotFound("Safari registration was not found.")
             if registration.status is not SafariRegistrationStatus.OPEN:
                 raise SafariRegistrationClosed("Safari registration is closed.")
+            self._validate_registration_window(
+                registration.opened_at,
+                started_at,
+                minimum_registration_seconds,
+            )
             if registration.participant_count > SAFARI_MAX_PARTICIPANTS:
                 raise SafariParticipantLimitReached(
                     "Safari registration participant limit exceeded."
@@ -161,6 +173,20 @@ class StartSafariApplicationService:
                 session.level,
             )
             return StartSafariResult(session, consumed_unlock, generated)
+
+    @staticmethod
+    def _validate_registration_window(
+        opened_at: datetime,
+        started_at: datetime,
+        minimum_registration_seconds: int,
+    ) -> None:
+        if minimum_registration_seconds <= 0:
+            return
+
+        elapsed_seconds = (started_at - opened_at).total_seconds()
+        remaining_seconds = ceil(minimum_registration_seconds - elapsed_seconds)
+        if remaining_seconds > 0:
+            raise SafariRegistrationStillOpen(remaining_seconds)
 
     async def _available_registered_unlock(
         self,
