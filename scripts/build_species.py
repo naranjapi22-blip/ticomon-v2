@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import requests
-
 from core.evolution.stage_resolver import StageResolver
+
 from core.spawn.spawn_rarity_classifier import SpawnRarityClassifier
 
 BASE_URL = "https://pokeapi.co/api/v2"
