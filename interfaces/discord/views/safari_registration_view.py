@@ -14,6 +14,10 @@ from application.safari import (
 )
 from core.safari.registration import SafariRegistrationClosed
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_timing import (
+    SAFARI_SELECTION_SECONDS,
+    deadline_after,
+)
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
 
 logger = logging.getLogger(__name__)
@@ -151,6 +155,7 @@ class SafariRegistrationView(discord.ui.View):
             core=self.core,
             guild_id=self.guild_id,
             session=result.session,
+            selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
         )
         view.message = self.message
         file = await view.build_file()
@@ -159,6 +164,7 @@ class SafariRegistrationView(discord.ui.View):
             view=view,
             attachments=[file],
         )
+        view.start_selection_timer()
 
     @discord.ui.button(
         label="Cancel Safari",
@@ -187,6 +193,10 @@ class SafariRegistrationView(discord.ui.View):
         for child in self.children:
             child.disabled = True
 
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear(self.guild_id)
+
         await interaction.response.edit_message(
             content="Safari registration cancelled.",
             embed=None,
@@ -198,7 +208,12 @@ class SafariRegistrationView(discord.ui.View):
             child.disabled = True
 
         if self.message is not None:
-            await self.message.edit(view=self)
+            await self.message.edit(
+                content=(
+                    "This Safari interface expired. Use !safariresume to continue."
+                ),
+                view=self,
+            )
 
     async def on_error(
         self,

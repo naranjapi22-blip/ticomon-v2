@@ -106,7 +106,12 @@ async def test_join_button_refreshes_message() -> None:
 
 
 @pytest.mark.asyncio
-async def test_start_button_opens_encounter_view() -> None:
+async def test_start_button_opens_encounter_view(monkeypatch) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
     view = SafariRegistrationView(
         core=SimpleNamespace(
             start_safari_application=SimpleNamespace(
@@ -135,6 +140,7 @@ async def test_start_button_opens_encounter_view() -> None:
         SafariEncounterView,
     )
     assert kwargs["attachments"][0].filename == "safari-encounter.png"
+    assert kwargs["view"].build_embed().image.url == "attachment://safari-encounter.png"
 
 
 @pytest.mark.asyncio
@@ -159,3 +165,20 @@ async def test_cancel_button_disables_registration_view() -> None:
 
     interaction.response.edit_message.assert_awaited_once()
     assert all(child.disabled for child in view.children)
+
+
+@pytest.mark.asyncio
+async def test_registration_view_timeout_edits_expired_note() -> None:
+    view = SafariRegistrationView(
+        core=SimpleNamespace(),
+        guild_id=10,
+        registration_result=_registration_result(),
+    )
+    view.message = AsyncMock()
+
+    await view.on_timeout()
+
+    assert (
+        view.message.edit.await_args.kwargs["content"]
+        == "This Safari interface expired. Use !safariresume to continue."
+    )

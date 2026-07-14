@@ -10,6 +10,10 @@ class SafariActivityAlreadyExists(SafariApplicationError):
     pass
 
 
+class SafariActivityNotFound(SafariApplicationError):
+    pass
+
+
 class SafariRegistrationNotFound(SafariApplicationError):
     pass
 

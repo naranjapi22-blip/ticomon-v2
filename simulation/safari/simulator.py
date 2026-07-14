@@ -15,6 +15,7 @@ from application.safari import (
     SafariRouteApplicationService,
     StartSafariApplicationService,
 )
+from application.safari.activity_state import SafariActivityTracker
 from core.candy.reward_policy import RewardPolicy
 from core.capture.attempt_service import CaptureAttemptService
 from core.capture.domain.capture_chance_calculator import CaptureChanceCalculator
@@ -239,6 +240,7 @@ class SafariSimulationRunner:
         )
 
         activity_repository = InMemorySafariActivityRepository()
+        activity_tracker = SafariActivityTracker()
         unlock_repository = InMemorySafariUnlockRepository()
         capture_unit_of_work = InMemoryCaptureUnitOfWork()
         reward_policy = RewardPolicy()
@@ -250,6 +252,7 @@ class SafariSimulationRunner:
         registration_service = SafariRegistrationApplicationService(
             activity_repository=activity_repository,
             unlock_repository=unlock_repository,
+            activity_tracker=activity_tracker,
         )
         start_service = StartSafariApplicationService(
             activity_repository=activity_repository,
@@ -278,6 +281,7 @@ class SafariSimulationRunner:
         )
         finish_service = FinishSafariApplicationService(
             activity_repository=activity_repository,
+            activity_tracker=activity_tracker,
             clock=lambda: datetime.now(timezone.utc),
         )
 

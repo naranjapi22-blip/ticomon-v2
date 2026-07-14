@@ -12,6 +12,7 @@ from application.safari import (
     SafariRouteApplicationService,
     StartSafariApplicationService,
 )
+from application.safari.activity_state import SafariActivityTracker
 from core.candy.reward_policy import RewardPolicy
 from core.capture.attempt_service import CaptureAttemptService
 from core.capture.domain.capture_chance_calculator import CaptureChanceCalculator
@@ -84,6 +85,7 @@ async def test_complete_safari_flow_in_memory():
     registration_service = SafariRegistrationApplicationService(
         activity_repository=activity_repository,
         unlock_repository=unlock_repository,
+        activity_tracker=SafariActivityTracker(),
     )
     route_service = SafariRouteApplicationService(
         activity_repository=activity_repository,
@@ -102,6 +104,7 @@ async def test_complete_safari_flow_in_memory():
     )
     finish_service = FinishSafariApplicationService(
         activity_repository=activity_repository,
+        activity_tracker=SafariActivityTracker(),
         clock=lambda: NOW,
     )
 

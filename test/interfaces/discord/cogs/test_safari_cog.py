@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock
 
@@ -6,18 +6,27 @@ import pytest
 
 from application.safari import (
     OpenSafariRegistrationResult,
+    ResolveSafariCaptureResult,
     SafariActivityAlreadyExists,
     SafariUnlockUnavailable,
     StartSafariResult,
 )
 from core.safari import SafariGeneratedEncounter, SafariThematicEvent
-from core.safari.domain import SAFARI_LEVEL_CONFIGS, SafariMapInfluence
+from core.safari.domain import (
+    SAFARI_LEVEL_CONFIGS,
+    SafariMapInfluence,
+    SafariSessionStatus,
+)
 from core.safari.registration import SafariRegistration
 from core.safari.unlock import SafariUnlock
 from interfaces.discord.cogs.safari_cog import SafariCog
+from interfaces.discord.views.safari_abort_confirm_view import (
+    SafariAbortConfirmView,
+)
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
 from interfaces.discord.views.safari_registration_view import SafariRegistrationView
-from test.unit.safari.test_session import make_encounter, make_session
+from interfaces.discord.views.safari_route_view import SafariRouteView
+from test.unit.safari.test_session import make_encounter, make_session, make_vote
 
 
 def _registration_result() -> OpenSafariRegistrationResult:
@@ -264,7 +273,14 @@ async def test_safariunlock_rejects_dm_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_safaritest_opens_solo_registration_and_shows_first_encounter() -> None:
+async def test_safaritest_opens_solo_registration_and_shows_first_encounter(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
     open_registration = AsyncMock(return_value=_registration_result())
     start_test = AsyncMock(return_value=_start_result())
     core = SimpleNamespace(
@@ -292,7 +308,14 @@ async def test_safaritest_opens_solo_registration_and_shows_first_encounter() ->
 
 
 @pytest.mark.asyncio
-async def test_safaritest_joins_existing_registration_idempotently() -> None:
+async def test_safaritest_joins_existing_registration_idempotently(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
     open_registration = AsyncMock(side_effect=SafariActivityAlreadyExists())
     join_registration = AsyncMock(return_value=_registration_result())
     start_test = AsyncMock(return_value=_start_result())
@@ -346,3 +369,288 @@ async def test_safaritest_rejects_non_admin_users_and_dm_context() -> None:
     )
     await SafariCog.safaritest.callback(cog, dm_ctx)
     dm_ctx.send.assert_awaited_once_with("Safari can only be used in a server.")
+
+
+def _activity_snapshot(activity, selection_deadline=None, route_vote_deadline=None):
+    return SimpleNamespace(
+        activity=activity,
+        timing=SimpleNamespace(
+            selection_deadline=selection_deadline,
+            route_vote_deadline=route_vote_deadline,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_safariresume_reconstructs_registration() -> None:
+    session = make_session()
+    registration = _registration_result().registration
+    snapshot = _activity_snapshot(registration)
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=snapshot),
+        ),
+        safari_unlock_repository=SimpleNamespace(
+            get_available_by_guild_id=AsyncMock(
+                return_value=(_registration_result().unlock,)
+            ),
+        ),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=session.guild_id),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    assert isinstance(ctx.send.await_args.kwargs["view"], SafariRegistrationView)
+
+
+@pytest.mark.asyncio
+async def test_safariresume_reconstructs_encounter(monkeypatch) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
+    session = make_session()
+    encounter = make_encounter((25,))
+    session.publish_encounter(encounter)
+    snapshot = _activity_snapshot(session)
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=snapshot),
+        ),
+        safari_unlock_repository=SimpleNamespace(),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=session.guild_id),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    kwargs = ctx.send.await_args.kwargs
+    assert isinstance(kwargs["view"], SafariEncounterView)
+    assert kwargs["file"].filename == "safari-encounter.png"
+
+
+@pytest.mark.asyncio
+async def test_safariresume_reconstructs_route_vote(monkeypatch) -> None:
+    monkeypatch.setattr(
+        SafariRouteView,
+        "start_route_timer",
+        lambda self: None,
+    )
+    session = make_session()
+    session._status = SafariSessionStatus.ROUTE_DECISION
+    vote = make_vote(session.current_segment.zone)
+    session.start_route_vote(vote)
+    snapshot = _activity_snapshot(session)
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=snapshot),
+        ),
+        safari_unlock_repository=SimpleNamespace(),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=session.guild_id),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    assert isinstance(ctx.send.await_args.kwargs["view"], SafariRouteView)
+
+
+@pytest.mark.asyncio
+async def test_safariresume_reports_missing_activity() -> None:
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=None),
+        ),
+        safari_unlock_repository=SimpleNamespace(),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    ctx.send.assert_awaited_once_with("No Safari activity is available to resume.")
+
+
+@pytest.mark.asyncio
+async def test_safariresume_resolves_expired_encounter(monkeypatch) -> None:
+    monkeypatch.setattr(
+        SafariRouteView,
+        "start_route_timer",
+        lambda self: None,
+    )
+    session = make_session()
+    encounter = make_encounter((25,))
+    session.publish_encounter(encounter)
+    snapshot = _activity_snapshot(
+        session,
+        selection_deadline=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    route_vote = make_vote(session.current_segment.zone)
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=snapshot),
+        ),
+        safari_capture_application=SimpleNamespace(
+            close_capture_selection=AsyncMock(),
+            resolve_capture=AsyncMock(
+                return_value=ResolveSafariCaptureResult(
+                    session=session,
+                    encounter_resolution=SimpleNamespace(),
+                    persisted_result=SimpleNamespace(),
+                    slot_results=(),
+                    rewards_by_trainer={},
+                    balls_committed_by_trainer={},
+                    next_session_status=SafariSessionStatus.ROUTE_DECISION,
+                )
+            ),
+        ),
+        safari_route_application=SimpleNamespace(
+            open_route_vote=AsyncMock(
+                return_value=SimpleNamespace(
+                    session=session,
+                    vote=route_vote,
+                    options=route_vote.options,
+                )
+            ),
+        ),
+        safari_finish_application=SimpleNamespace(),
+        safari_unlock_repository=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=session.guild_id),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    assert isinstance(ctx.send.await_args.kwargs["view"], SafariRouteView)
+
+
+@pytest.mark.asyncio
+async def test_safariresume_resolves_expired_route_vote(monkeypatch) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
+    session = make_session()
+    encounter = make_encounter((25,))
+    session.publish_encounter(encounter)
+    session._status = SafariSessionStatus.ROUTE_DECISION
+    vote = make_vote(session.current_segment.zone)
+    session.start_route_vote(vote)
+    snapshot = _activity_snapshot(
+        session,
+        route_vote_deadline=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    next_session = make_session()
+    next_session.publish_encounter(make_encounter((26,)))
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=snapshot),
+        ),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(
+            resolve_route_vote=AsyncMock(
+                return_value=SimpleNamespace(
+                    session=next_session,
+                )
+            ),
+        ),
+        safari_finish_application=SimpleNamespace(),
+        safari_unlock_repository=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=session.guild_id),
+        author=SimpleNamespace(id=20),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariresume.callback(cog, ctx)
+
+    assert isinstance(ctx.send.await_args.kwargs["view"], SafariEncounterView)
+
+
+@pytest.mark.asyncio
+async def test_safariabort_shows_confirmation_view() -> None:
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=_activity_snapshot(make_session())),
+        ),
+        safari_abort_application=SimpleNamespace(),
+        safari_unlock_repository=SimpleNamespace(),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10, owner_id=20),
+        author=SimpleNamespace(
+            id=20, guild_permissions=SimpleNamespace(administrator=True)
+        ),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariabort.callback(cog, ctx)
+
+    assert isinstance(ctx.send.await_args.kwargs["view"], SafariAbortConfirmView)
+
+
+@pytest.mark.asyncio
+async def test_safariabort_rejects_missing_activity() -> None:
+    core = SimpleNamespace(
+        safari_activity_application=SimpleNamespace(
+            get=AsyncMock(return_value=None),
+        ),
+        safari_abort_application=SimpleNamespace(),
+        safari_unlock_repository=SimpleNamespace(),
+        safari_finish_application=SimpleNamespace(),
+        safari_capture_application=SimpleNamespace(),
+        safari_route_application=SimpleNamespace(),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10, owner_id=20),
+        author=SimpleNamespace(
+            id=20, guild_permissions=SimpleNamespace(administrator=True)
+        ),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariabort.callback(cog, ctx)
+
+    ctx.send.assert_awaited_once_with("No Safari activity is available to abort.")

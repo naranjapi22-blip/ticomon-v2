@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from application.safari import (
     SafariActivityAlreadyExists,
+    SafariActivityNotFound,
     SafariCaptureResolutionUnavailable,
     SafariCaptureSelectionNotFound,
     SafariCaptureSelectionUnavailable,
@@ -23,6 +24,8 @@ def safari_error_message(error: Exception) -> str:
         return "No Safari unlock is available for this guild."
     if isinstance(error, SafariActivityAlreadyExists):
         return "A Safari activity is already active for this guild."
+    if isinstance(error, SafariActivityNotFound):
+        return "No Safari activity is active for this guild."
     if isinstance(error, SafariRegistrationNotFound):
         return "Safari registration is no longer available."
     if isinstance(error, SafariRegistrationClosed):

@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Callable
 
+from application.safari.activity_state import SafariActivityTracker
 from application.safari.exceptions import (
     SafariSessionNotFinished,
     SafariSessionNotFound,
@@ -41,9 +42,11 @@ class FinishSafariApplicationService:
     def __init__(
         self,
         activity_repository: SafariActivityRepository,
+        activity_tracker: SafariActivityTracker,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._activity_repository = activity_repository
+        self._activity_tracker = activity_tracker
         self._clock = clock or (lambda: datetime.now(UTC))
 
     async def finish(self, guild_id: int) -> FinishSafariResult:
@@ -54,6 +57,7 @@ class FinishSafariApplicationService:
             summary = self._build_summary(session, finished_at)
             try:
                 await self._activity_repository.clear_session(guild_id)
+                self._activity_tracker.clear(guild_id)
             except Exception:
                 logger.exception(
                     "failed to release safari activity guild_id=%s session_id=%s",

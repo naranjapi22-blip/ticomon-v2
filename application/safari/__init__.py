@@ -1,6 +1,10 @@
+from .abort_service import AbortSafariApplicationService
+from .activity_service import GetSafariActivityApplicationService
+from .activity_state import SafariActivityTracker
 from .capture_application_service import SafariCaptureApplicationService
 from .exceptions import (
     SafariActivityAlreadyExists,
+    SafariActivityNotFound,
     SafariApplicationError,
     SafariCaptureResolutionUnavailable,
     SafariCaptureSelectionNotFound,
@@ -28,6 +32,7 @@ from .results import (
     OpenSafariRouteVoteResult,
     ResolveSafariCaptureResult,
     ResolveSafariRouteVoteResult,
+    SafariActivitySnapshot,
     SafariCapturedCreatureSummary,
     SafariCaptureSelectionState,
     SafariCaptureSlotApplicationResult,
@@ -55,12 +60,17 @@ __all__ = [
     "OpenSafariRegistrationResult",
     "OpenSafariRouteVoteResult",
     "SafariActivityAlreadyExists",
+    "SafariActivityNotFound",
     "SafariApplicationError",
+    "AbortSafariApplicationService",
+    "GetSafariActivityApplicationService",
     "SafariCaptureApplicationService",
     "SafariCaptureResolutionUnavailable",
     "SafariCapturedCreatureSummary",
     "SafariCaptureSelectionNotFound",
     "SafariCaptureSelectionUnavailable",
+    "SafariActivitySnapshot",
+    "SafariActivityTracker",
     "SafariEncounterSlotSummary",
     "SafariEncounterSummary",
     "SafariInsufficientParticipants",

@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 
+from application.safari.activity_state import SafariActivityTracker
 from application.safari.exceptions import (
     SafariActivityAlreadyExists,
     SafariRegistrationNotFound,
@@ -24,9 +25,11 @@ class SafariRegistrationApplicationService:
         self,
         activity_repository: SafariActivityRepository,
         unlock_repository: SafariUnlockRepository,
+        activity_tracker: SafariActivityTracker,
     ) -> None:
         self._activity_repository = activity_repository
         self._unlock_repository = unlock_repository
+        self._activity_tracker = activity_tracker
 
     async def open(
         self,
@@ -112,5 +115,6 @@ class SafariRegistrationApplicationService:
 
             registration.cancel()
             await self._activity_repository.clear_registration(guild_id)
+            self._activity_tracker.clear(guild_id)
             logger.info("safari_registration_cancelled guild_id=%s", guild_id)
             return CancelSafariRegistrationResult(registration)

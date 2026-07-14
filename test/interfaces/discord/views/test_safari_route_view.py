@@ -23,9 +23,15 @@ async def test_route_view_renders_options() -> None:
     embed = view.build_embed()
 
     assert embed.title == "Safari Route Vote"
-    assert any(field.name == "Votes" for field in embed.fields)
+    assert embed.description == "Vote for the next route."
+    assert len(embed.fields) == 0
+    assert [option.label for option in view.children[0].options] == [
+        f"{'Stay at' if option.stays_in_same_zone else 'Advance to'} "
+        f"{option.destination_zone.value.replace('_', ' ').title()}"
+        for option in vote.options
+    ]
+    assert all(":" not in option.label for option in view.children[0].options)
     assert view.children[0].__class__.__name__ == "SafariRouteOptionSelect"
-    assert view.children[1].__class__.__name__ == "SafariRouteResolveButton"
 
 
 @pytest.mark.asyncio
@@ -58,6 +64,7 @@ async def test_cast_vote_refreshes_route_view() -> None:
         response=SimpleNamespace(
             send_message=AsyncMock(),
             edit_message=AsyncMock(),
+            defer=AsyncMock(),
         ),
     )
 
@@ -68,12 +75,18 @@ async def test_cast_vote_refreshes_route_view() -> None:
         101,
         vote.options[0].id,
     )
-    interaction.response.send_message.assert_awaited_once()
+    interaction.response.send_message.assert_not_awaited()
+    interaction.response.defer.assert_awaited_once()
     assert view.refresh.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_resolve_route_opens_next_encounter() -> None:
+async def test_route_timeout_opens_next_encounter(monkeypatch) -> None:
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        lambda self: None,
+    )
     session = make_session()
     vote = make_vote(session.current_segment.zone)
     next_session = make_session()
@@ -99,16 +112,32 @@ async def test_resolve_route_opens_next_encounter() -> None:
         vote=vote,
         options=vote.options,
     )
-    interaction = SimpleNamespace(
-        response=SimpleNamespace(
-            send_message=AsyncMock(),
-            edit_message=AsyncMock(),
-        ),
-    )
+    view.message = AsyncMock()
 
-    await view.resolve_route(interaction)
+    await view._resolve_route_timeout()
 
     assert isinstance(
-        interaction.response.edit_message.await_args.kwargs["view"],
+        view.message.edit.await_args.kwargs["view"],
         SafariEncounterView,
+    )
+
+
+@pytest.mark.asyncio
+async def test_route_timeout_edits_expired_note() -> None:
+    session = make_session()
+    vote = make_vote(session.current_segment.zone)
+    view = SafariRouteView(
+        core=SimpleNamespace(),
+        guild_id=session.guild_id,
+        session=session,
+        vote=vote,
+        options=vote.options,
+    )
+    view.message = AsyncMock()
+
+    await view.on_timeout()
+
+    assert (
+        view.message.edit.await_args.kwargs["content"]
+        == "This Safari interface expired. Use !safariresume to continue."
     )

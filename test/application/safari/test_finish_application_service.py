@@ -13,6 +13,7 @@ from application.safari import (
     SafariSessionNotFinished,
     SafariSessionNotFound,
 )
+from application.safari.activity_state import SafariActivityTracker
 from core.capture.domain.capture_ball import CaptureBall
 from core.safari import (
     SafariCaptureAttempt,
@@ -41,9 +42,12 @@ NOW = datetime(2026, 7, 13, 12, tzinfo=UTC)
 
 def _service(
     activity: InMemorySafariActivityRepository,
+    tracker: SafariActivityTracker,
 ) -> FinishSafariApplicationService:
     return FinishSafariApplicationService(
-        activity_repository=activity, clock=lambda: NOW
+        activity_repository=activity,
+        activity_tracker=tracker,
+        clock=lambda: NOW,
     )
 
 
@@ -200,7 +204,7 @@ def _finalized_session() -> SafariSession:
 
 @pytest.mark.asyncio
 async def test_finish_rejects_missing_session():
-    service = _service(InMemorySafariActivityRepository())
+    service = _service(InMemorySafariActivityRepository(), SafariActivityTracker())
 
     with pytest.raises(SafariSessionNotFound):
         await service.finish(100)
@@ -209,9 +213,10 @@ async def test_finish_rejects_missing_session():
 @pytest.mark.asyncio
 async def test_finish_builds_summary_and_clears_activity():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     session = _finalized_session()
     await activity.save_session(session)
-    service = _service(activity)
+    service = _service(activity, tracker)
 
     result = await service.finish(session.guild_id)
 
@@ -255,6 +260,7 @@ async def test_finish_builds_summary_and_clears_activity():
     assert result.summary.totals.attempts_executed == 3
     assert result.summary.totals.balls_committed == 3
     assert await activity.get_session(session.guild_id) is None
+    assert tracker.get(session.guild_id).selection_deadline is None
 
     with pytest.raises(SafariSessionNotFound):
         await service.finish(session.guild_id)
@@ -263,10 +269,11 @@ async def test_finish_builds_summary_and_clears_activity():
 @pytest.mark.asyncio
 async def test_finish_rejects_session_with_pending_encounter():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     session = _finalized_session()
     session._current_encounter = make_encounter((25,))
     await activity.save_session(session)
-    service = _service(activity)
+    service = _service(activity, tracker)
 
     with pytest.raises(SafariSessionNotFinished):
         await service.finish(session.guild_id)
@@ -275,10 +282,11 @@ async def test_finish_rejects_session_with_pending_encounter():
 @pytest.mark.asyncio
 async def test_finish_rejects_session_with_pending_route_vote():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     session = _finalized_session()
     session._current_route_vote = make_vote(session.current_segment.zone)
     await activity.save_session(session)
-    service = _service(activity)
+    service = _service(activity, tracker)
 
     with pytest.raises(SafariSessionNotFinished):
         await service.finish(session.guild_id)
@@ -287,6 +295,7 @@ async def test_finish_rejects_session_with_pending_route_vote():
 @pytest.mark.asyncio
 async def test_finish_ranking_uses_deterministic_tiebreakers():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     session = make_session(
         (
             SafariParticipant(1, 9, 4),
@@ -359,7 +368,7 @@ async def test_finish_ranking_uses_deterministic_tiebreakers():
     session._status = SafariSessionStatus.FINISHED
     session._finish_reason = SafariFinishReason.COMPLETED
     await activity.save_session(session)
-    service = _service(activity)
+    service = _service(activity, tracker)
 
     result = await service.finish(session.guild_id)
 
@@ -374,9 +383,10 @@ async def test_finish_ranking_uses_deterministic_tiebreakers():
 @pytest.mark.asyncio
 async def test_finish_rejects_active_session_and_keeps_activity():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     session = make_session()
     await activity.save_session(session)
-    service = _service(activity)
+    service = _service(activity, tracker)
 
     with pytest.raises(SafariSessionNotFinished):
         await service.finish(session.guild_id)
@@ -391,9 +401,14 @@ async def test_finish_does_not_clear_when_summary_build_fails():
             raise RuntimeError("summary")
 
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     session = _finalized_session()
     await activity.save_session(session)
-    service = _FailingFinishService(activity_repository=activity, clock=lambda: NOW)
+    service = _FailingFinishService(
+        activity_repository=activity,
+        activity_tracker=tracker,
+        clock=lambda: NOW,
+    )
 
     with pytest.raises(RuntimeError, match="summary"):
         await service.finish(session.guild_id)

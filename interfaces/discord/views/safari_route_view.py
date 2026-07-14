@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import datetime
 
 import discord
 
@@ -12,8 +14,14 @@ from application.safari import (
 )
 from core.safari import SafariRouteOption, SafariRouteVote, SafariSession
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_timing import (
+    SAFARI_ROUTE_VOTE_SECONDS,
+    SAFARI_VIEW_EXPIRED_MESSAGE,
+    SAFARI_VIEW_FALLBACK_SECONDS,
+    deadline_after,
+    remaining_seconds,
+)
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
-from rendering.safari.narrative import route_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +31,11 @@ class SafariRouteOptionSelect(discord.ui.Select):
         options = []
         for option in view.options:
             destination = option.destination_zone.value.replace("_", " ").title()
-            movement = "Stay" if option.stays_in_same_zone else "Advance"
+            movement = "Stay at" if option.stays_in_same_zone else "Advance to"
             options.append(
                 discord.SelectOption(
-                    label=f"{movement}: {destination}",
+                    label=f"{movement} {destination}",
                     value=option.id,
-                    description=option.narrative_key.replace("_", " "),
                 )
             )
 
@@ -44,18 +51,6 @@ class SafariRouteOptionSelect(discord.ui.Select):
         await self.view.cast_vote(interaction, self.values[0])
 
 
-class SafariRouteResolveButton(discord.ui.Button):
-    def __init__(self) -> None:
-        super().__init__(
-            label="Resolve Route",
-            style=discord.ButtonStyle.primary,
-            row=1,
-        )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self.view.resolve_route(interaction)
-
-
 class SafariRouteView(discord.ui.View):
     def __init__(
         self,
@@ -64,8 +59,9 @@ class SafariRouteView(discord.ui.View):
         session: SafariSession,
         vote: SafariRouteVote,
         options: tuple[SafariRouteOption, ...],
+        route_vote_deadline: datetime | None = None,
     ) -> None:
-        super().__init__(timeout=300)
+        super().__init__(timeout=SAFARI_VIEW_FALLBACK_SECONDS)
 
         self.core = core
         self.guild_id = guild_id
@@ -73,41 +69,46 @@ class SafariRouteView(discord.ui.View):
         self.vote = vote
         self.options = options
         self.message: discord.Message | None = None
+        self._route_vote_deadline = route_vote_deadline
+        self._timer_task: asyncio.Task[None] | None = None
+        self._timer_lock = asyncio.Lock()
+        self._timer_processed = False
 
         self.add_item(SafariRouteOptionSelect(self))
-        self.add_item(SafariRouteResolveButton())
 
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
             title="Safari Route Vote",
-            description=route_narrative(
-                self.session.safari_map,
-                len(self.options),
-            ),
+            description="Vote for the next route.",
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="Map", value=self.session.safari_map.value, inline=True)
-        embed.add_field(
-            name="Zone", value=self.session.current_segment.zone.value, inline=True
-        )
-        embed.add_field(name="Weather", value=self.session.weather.value, inline=True)
-        embed.add_field(name="Time", value=self.session.time_of_day.value, inline=True)
-        embed.add_field(
-            name="Votes", value=str(len(self.vote.votes_by_trainer)), inline=True
-        )
-        embed.add_field(
-            name="Choices",
-            value="\n".join(
-                (
-                    f"**{option.id}** — "
-                    f"{'Stay' if option.stays_in_same_zone else 'Advance'} "
-                    f"to {option.destination_zone.value.replace('_', ' ').title()}"
-                )
-                for option in self.options
-            ),
-            inline=False,
-        )
         return embed
+
+    def start_route_timer(self) -> None:
+        if self._route_vote_deadline is None:
+            self._route_vote_deadline = deadline_after(SAFARI_ROUTE_VOTE_SECONDS)
+
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear_deadlines(self.guild_id)
+            tracker.set_route_vote_deadline(self.guild_id, self._route_vote_deadline)
+
+        self.cancel_timeout_task()
+        self._timer_processed = False
+        self._timer_task = asyncio.create_task(self._run_route_timeout())
+        if tracker is not None:
+            tracker.set_timer_task(self.guild_id, self._timer_task)
+
+    def cancel_timeout_task(self) -> None:
+        if self._timer_task is None:
+            return
+
+        if not self._timer_task.done():
+            self._timer_task.cancel()
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear_timer_task(self.guild_id, self._timer_task)
+        self._timer_task = None
 
     async def cast_vote(
         self,
@@ -138,16 +139,54 @@ class SafariRouteView(discord.ui.View):
             return
 
         self.vote = result.vote
-        await interaction.response.send_message(
-            content=(
-                f"Vote recorded for {result.option_id}"
-                + (" (replaced)." if result.replaced else ".")
-            ),
-            ephemeral=True,
-        )
+        await interaction.response.defer()
         await self.refresh()
 
-    async def resolve_route(self, interaction: discord.Interaction) -> None:
+    async def refresh(self) -> None:
+        if self.message is not None:
+            await self.message.edit(
+                embed=self.build_embed(),
+                view=self,
+            )
+
+    async def expire_interface(self) -> None:
+        for child in self.children:
+            child.disabled = True
+
+        if self.message is not None:
+            await self.message.edit(
+                content=SAFARI_VIEW_EXPIRED_MESSAGE,
+                view=self,
+            )
+
+    async def on_timeout(self) -> None:
+        if self._timer_processed:
+            return
+        await self.expire_interface()
+
+    async def _run_route_timeout(self) -> None:
+        try:
+            await asyncio.sleep(remaining_seconds(self._route_vote_deadline))
+            async with self._timer_lock:
+                if self._timer_processed:
+                    return
+                self._timer_processed = True
+            await self._resolve_route_timeout()
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception(
+                "safari_route_timeout_failed guild_id=%s session_id=%s",
+                self.guild_id,
+                self.session.id,
+            )
+            raise
+        finally:
+            tracker = getattr(self.core, "safari_activity_tracker", None)
+            if tracker is not None:
+                tracker.clear_timer_task(self.guild_id, self._timer_task)
+
+    async def _resolve_route_timeout(self) -> None:
         try:
             result = await self.core.safari_route_application.resolve_route_vote(
                 self.guild_id,
@@ -157,21 +196,29 @@ class SafariRouteView(discord.ui.View):
             SafariRouteVoteNotFound,
             SafariRouteVoteUnavailable,
         ) as error:
-            await interaction.response.send_message(
-                safari_error_message(error),
-                ephemeral=True,
+            logger.warning(
+                "safari_route_timeout_skipped guild_id=%s session_id=%s error=%s",
+                self.guild_id,
+                self.session.id,
+                type(error).__name__,
             )
             return
-        except ValueError as error:
-            await interaction.response.send_message(
-                safari_error_message(error),
-                ephemeral=True,
+        except Exception:
+            logger.exception(
+                "safari_route_timeout_resolution_failed guild_id=%s session_id=%s",
+                self.guild_id,
+                self.session.id,
             )
             return
 
         self.session = result.session
+        self.stop()
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear_timer_task(self.guild_id, self._timer_task)
         for child in self.children:
             child.disabled = True
+
         view = SafariEncounterView(
             core=self.core,
             guild_id=self.guild_id,
@@ -179,41 +226,10 @@ class SafariRouteView(discord.ui.View):
         )
         view.message = self.message
         file = await view.build_file()
-        await interaction.response.edit_message(
-            embed=view.build_embed(),
-            view=view,
-            attachments=[file],
-        )
-
-    async def refresh(self) -> None:
         if self.message is not None:
             await self.message.edit(
-                embed=self.build_embed(),
-                view=self,
+                embed=view.build_embed(),
+                view=view,
+                attachments=[file],
             )
-
-    async def on_timeout(self) -> None:
-        for child in self.children:
-            child.disabled = True
-
-        if self.message is not None:
-            await self.message.edit(view=self)
-
-    async def on_error(
-        self,
-        interaction: discord.Interaction,
-        error: Exception,
-        item: discord.ui.Item[discord.ui.View],
-    ) -> None:
-        logger.exception(
-            "safari_route_view_error guild_id=%s user_id=%s item=%s",
-            self.guild_id,
-            getattr(interaction.user, "id", None),
-            getattr(item, "label", item.__class__.__name__),
-            exc_info=(type(error), error, error.__traceback__),
-        )
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "Safari route interaction failed. Please try again.",
-                ephemeral=True,
-            )
+        view.start_selection_timer()

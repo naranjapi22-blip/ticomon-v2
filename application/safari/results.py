@@ -4,8 +4,10 @@ from enum import Enum
 from typing import Mapping
 from uuid import UUID
 
+from application.safari.activity_state import SafariActivityTimingSnapshot
 from core.candy.candy_bundle import CandyBundle
 from core.creature.creature import Creature
+from core.safari.activity_repository import SafariActivity
 from core.safari.capture import (
     SafariCaptureSelection,
     SafariPersistedCapture,
@@ -207,6 +209,12 @@ class SafariFinalSummary:
 class FinishSafariResult:
     session: SafariSession
     summary: SafariFinalSummary
+
+
+@dataclass(frozen=True, slots=True)
+class SafariActivitySnapshot:
+    activity: SafariActivity
+    timing: SafariActivityTimingSnapshot
 
 
 @dataclass(frozen=True, slots=True)

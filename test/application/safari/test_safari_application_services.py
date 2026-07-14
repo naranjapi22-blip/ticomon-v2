@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 import pytest
 
 from application.safari import (
+    AbortSafariApplicationService,
+    GetSafariActivityApplicationService,
     SafariActivityAlreadyExists,
     SafariInsufficientParticipants,
     SafariRegistrationApplicationService,
@@ -12,6 +14,7 @@ from application.safari import (
     SafariUnlockUnavailable,
     StartSafariApplicationService,
 )
+from application.safari.activity_state import SafariActivityTracker
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
     SAFARI_MAX_PARTICIPANTS,
@@ -175,9 +178,10 @@ def _start_service(activity, unlocks, generator=None, events=None):
 @pytest.mark.asyncio
 async def test_open_reserves_available_unlock_without_consuming_it():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
-    service = SafariRegistrationApplicationService(activity, unlocks)
+    service = SafariRegistrationApplicationService(activity, unlocks, tracker)
 
     result = await service.open(100, 10, NOW)
 
@@ -191,9 +195,11 @@ async def test_open_reserves_available_unlock_without_consuming_it():
 @pytest.mark.asyncio
 async def test_open_requires_unlock_and_rejects_existing_activity():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     empty_service = SafariRegistrationApplicationService(
         activity,
         _UnlockRepository(),
+        tracker,
     )
     with pytest.raises(SafariUnlockUnavailable):
         await empty_service.open(100, 10, NOW)
@@ -201,6 +207,7 @@ async def test_open_requires_unlock_and_rejects_existing_activity():
     service = SafariRegistrationApplicationService(
         activity,
         _UnlockRepository((_unlock(),)),
+        tracker,
     )
     await service.open(100, 10, NOW)
     with pytest.raises(SafariActivityAlreadyExists):
@@ -210,9 +217,11 @@ async def test_open_requires_unlock_and_rejects_existing_activity():
 @pytest.mark.asyncio
 async def test_concurrent_open_creates_only_one_registration():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     service = SafariRegistrationApplicationService(
         activity,
         _UnlockRepository((_unlock(),)),
+        tracker,
     )
     results = await asyncio.gather(
         service.open(100, 10, NOW),
@@ -229,8 +238,9 @@ async def test_concurrent_open_creates_only_one_registration():
 @pytest.mark.asyncio
 async def test_join_is_idempotent_and_enforces_global_capacity():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     unlocks = _UnlockRepository((_unlock(),))
-    service = SafariRegistrationApplicationService(activity, unlocks)
+    service = SafariRegistrationApplicationService(activity, unlocks, tracker)
     await service.open(100, 1, NOW)
 
     first = await service.join(100, 2)
@@ -248,9 +258,11 @@ async def test_join_is_idempotent_and_enforces_global_capacity():
 
 @pytest.mark.asyncio
 async def test_join_requires_an_open_registration():
+    tracker = SafariActivityTracker()
     service = SafariRegistrationApplicationService(
         InMemorySafariActivityRepository(),
         _UnlockRepository(),
+        tracker,
     )
     with pytest.raises(SafariRegistrationNotFound):
         await service.join(100, 1)
@@ -259,9 +271,10 @@ async def test_join_requires_an_open_registration():
 @pytest.mark.asyncio
 async def test_cancel_clears_activity_and_preserves_unlock():
     activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
-    service = SafariRegistrationApplicationService(activity, unlocks)
+    service = SafariRegistrationApplicationService(activity, unlocks, tracker)
     await service.open(100, 1, NOW)
 
     result = await service.cancel(100)
@@ -277,6 +290,7 @@ async def test_cancel_clears_activity_and_preserves_unlock():
 async def test_start_builds_complete_session_then_consumes_exact_unlock_and_stores_it():
     events = []
     activity = _TrackingActivityRepository(events)
+    tracker = SafariActivityTracker()
     reserved = _unlock(2)
     other = _unlock(1)
     unlocks = _UnlockRepository((other, reserved), events)
@@ -322,7 +336,11 @@ async def test_start_builds_complete_session_then_consumes_exact_unlock_and_stor
     assert map_selector.influence is reserved.map_influence
     assert generator.context.phase is session.phase
     assert generator.context.seen_species_ids == frozenset()
-    registration_service = SafariRegistrationApplicationService(activity, unlocks)
+    registration_service = SafariRegistrationApplicationService(
+        activity,
+        unlocks,
+        tracker,
+    )
     with pytest.raises(SafariRegistrationNotFound):
         await registration_service.join(100, 30)
 
@@ -356,6 +374,38 @@ async def test_start_for_testing_allows_a_single_participant():
     assert unlock.status is SafariUnlockStatus.CONSUMED
     assert await activity.get_session(100) is result.session
     assert result.session.participants_by_trainer[10].initial_balls == 9
+
+
+@pytest.mark.asyncio
+async def test_get_activity_snapshot_exposes_deadlines():
+    activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
+    registration = SafariRegistration(100, 1, (10,), NOW)
+    await activity.save_registration(registration)
+    tracker.set_selection_deadline(100, NOW)
+
+    service = GetSafariActivityApplicationService(activity, tracker)
+    snapshot = await service.get(100)
+
+    assert snapshot is not None
+    assert snapshot.activity is registration
+    assert snapshot.timing.selection_deadline == NOW
+
+
+@pytest.mark.asyncio
+async def test_abort_clears_registration_and_timer_state():
+    activity = InMemorySafariActivityRepository()
+    tracker = SafariActivityTracker()
+    registration = SafariRegistration(100, 1, (10,), NOW)
+    await activity.save_registration(registration)
+    tracker.set_selection_deadline(100, NOW)
+
+    service = AbortSafariApplicationService(activity, tracker)
+    result = await service.abort(100, 55)
+
+    assert result.activity is registration
+    assert await activity.get_activity(100) is None
+    assert tracker.get(100).selection_deadline is None
 
 
 @pytest.mark.asyncio

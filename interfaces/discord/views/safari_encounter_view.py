@@ -9,8 +9,6 @@ import discord
 
 from application.bootstrap.core import CoreServices
 from application.safari import (
-    ConfirmSafariCaptureSelectionResult,
-    DeclineSafariCaptureResult,
     FinishSafariResult,
     SafariCaptureResolutionUnavailable,
     SafariCaptureSelectionNotFound,
@@ -21,8 +19,14 @@ from core.safari import SafariEncounter, SafariSession, SafariSessionStatus
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.files import image_to_discord_file
 from interfaces.discord.safari_errors import safari_error_message
+from interfaces.discord.safari_timing import (
+    SAFARI_SELECTION_SECONDS,
+    SAFARI_VIEW_EXPIRED_MESSAGE,
+    SAFARI_VIEW_FALLBACK_SECONDS,
+    deadline_after,
+    remaining_seconds,
+)
 from rendering.safari import SafariEncounterRenderer
-from rendering.safari.narrative import encounter_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +39,14 @@ class SafariEncounterSlotSelect(discord.ui.Select):
         options = []
         for index, slot in enumerate(encounter.slots, start=1):
             species = slot.opportunity.species
-            label = f"Slot {index}: {species.name.title()}"
-            description = []
+            description = [species.name.title()]
             if slot.opportunity.is_shiny:
                 description.append("Shiny")
             if slot.opportunity.initial_form is not None:
                 description.append(slot.opportunity.initial_form.name)
             options.append(
                 discord.SelectOption(
-                    label=label,
+                    label=f"Slot {index}",
                     value=str(slot.id),
                     description=", ".join(description) if description else None,
                 )
@@ -62,32 +65,25 @@ class SafariEncounterSlotSelect(discord.ui.Select):
         await self.view.choose_slot(interaction, slot_id)
 
 
-class SafariEncounterResolveButton(discord.ui.Button):
-    def __init__(self) -> None:
-        super().__init__(
-            label="Resolve Encounter",
-            style=discord.ButtonStyle.primary,
-            row=1,
-        )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self.view.resolve_encounter(interaction)
-
-
 class SafariEncounterView(discord.ui.View):
     def __init__(
         self,
         core: CoreServices,
         guild_id: int,
         session: SafariSession,
+        selection_deadline: datetime | None = None,
     ) -> None:
-        super().__init__(timeout=300)
+        super().__init__(timeout=SAFARI_VIEW_FALLBACK_SECONDS)
 
         self.core = core
         self.guild_id = guild_id
         self.session = session
         self.message: discord.Message | None = None
         self.renderer = SafariEncounterRenderer()
+        self._selection_deadline = selection_deadline
+        self._timer_task: asyncio.Task[None] | None = None
+        self._timer_lock = asyncio.Lock()
+        self._timer_processed = False
 
         self.add_item(SafariEncounterSlotSelect(self))
         self.add_item(
@@ -98,67 +94,48 @@ class SafariEncounterView(discord.ui.View):
                 ),
             )
         )
-        self.add_item(SafariEncounterResolveButton())
 
     def build_embed(self) -> discord.Embed:
-        encounter = self._encounter()
-        current_segment = self.session.current_segment
-        confirmed = sum(
-            1
-            for selection in encounter.selections_by_trainer.values()
-            if selection.is_confirmed
-        )
-        declined = len(encounter.declined_participant_ids)
         progress = self.session.completed_encounter_count + 1
 
         embed = discord.Embed(
             title=f"Safari Encounter {progress}/{self.session.total_encounters}",
-            description=encounter_narrative(
-                self.session.safari_map,
-                self.session.weather,
-                self.session.time_of_day,
-                self.session.phase,
-            ),
+            description="Choose a Pokémon and the number of Safari Balls to use.",
             color=discord.Color.green(),
         )
-        embed.add_field(name="Map", value=self.session.safari_map.value, inline=True)
-        embed.add_field(name="Zone", value=current_segment.zone.value, inline=True)
-        embed.add_field(name="Weather", value=self.session.weather.value, inline=True)
-        embed.add_field(name="Time", value=self.session.time_of_day.value, inline=True)
-        embed.add_field(name="Phase", value=self.session.phase.value, inline=True)
-        embed.add_field(
-            name="Segment",
-            value=f"{current_segment.remaining_encounters} encounter(s) left",
-            inline=True,
-        )
-        embed.add_field(
-            name="Decisions",
-            value=(
-                f"Confirmed: {confirmed}\n"
-                f"Declined: {declined}\n"
-                f"Eligible: {len(encounter.eligible_participant_ids)}"
-            ),
-            inline=False,
-        )
-
-        for index, slot in enumerate(encounter.slots, start=1):
-            species = slot.opportunity.species
-            details = [f"Species: {species.name.title()}"]
-            if slot.opportunity.is_shiny:
-                details.append("Shiny: Yes")
-            if slot.opportunity.initial_form is not None:
-                details.append(f"Form: {slot.opportunity.initial_form.name}")
-            embed.add_field(
-                name=f"Slot {index}",
-                value="\n".join(details),
-                inline=False,
-            )
+        embed.set_image(url="attachment://safari-encounter.png")
 
         return embed
 
     async def build_file(self) -> discord.File:
         image = await asyncio.to_thread(self.renderer.render, self.session)
         return image_to_discord_file(image, "safari-encounter.png")
+
+    def start_selection_timer(self) -> None:
+        if self._selection_deadline is None:
+            self._selection_deadline = deadline_after(SAFARI_SELECTION_SECONDS)
+
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear_deadlines(self.guild_id)
+            tracker.set_selection_deadline(self.guild_id, self._selection_deadline)
+
+        self.cancel_timeout_task()
+        self._timer_processed = False
+        self._timer_task = asyncio.create_task(self._run_selection_timeout())
+        if tracker is not None:
+            tracker.set_timer_task(self.guild_id, self._timer_task)
+
+    def cancel_timeout_task(self) -> None:
+        if self._timer_task is None:
+            return
+
+        if not self._timer_task.done():
+            self._timer_task.cancel()
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear_timer_task(self.guild_id, self._timer_task)
+        self._timer_task = None
 
     async def choose_slot(
         self,
@@ -204,13 +181,25 @@ class SafariEncounterView(discord.ui.View):
         ball_count: int,
     ) -> None:
         try:
-            result = await self.core.safari_capture_application.select_capture(
-                self.guild_id,
-                interaction.user.id,
-                slot_id,
-                ball_count,
+            selection_result = (
+                await self.core.safari_capture_application.select_capture(
+                    self.guild_id,
+                    interaction.user.id,
+                    slot_id,
+                    ball_count,
+                )
             )
-        except (SafariSessionNotFound, SafariCaptureSelectionUnavailable) as error:
+            result = (
+                await self.core.safari_capture_application.confirm_capture_selection(
+                    self.guild_id,
+                    interaction.user.id,
+                )
+            )
+        except (
+            SafariSessionNotFound,
+            SafariCaptureSelectionNotFound,
+            SafariCaptureSelectionUnavailable,
+        ) as error:
             await interaction.response.send_message(
                 safari_error_message(error),
                 ephemeral=True,
@@ -223,60 +212,69 @@ class SafariEncounterView(discord.ui.View):
             )
             return
 
-        confirmation = SafariCaptureConfirmationView(
-            core=self.core,
-            parent_view=self,
-            selection_result=result,
-        )
         await interaction.response.send_message(
-            embed=confirmation.build_embed(),
-            view=confirmation,
+            content=(
+                f"Selection confirmed: "
+                f"{selection_result.slot.opportunity.species.name.title()} "
+                f"with {selection_result.balls_selected} Safari Balls.\n"
+                f"{result.balls_available} Safari Balls remaining."
+            ),
             ephemeral=True,
         )
         await self.refresh()
 
-    async def confirm_selection(
-        self,
-        trainer_id: int,
-    ) -> ConfirmSafariCaptureSelectionResult:
-        try:
-            result = (
-                await self.core.safari_capture_application.confirm_capture_selection(
-                    self.guild_id,
-                    trainer_id,
-                )
-            )
-        except (
-            SafariCaptureSelectionNotFound,
-            SafariCaptureSelectionUnavailable,
-        ) as error:
-            raise error
-        except ValueError as error:
-            raise error
-
+    async def decline_selection(self, trainer_id: int) -> None:
+        await self.core.safari_capture_application.decline_capture(
+            self.guild_id,
+            trainer_id,
+        )
         await self.refresh()
-        return result
 
-    async def decline_selection(
-        self,
-        trainer_id: int,
-    ) -> DeclineSafariCaptureResult:
-        try:
-            result: DeclineSafariCaptureResult = (
-                await self.core.safari_capture_application.decline_capture(
-                    self.guild_id,
-                    trainer_id,
-                )
+    async def refresh(self) -> None:
+        if self.message is not None:
+            await self.message.edit(
+                embed=self.build_embed(),
+                view=self,
             )
-        except (SafariSessionNotFound, SafariCaptureSelectionUnavailable) as error:
-            raise error
-        except ValueError as error:
-            raise error
 
-        await self.refresh()
-        return result
+    async def expire_interface(self) -> None:
+        for child in self.children:
+            child.disabled = True
 
-    async def resolve_encounter(self, interaction: discord.Interaction) -> None:
+        if self.message is not None:
+            await self.message.edit(
+                content=SAFARI_VIEW_EXPIRED_MESSAGE,
+                view=self,
+            )
+
+    async def on_timeout(self) -> None:
+        if self._timer_processed:
+            return
+        await self.expire_interface()
+
+    async def _run_selection_timeout(self) -> None:
+        try:
+            await asyncio.sleep(remaining_seconds(self._selection_deadline))
+            async with self._timer_lock:
+                if self._timer_processed:
+                    return
+                self._timer_processed = True
+            await self._resolve_selection_timeout()
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.exception(
+                "safari_selection_timeout_failed guild_id=%s session_id=%s",
+                self.guild_id,
+                self.session.id,
+            )
+            raise
+        finally:
+            tracker = getattr(self.core, "safari_activity_tracker", None)
+            if tracker is not None:
+                tracker.clear_timer_task(self.guild_id, self._timer_task)
+
+    async def _resolve_selection_timeout(self) -> None:
         try:
             await self.core.safari_capture_application.close_capture_selection(
                 self.guild_id,
@@ -289,58 +287,32 @@ class SafariEncounterView(discord.ui.View):
             SafariCaptureSelectionUnavailable,
             SafariSessionNotFound,
         ) as error:
-            await interaction.response.send_message(
-                safari_error_message(error),
-                ephemeral=True,
+            logger.warning(
+                "safari_selection_timeout_skipped guild_id=%s session_id=%s error=%s",
+                self.guild_id,
+                self.session.id,
+                type(error).__name__,
             )
             return
-        except ValueError as error:
-            await interaction.response.send_message(
-                safari_error_message(error),
-                ephemeral=True,
+        except Exception:
+            logger.exception(
+                "safari_selection_timeout_resolution_failed guild_id=%s session_id=%s",
+                self.guild_id,
+                self.session.id,
             )
             return
 
         self.session = result.session
+        self.stop()
+        tracker = getattr(self.core, "safari_activity_tracker", None)
+        if tracker is not None:
+            tracker.clear_timer_task(self.guild_id, self._timer_task)
         if result.next_session_status is SafariSessionStatus.ROUTE_DECISION:
-            for child in self.children:
-                child.disabled = True
-            from interfaces.discord.views.safari_route_view import SafariRouteView
-
-            route_vote = await self.core.safari_route_application.open_route_vote(
-                self.guild_id,
-                datetime.now(UTC),
-            )
-            view = SafariRouteView(
-                core=self.core,
-                guild_id=self.guild_id,
-                session=route_vote.session,
-                vote=route_vote.vote,
-                options=route_vote.options,
-            )
-            view.message = self.message
-            await interaction.response.edit_message(
-                embed=view.build_embed(),
-                view=view,
-                attachments=[],
-            )
+            await self._show_route_vote()
             return
 
         if result.next_session_status is SafariSessionStatus.ENCOUNTER:
-            for child in self.children:
-                child.disabled = True
-            view = SafariEncounterView(
-                core=self.core,
-                guild_id=self.guild_id,
-                session=result.session,
-            )
-            view.message = self.message
-            file = await view.build_file()
-            await interaction.response.edit_message(
-                embed=view.build_embed(),
-                view=view,
-                attachments=[file],
-            )
+            await self._show_next_encounter(result.session)
             return
 
         from interfaces.discord.views.safari_summary import SafariSummaryView
@@ -355,44 +327,51 @@ class SafariEncounterView(discord.ui.View):
         )
         view.message = self.message
         file = await view.build_file()
-        await interaction.response.edit_message(
-            embeds=view.build_embeds(),
-            view=view,
-            attachments=[file],
-        )
-
-    async def refresh(self) -> None:
         if self.message is not None:
             await self.message.edit(
-                embed=self.build_embed(),
-                view=self,
+                embeds=view.build_embeds(),
+                view=view,
+                attachments=[file],
             )
 
-    async def on_timeout(self) -> None:
-        for child in self.children:
-            child.disabled = True
+    async def _show_route_vote(self) -> None:
+        from interfaces.discord.views.safari_route_view import SafariRouteView
 
-        if self.message is not None:
-            await self.message.edit(view=self)
-
-    async def on_error(
-        self,
-        interaction: discord.Interaction,
-        error: Exception,
-        item: discord.ui.Item[discord.ui.View],
-    ) -> None:
-        logger.exception(
-            "safari_encounter_view_error guild_id=%s user_id=%s item=%s",
+        route_vote = await self.core.safari_route_application.open_route_vote(
             self.guild_id,
-            getattr(interaction.user, "id", None),
-            getattr(item, "label", item.__class__.__name__),
-            exc_info=(type(error), error, error.__traceback__),
+            datetime.now(UTC),
         )
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "Safari encounter interaction failed. Please try again.",
-                ephemeral=True,
+        view = SafariRouteView(
+            core=self.core,
+            guild_id=self.guild_id,
+            session=route_vote.session,
+            vote=route_vote.vote,
+            options=route_vote.options,
+        )
+        view.message = self.message
+        if self.message is not None:
+            await self.message.edit(
+                embed=view.build_embed(),
+                view=view,
+                attachments=[],
             )
+        view.start_route_timer()
+
+    async def _show_next_encounter(self, session: SafariSession) -> None:
+        view = SafariEncounterView(
+            core=self.core,
+            guild_id=self.guild_id,
+            session=session,
+        )
+        view.message = self.message
+        file = await view.build_file()
+        if self.message is not None:
+            await self.message.edit(
+                embed=view.build_embed(),
+                view=view,
+                attachments=[file],
+            )
+        view.start_selection_timer()
 
     def _encounter(self) -> SafariEncounter:
         encounter = self.session.current_encounter
@@ -440,6 +419,7 @@ class SafariBallCountView(discord.ui.View):
 
         for count in range(1, remaining_balls + 1):
             self.add_item(SafariBallCountButton(count, self))
+        self.add_item(SafariBallDeclineButton(self))
 
     def build_embed(self) -> discord.Embed:
         return discord.Embed(
@@ -463,58 +443,22 @@ class SafariBallCountView(discord.ui.View):
         )
 
 
-class SafariCaptureConfirmationView(discord.ui.View):
-    def __init__(
-        self,
-        core: CoreServices,
-        parent_view: SafariEncounterView,
-        selection_result: ConfirmSafariCaptureSelectionResult | None = None,
-    ) -> None:
-        super().__init__(timeout=120)
-
-        self.core = core
-        self.parent_view = parent_view
-        self.selection_result = selection_result
-        self.message: discord.Message | None = None
-
-    def build_embed(self) -> discord.Embed:
-        if self.selection_result is None:
-            return discord.Embed(
-                title="Safari Selection",
-                description="No pending selection.",
-                color=discord.Color.blurple(),
-            )
-
-        selection = self.selection_result.selection
-        return discord.Embed(
-            title="Safari Selection Pending",
-            description=(
-                f"Slot: **{selection.slot_id}**\n"
-                f"Balls: **{selection.ball_count}**\n"
-                f"Remaining Balls: **{self.selection_result.balls_available}**"
-            ),
-            color=discord.Color.gold(),
+class SafariBallDeclineButton(discord.ui.Button):
+    def __init__(self, view: "SafariBallCountView") -> None:
+        super().__init__(
+            label="Decline",
+            style=discord.ButtonStyle.danger,
+            row=1,
         )
+        self._selection_view = view
 
-    @discord.ui.button(
-        label="Confirm",
-        style=discord.ButtonStyle.success,
-    )
-    async def confirm_button(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ) -> None:
-        if self.selection_result is None:
-            await interaction.response.send_message(
-                "No pending Safari selection.",
-                ephemeral=True,
-            )
-            return
-
+    async def callback(self, interaction: discord.Interaction) -> None:
         try:
-            result = await self.parent_view.confirm_selection(interaction.user.id)
+            await self._selection_view.parent_view.decline_selection(
+                interaction.user.id
+            )
         except (
+            SafariSessionNotFound,
             SafariCaptureSelectionNotFound,
             SafariCaptureSelectionUnavailable,
         ) as error:
@@ -530,58 +474,10 @@ class SafariCaptureConfirmationView(discord.ui.View):
             )
             return
 
-        for child in self.children:
-            child.disabled = True
-        await interaction.response.edit_message(
-            content=(
-                f"Selection confirmed. Remaining Balls: " f"{result.balls_available}."
-            ),
-            embed=None,
-            view=self,
-        )
-
-    @discord.ui.button(
-        label="Change",
-        style=discord.ButtonStyle.secondary,
-    )
-    async def change_button(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ) -> None:
-        await interaction.response.send_message(
-            "Choose another slot or ball count in the encounter message.",
-            ephemeral=True,
-        )
-
-    @discord.ui.button(
-        label="Decline",
-        style=discord.ButtonStyle.danger,
-    )
-    async def decline_button(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button,
-    ) -> None:
-        try:
-            await self.parent_view.decline_selection(interaction.user.id)
-        except (SafariSessionNotFound, SafariCaptureSelectionUnavailable) as error:
-            await interaction.response.send_message(
-                safari_error_message(error),
-                ephemeral=True,
-            )
-            return
-        except ValueError as error:
-            await interaction.response.send_message(
-                safari_error_message(error),
-                ephemeral=True,
-            )
-            return
-
-        for child in self.children:
+        for child in self._selection_view.children:
             child.disabled = True
         await interaction.response.edit_message(
             content="Selection declined.",
             embed=None,
-            view=self,
+            view=self._selection_view,
         )

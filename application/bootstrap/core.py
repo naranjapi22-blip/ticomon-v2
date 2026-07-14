@@ -26,12 +26,15 @@ from application.release.release_application_service import (
     ReleaseApplicationService,
 )
 from application.safari import (
+    AbortSafariApplicationService,
     FinishSafariApplicationService,
+    GetSafariActivityApplicationService,
     SafariCaptureApplicationService,
     SafariRegistrationApplicationService,
     SafariRouteApplicationService,
     StartSafariApplicationService,
 )
+from application.safari.activity_state import SafariActivityTracker
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
@@ -139,6 +142,9 @@ class CoreServices:
     safari_route_application: SafariRouteApplicationService
     safari_capture_application: SafariCaptureApplicationService
     safari_finish_application: FinishSafariApplicationService
+    safari_abort_application: AbortSafariApplicationService
+    safari_activity_application: GetSafariActivityApplicationService
+    safari_activity_tracker: SafariActivityTracker
     start_safari_application: StartSafariApplicationService
     evolution_application: EvolutionApplicationService
     release_application: ReleaseApplicationService
@@ -202,6 +208,7 @@ def build_core(
 
     spawn_session_repository = InMemorySpawnSessionRepository()
     safari_activity_repository = InMemorySafariActivityRepository()
+    safari_activity_tracker = SafariActivityTracker()
     safari_unlock_repository = NeonSafariUnlockRepository()
 
     stat_calculator = StatCalculator()
@@ -230,6 +237,7 @@ def build_core(
     safari_registration_application = SafariRegistrationApplicationService(
         activity_repository=safari_activity_repository,
         unlock_repository=safari_unlock_repository,
+        activity_tracker=safari_activity_tracker,
     )
     safari_route_application = SafariRouteApplicationService(
         activity_repository=safari_activity_repository,
@@ -250,6 +258,15 @@ def build_core(
     )
     safari_finish_application = FinishSafariApplicationService(
         activity_repository=safari_activity_repository,
+        activity_tracker=safari_activity_tracker,
+    )
+    safari_abort_application = AbortSafariApplicationService(
+        activity_repository=safari_activity_repository,
+        activity_tracker=safari_activity_tracker,
+    )
+    safari_activity_application = GetSafariActivityApplicationService(
+        activity_repository=safari_activity_repository,
+        activity_tracker=safari_activity_tracker,
     )
     start_safari_application = StartSafariApplicationService(
         activity_repository=safari_activity_repository,
@@ -354,6 +371,9 @@ def build_core(
         safari_route_application=safari_route_application,
         safari_capture_application=safari_capture_application,
         safari_finish_application=safari_finish_application,
+        safari_abort_application=safari_abort_application,
+        safari_activity_application=safari_activity_application,
+        safari_activity_tracker=safari_activity_tracker,
         start_safari_application=start_safari_application,
         evolution_application=evolution_application,
         release_application=release_application,
