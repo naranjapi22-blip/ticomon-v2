@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import discord
@@ -15,7 +16,12 @@ from application.safari import (
     SafariCaptureSelectionUnavailable,
     SafariSessionNotFound,
 )
-from core.safari import SafariEncounter, SafariSession, SafariSessionStatus
+from core.safari import (
+    SafariEncounter,
+    SafariRouteOption,
+    SafariSession,
+    SafariSessionStatus,
+)
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.files import image_to_discord_file
 from interfaces.discord.safari_errors import safari_error_message
@@ -29,6 +35,94 @@ from interfaces.discord.safari_timing import (
 from rendering.safari import SafariEncounterRenderer
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    pass
+
+
+async def publish_current_encounter(
+    core: CoreServices,
+    guild_id: int,
+    session: SafariSession,
+    channel: discord.abc.Messageable,
+    *,
+    selection_deadline: datetime | None = None,
+) -> discord.ui.View:
+    view = SafariEncounterView(
+        core=core,
+        guild_id=guild_id,
+        session=session,
+        selection_deadline=selection_deadline,
+    )
+    content, file = await view.build_message()
+    message = await channel.send(
+        content=content,
+        file=file,
+        view=view,
+    )
+    view.message = message
+    logger.info(
+        "safari_next_encounter_published "
+        "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s",
+        guild_id,
+        session.id,
+        view._encounter().id,
+        session.completed_encounter_count + 1,
+    )
+    view.start_selection_timer()
+    return view
+
+
+async def publish_current_route_vote(
+    core: CoreServices,
+    guild_id: int,
+    session: SafariSession,
+    channel: discord.abc.Messageable,
+    *,
+    vote=None,
+    options: tuple[SafariRouteOption, ...] | None = None,
+    route_vote_deadline: datetime | None = None,
+) -> discord.ui.View:
+    from interfaces.discord.views.safari_route_view import SafariRouteView
+
+    if vote is None:
+        vote = session.current_route_vote
+    if vote is None:
+        raise SafariSessionNotFound("Safari route vote was not found.")
+    if options is None:
+        options = vote.options
+
+    view = SafariRouteView(
+        core=core,
+        guild_id=guild_id,
+        session=session,
+        vote=vote,
+        options=options,
+        route_vote_deadline=route_vote_deadline,
+    )
+    message = await channel.send(
+        content=view.build_content(),
+        view=view,
+    )
+    view.message = message
+    view.start_route_timer()
+    return view
+
+
+async def publish_final_summary(
+    core: CoreServices,
+    guild_id: int,
+    channel: discord.abc.Messageable,
+) -> discord.ui.View:
+    from interfaces.discord.views.safari_summary import SafariSummaryView
+
+    finish_result: FinishSafariResult = await core.safari_finish_application.finish(
+        guild_id,
+    )
+    view = SafariSummaryView(finish_result)
+    message = await channel.send(embeds=view.build_embeds(), view=view)
+    view.message = message
+    return view
 
 
 class SafariEncounterSlotSelect(discord.ui.Select):
@@ -133,6 +227,16 @@ class SafariEncounterView(discord.ui.View):
         self._timer_task = asyncio.create_task(self._run_selection_timeout())
         if tracker is not None:
             tracker.set_timer_task(self.guild_id, self._timer_task)
+        logger.info(
+            "safari_selection_timer_started "
+            "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s "
+            "deadline=%s",
+            self.guild_id,
+            self.session.id,
+            self._encounter().id,
+            self.session.completed_encounter_count + 1,
+            self._selection_deadline,
+        )
 
     def cancel_timeout_task(self) -> None:
         if self._timer_task is None:
@@ -326,9 +430,30 @@ class SafariEncounterView(discord.ui.View):
         if tracker is not None:
             tracker.clear_timer_task(self.guild_id, self._timer_task)
 
+        logger.info(
+            "safari_encounter_transition_started "
+            "guild_id=%s session_id=%s encounter_id=%s next_status=%s "
+            "encounter_index=%s",
+            self.guild_id,
+            self.session.id,
+            self._encounter().id,
+            result.next_session_status.name,
+            self.session.completed_encounter_count + 1,
+        )
+
         if self.message is not None:
             await self.message.channel.send(
                 content=self._build_encounter_results_message(result),
+            )
+            logger.info(
+                "safari_encounter_results_published "
+                "guild_id=%s session_id=%s encounter_id=%s next_status=%s "
+                "encounter_index=%s",
+                self.guild_id,
+                self.session.id,
+                self._encounter().id,
+                result.next_session_status.name,
+                self.session.completed_encounter_count + 1,
             )
 
         if result.next_session_status is SafariSessionStatus.ROUTE_DECISION:
@@ -342,52 +467,37 @@ class SafariEncounterView(discord.ui.View):
         await self._show_summary()
 
     async def _show_route_vote(self) -> None:
-        from interfaces.discord.views.safari_route_view import SafariRouteView
-
-        route_vote = await self.core.safari_route_application.open_route_vote(
-            self.guild_id,
-            datetime.now(UTC),
-        )
-        view = SafariRouteView(
-            core=self.core,
-            guild_id=self.guild_id,
-            session=route_vote.session,
-            vote=route_vote.vote,
-            options=route_vote.options,
-        )
         if self.message is not None:
-            await self.message.channel.send(
-                content=view.build_content(),
-                view=view,
+            route_vote = await self.core.safari_route_application.open_route_vote(
+                self.guild_id,
+                datetime.now(UTC),
             )
-        view.start_route_timer()
+            await publish_current_route_vote(
+                self.core,
+                self.guild_id,
+                route_vote.session,
+                self.message.channel,
+                vote=route_vote.vote,
+                options=route_vote.options,
+            )
 
     async def _show_next_encounter(self, session: SafariSession) -> None:
-        view = SafariEncounterView(
-            core=self.core,
-            guild_id=self.guild_id,
-            session=session,
-        )
-        file = await view.build_file()
         if self.message is not None:
-            await self.message.channel.send(
-                content=view.build_content(),
-                file=file,
-                view=view,
+            await publish_current_encounter(
+                self.core,
+                self.guild_id,
+                session,
+                self.message.channel,
+                selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
             )
-        view.start_selection_timer()
 
     async def _show_summary(self) -> None:
-        from interfaces.discord.views.safari_summary import SafariSummaryView
-
-        finish_result: FinishSafariResult = (
-            await self.core.safari_finish_application.finish(
-                self.guild_id,
-            )
-        )
-        view = SafariSummaryView(finish_result)
         if self.message is not None:
-            await self.message.channel.send(embeds=view.build_embeds(), view=view)
+            await publish_final_summary(
+                self.core,
+                self.guild_id,
+                self.message.channel,
+            )
 
     async def _reject_if_ended(self, interaction: discord.Interaction) -> bool:
         if not self._phase_ended:

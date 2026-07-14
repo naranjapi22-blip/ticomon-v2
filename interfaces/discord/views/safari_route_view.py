@@ -21,7 +21,9 @@ from interfaces.discord.safari_timing import (
     deadline_after,
     remaining_seconds,
 )
-from interfaces.discord.views.safari_encounter_view import SafariEncounterView
+from interfaces.discord.views.safari_encounter_view import (
+    publish_current_encounter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,12 @@ class SafariRouteView(discord.ui.View):
         self._timer_task = asyncio.create_task(self._run_route_timeout())
         if tracker is not None:
             tracker.set_timer_task(self.guild_id, self._timer_task)
+        logger.info(
+            "safari_route_timer_started guild_id=%s session_id=%s deadline=%s",
+            self.guild_id,
+            self.session.id,
+            self._route_vote_deadline,
+        )
 
     def cancel_timeout_task(self) -> None:
         if self._timer_task is None:
@@ -224,19 +232,25 @@ class SafariRouteView(discord.ui.View):
                 view=self,
             )
 
-        view = SafariEncounterView(
-            core=self.core,
-            guild_id=self.guild_id,
-            session=result.session,
+        logger.info(
+            "safari_next_encounter_published "
+            "guild_id=%s session_id=%s encounter_id=%s encounter_index=%s",
+            self.guild_id,
+            self.session.id,
+            (
+                self.session.current_encounter.id
+                if self.session.current_encounter
+                else None
+            ),
+            self.session.completed_encounter_count + 1,
         )
-        file = await view.build_file()
         if self.message is not None:
-            await self.message.channel.send(
-                content=view.build_content(),
-                file=file,
-                view=view,
+            await publish_current_encounter(
+                self.core,
+                self.guild_id,
+                result.session,
+                self.message.channel,
             )
-        view.start_selection_timer()
 
     async def _reject_if_ended(self, interaction: discord.Interaction) -> bool:
         if not self._phase_ended:

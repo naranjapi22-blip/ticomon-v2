@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -171,6 +171,60 @@ async def test_selection_timeout_transitions_to_route_view(monkeypatch) -> None:
         view.message.channel.send.await_args_list[1].kwargs["view"],
         SafariRouteView,
     )
+
+
+@pytest.mark.asyncio
+async def test_selection_timeout_transitions_to_next_encounter(monkeypatch) -> None:
+    start_selection_timer = Mock()
+    monkeypatch.setattr(
+        SafariEncounterView,
+        "start_selection_timer",
+        start_selection_timer,
+    )
+    view, session = _encounter_view()
+    next_session = make_session()
+    next_session.publish_encounter(make_encounter((27,)))
+    view.message = SimpleNamespace(
+        channel=SimpleNamespace(send=AsyncMock()),
+        edit=AsyncMock(),
+    )
+    view.core = SimpleNamespace(
+        safari_capture_application=SimpleNamespace(
+            close_capture_selection=AsyncMock(),
+            resolve_capture=AsyncMock(
+                return_value=ResolveSafariCaptureResult(
+                    session=next_session,
+                    encounter_resolution=SimpleNamespace(),
+                    persisted_result=SimpleNamespace(),
+                    slot_results=(),
+                    rewards_by_trainer={},
+                    balls_committed_by_trainer={},
+                    next_session_status=SafariSessionStatus.ENCOUNTER,
+                )
+            ),
+        ),
+        safari_route_application=SimpleNamespace(
+            open_route_vote=AsyncMock(),
+        ),
+        safari_finish_application=SimpleNamespace(),
+    )
+
+    await view._resolve_selection_timeout()
+
+    assert view.message.channel.send.await_count == 2
+    assert (
+        "Encounter Results"
+        in view.message.channel.send.await_args_list[0].kwargs["content"]
+    )
+    assert isinstance(
+        view.message.channel.send.await_args_list[1].kwargs["view"],
+        SafariEncounterView,
+    )
+    assert view.message.channel.send.await_args_list[1].kwargs["file"].filename == (
+        "safari-encounter.png"
+    )
+    start_selection_timer.assert_called_once()
+    view.core.safari_route_application.open_route_vote.assert_not_awaited()
 
 
 @pytest.mark.asyncio

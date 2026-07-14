@@ -32,12 +32,14 @@ from interfaces.discord.safari_timing import (
 from interfaces.discord.views.safari_abort_confirm_view import (
     SafariAbortConfirmView,
 )
-from interfaces.discord.views.safari_encounter_view import SafariEncounterView
+from interfaces.discord.views.safari_encounter_view import (
+    publish_current_encounter,
+    publish_current_route_vote,
+    publish_final_summary,
+)
 from interfaces.discord.views.safari_registration_view import (
     SafariRegistrationView,
 )
-from interfaces.discord.views.safari_route_view import SafariRouteView
-from interfaces.discord.views.safari_summary import SafariSummaryView
 
 
 class SafariCog(commands.Cog):
@@ -237,20 +239,13 @@ class SafariCog(commands.Cog):
         *,
         selection_deadline: datetime | None,
     ) -> None:
-        view = SafariEncounterView(
-            core=self.core,
-            guild_id=ctx.guild.id,
-            session=session,
+        await publish_current_encounter(
+            self.core,
+            ctx.guild.id,
+            session,
+            ctx,
             selection_deadline=selection_deadline,
         )
-        content, file = await view.build_message()
-        message = await ctx.send(
-            content=content,
-            file=file,
-            view=view,
-        )
-        view.message = message
-        view.start_selection_timer()
 
     async def _resume_snapshot(
         self,
@@ -308,20 +303,15 @@ class SafariCog(commands.Cog):
 
         vote = session.current_route_vote
         assert vote is not None
-        view = SafariRouteView(
-            core=self.core,
-            guild_id=ctx.guild.id,
-            session=session,
+        await publish_current_route_vote(
+            self.core,
+            ctx.guild.id,
+            session,
+            ctx,
             vote=vote,
             options=vote.options,
             route_vote_deadline=deadline,
         )
-        message = await ctx.send(
-            content=view.build_content(),
-            view=view,
-        )
-        view.message = message
-        view.start_route_timer()
 
     async def _resolve_expired_encounter(self, ctx: commands.Context) -> None:
         guild_id = ctx.guild.id
@@ -337,28 +327,24 @@ class SafariCog(commands.Cog):
                 guild_id,
                 datetime.now(UTC),
             )
-            view = SafariRouteView(
-                core=self.core,
-                guild_id=guild_id,
-                session=route_vote.session,
+            await publish_current_route_vote(
+                self.core,
+                guild_id,
+                route_vote.session,
+                ctx,
                 vote=route_vote.vote,
                 options=route_vote.options,
             )
-            message = await self._send_route_view(ctx, view)
-            view.message = message
-            view.start_route_timer()
             return
 
         if result.next_session_status is SafariSessionStatus.ENCOUNTER:
-            view = SafariEncounterView(
-                core=self.core,
-                guild_id=guild_id,
-                session=session,
+            await publish_current_encounter(
+                self.core,
+                guild_id,
+                session,
+                ctx,
                 selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
             )
-            message = await self._send_encounter_view(ctx, view)
-            view.message = message
-            view.start_selection_timer()
             return
 
         await self._show_summary(ctx)
@@ -369,21 +355,20 @@ class SafariCog(commands.Cog):
         if tracker is not None:
             tracker.cancel_timer(guild_id)
         result = await self.core.safari_route_application.resolve_route_vote(guild_id)
-        view = SafariEncounterView(
-            core=self.core,
-            guild_id=guild_id,
-            session=result.session,
+        await publish_current_encounter(
+            self.core,
+            guild_id,
+            result.session,
+            ctx,
             selection_deadline=deadline_after(SAFARI_SELECTION_SECONDS),
         )
-        message = await self._send_encounter_view(ctx, view)
-        view.message = message
-        view.start_selection_timer()
 
     async def _show_summary(self, ctx: commands.Context) -> None:
-        finish_result = await self.core.safari_finish_application.finish(ctx.guild.id)
-        view = SafariSummaryView(finish_result)
-        message = await self._send_summary_view(ctx, view)
-        view.message = message
+        await publish_final_summary(
+            self.core,
+            ctx.guild.id,
+            ctx,
+        )
 
     async def _build_registration_result(
         self,
@@ -422,37 +407,6 @@ class SafariCog(commands.Cog):
 
         permissions = getattr(ctx.author, "guild_permissions", None)
         return bool(getattr(permissions, "administrator", False))
-
-    async def _send_encounter_view(
-        self,
-        ctx: commands.Context,
-        view: SafariEncounterView,
-    ) -> object:
-        return await ctx.send(
-            content=view.build_content(),
-            view=view,
-            file=await view.build_file(),
-        )
-
-    async def _send_route_view(
-        self,
-        ctx: commands.Context,
-        view: SafariRouteView,
-    ) -> object:
-        return await ctx.send(
-            content=view.build_content(),
-            view=view,
-        )
-
-    async def _send_summary_view(
-        self,
-        ctx: commands.Context,
-        view: SafariSummaryView,
-    ) -> object:
-        return await ctx.send(
-            embeds=view.build_embeds(),
-            view=view,
-        )
 
     async def _show_unlock_progress(self, ctx: commands.Context) -> None:
         world_repository = getattr(self.core, "safari_world_repository", None)
