@@ -5,9 +5,9 @@ import asyncio
 import discord
 
 from application.safari import SafariFinalSummary
+from core.safari.domain import SafariFinishReason
 from interfaces.discord.files import image_to_discord_file
 from rendering.safari import SafariSummaryRenderer
-from rendering.safari.narrative import summary_narrative
 
 
 class SafariSummaryView(discord.ui.View):
@@ -20,59 +20,37 @@ class SafariSummaryView(discord.ui.View):
         self.renderer = SafariSummaryRenderer()
 
     def build_embeds(self) -> tuple[discord.Embed, ...]:
-        return (
-            self._overview_embed(),
-            self._ranking_embed(),
-            self._route_embed(),
-            self._encounters_embed(),
-        )
+        embeds = [self._overview_embed(), self._ranking_embed()]
+        special_encounters = self._special_encounters_embed()
+        if special_encounters is not None:
+            embeds.append(special_encounters)
+        return tuple(embeds)
 
     def _overview_embed(self) -> discord.Embed:
-        summary = self.summary
         embed = discord.Embed(
-            title="Safari Summary",
-            description=summary_narrative(
-                summary.finish_reason.value,
-                summary.totals.encounters_completed,
-            ),
+            title="Safari Complete",
+            description=self._build_overview_description(),
             color=discord.Color.green(),
         )
         embed.set_image(url="attachment://safari-summary.png")
-        embed.add_field(name="Map", value=summary.safari_map.value, inline=True)
-        embed.add_field(name="Weather", value=summary.weather.value, inline=True)
-        embed.add_field(name="Time", value=summary.time_of_day.value, inline=True)
         embed.add_field(
-            name="Finish Reason",
-            value=summary.finish_reason.value,
-            inline=True,
-        )
-        embed.add_field(name="Level", value=str(summary.level), inline=True)
-        embed.add_field(
-            name="Totals",
+            name="Results",
             value=(
-                f"Encounters: {summary.totals.encounters_completed}\n"
-                f"Pokemon seen: {summary.totals.pokemon_seen}\n"
-                f"Captured slots: {summary.totals.slots_captured}\n"
-                f"Escaped slots: {summary.totals.slots_escaped}\n"
-                f"Attempts: {summary.totals.attempts_executed}\n"
-                f"Balls committed: {summary.totals.balls_committed}"
+                f"Pokémon captured: {self._captured_count()}\n"
+                f"Safari Balls used: {self._balls_used()}\n"
+                f"Safari Balls remaining: {self._balls_remaining()}"
             ),
             inline=False,
         )
-        embed.add_field(
-            name="Extraordinary",
-            value=(
-                "Legendary: "
-                f"{'Yes' if summary.extraordinary.legendary_seen else 'No'}\n"
-                "Mythical: "
-                f"{'Yes' if summary.extraordinary.mythical_seen else 'No'}\n"
-                "Shiny global: "
-                f"{'Yes' if summary.extraordinary.shiny_encounter_seen else 'No'}\n"
-                "Regional herd: "
-                f"{'Yes' if summary.extraordinary.regional_herd_seen else 'No'}"
-            ),
-            inline=False,
-        )
+
+        captured_lines = self._captured_pokemon_lines()
+        if captured_lines:
+            embed.add_field(
+                name="Captured Pokémon",
+                value="\n".join(captured_lines),
+                inline=False,
+            )
+
         return embed
 
     async def build_file(self) -> discord.File:
@@ -81,93 +59,84 @@ class SafariSummaryView(discord.ui.View):
 
     def _ranking_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title="Safari Ranking",
+            title="Ranking",
             color=discord.Color.blurple(),
         )
-        for participant in self.summary.ranking:
-            captures = (
-                "\n".join(
-                    (
-                        f"#{creature.collection_number} - "
-                        f"{creature.species.name.title()}"
-                        + (" [shiny]" if creature.is_shiny else "")
-                        + (
-                            f" ({creature.current_form.name})"
-                            if creature.current_form is not None
-                            else ""
-                        )
-                    )
-                    for creature in participant.captured_creatures
-                )
-                or "No captures."
+        lines = [
+            (
+                f"{participant.rank}. <@{participant.trainer_id}> — "
+                f"{participant.capture_count} capture"
+                f"{'s' if participant.capture_count != 1 else ''}"
             )
-            embed.add_field(
-                name=f"#{participant.rank} <@{participant.trainer_id}>",
-                value=(
-                    f"Captures: {participant.capture_count}\n"
-                    f"Shiny: {participant.shiny_capture_count}\n"
-                    f"Balls used: {participant.balls_used}\n"
-                    f"Balls remaining: {participant.balls_remaining}\n"
-                    f"Attempts: {participant.attempts_executed}\n"
-                    f"Slots won: {participant.slots_won}\n"
-                    f"Encounters: {participant.encounters_participated}\n"
-                    f"Captures:\n{captures}"
-                ),
-                inline=False,
-            )
+            for participant in self.summary.ranking
+        ]
+        embed.description = "\n".join(lines) if lines else "No participants recorded."
         return embed
 
-    def _route_embed(self) -> discord.Embed:
-        summary = self.summary
-        embed = discord.Embed(
-            title="Safari Route",
-            color=discord.Color.gold(),
-        )
-        embed.add_field(name="Map", value=summary.route.safari_map.value, inline=True)
-        embed.add_field(name="Weather", value=summary.route.weather.value, inline=True)
-        embed.add_field(
-            name="Time",
-            value=summary.route.time_of_day.value,
-            inline=True,
-        )
-        for index, segment in enumerate(summary.route.segments, start=1):
-            details = [
-                f"Phase: {segment.phase.value}",
-                f"Remaining encounters: {segment.remaining_encounters}",
-                f"Source option: {segment.source_option_id or 'Initial'}",
-            ]
-            if segment.vote_result is not None:
-                details.append(
-                    "Selected option: " f"{segment.vote_result.selected_option.id}"
-                )
-            embed.add_field(
-                name=f"Segment {index} - {segment.zone.value}",
-                value="\n".join(details),
-                inline=False,
-            )
-        return embed
+    def _special_encounters_embed(self) -> discord.Embed | None:
+        lines = []
+        if self.summary.extraordinary.legendary_seen:
+            lines.append("• Legendary Pokémon appeared")
+        if self.summary.extraordinary.mythical_seen:
+            lines.append("• Mythical Pokémon appeared")
+        if self.summary.extraordinary.shiny_encounter_seen:
+            lines.append("• Global shiny encounter")
+        if self.summary.extraordinary.regional_herd_seen:
+            lines.append("• Regional herd")
 
-    def _encounters_embed(self) -> discord.Embed:
+        if not lines:
+            return None
+
         embed = discord.Embed(
-            title="Safari Encounters",
+            title="Special Encounters",
             color=discord.Color.purple(),
         )
-        for index, encounter in enumerate(self.summary.encounters, start=1):
-            slot_lines = []
-            for slot in encounter.slot_summaries:
-                capture_text = "Escaped"
-                if slot.captured_creature is not None:
-                    capture_text = (
-                        f"Captured #{slot.captured_creature.collection_number} "
-                        f"by <@{slot.captured_creature.trainer_id}>"
-                    )
-                slot_lines.append(
-                    f"Slot {slot.slot_id}: {slot.species.name.title()} - "
-                    f"{capture_text}"
-                )
-            embed.add_field(
-                name=f"Encounter {index}",
-                value="\n".join(slot_lines),
-                inline=False,
-            )
+        embed.description = "\n".join(lines)
         return embed
+
+    def _build_overview_description(self) -> str:
+        summary = self.summary
+        context = " · ".join(
+            (
+                summary.safari_map.value.title(),
+                summary.weather.value.title(),
+                summary.time_of_day.value.title(),
+            )
+        )
+        return (
+            f"{context}\n"
+            f"{self._finish_reason_text()}\n"
+            f"The expedition ended after {summary.totals.encounters_completed} "
+            f"encounter{'s' if summary.totals.encounters_completed != 1 else ''}."
+        )
+
+    def _captured_pokemon_lines(self) -> list[str]:
+        lines: list[str] = []
+        for participant in self.summary.ranking:
+            for creature in participant.captured_creatures:
+                name = creature.species.name.title()
+                if creature.current_form is not None:
+                    name = f"{name} ({creature.current_form.name})"
+                if creature.is_shiny:
+                    name = f"{name} [shiny]"
+                lines.append(f"{name} · #{creature.collection_number}")
+        return lines
+
+    def _captured_count(self) -> int:
+        return sum(participant.capture_count for participant in self.summary.ranking)
+
+    def _balls_used(self) -> int:
+        return sum(participant.balls_used for participant in self.summary.ranking)
+
+    def _balls_remaining(self) -> int:
+        return sum(participant.balls_remaining for participant in self.summary.ranking)
+
+    def _finish_reason_text(self) -> str:
+        reason = self.summary.finish_reason
+        if reason is SafariFinishReason.COMPLETED:
+            return "The expedition was completed successfully."
+        if reason is SafariFinishReason.NO_BALLS_REMAINING:
+            return "The expedition ended because no Safari Balls remained."
+        if reason is SafariFinishReason.ADMINISTRATIVE_ABORT:
+            return "The expedition was ended by an administrator."
+        return "The expedition ended."

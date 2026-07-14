@@ -1,14 +1,37 @@
 from types import SimpleNamespace
 
+import pytest
+
+from core.safari.domain import SafariFinishReason
 from interfaces.discord.views.safari_summary import SafariSummaryView
 
 
-def test_summary_view_builds_embeds_from_session_summary() -> None:
+@pytest.mark.parametrize(
+    ("finish_reason", "expected_text"),
+    [
+        (
+            SafariFinishReason.COMPLETED,
+            "The expedition was completed successfully.",
+        ),
+        (
+            SafariFinishReason.NO_BALLS_REMAINING,
+            "The expedition ended because no Safari Balls remained.",
+        ),
+        (
+            SafariFinishReason.ADMINISTRATIVE_ABORT,
+            "The expedition was ended by an administrator.",
+        ),
+    ],
+)
+def test_summary_view_builds_embeds_from_session_summary(
+    finish_reason: SafariFinishReason,
+    expected_text: str,
+) -> None:
     summary = SimpleNamespace(
         safari_map=SimpleNamespace(value="FOREST"),
         weather=SimpleNamespace(value="CLEAR"),
         time_of_day=SimpleNamespace(value="DAY"),
-        finish_reason=SimpleNamespace(value="completed"),
+        finish_reason=finish_reason,
         level=4,
         totals=SimpleNamespace(
             encounters_completed=2,
@@ -78,8 +101,37 @@ def test_summary_view_builds_embeds_from_session_summary() -> None:
     view = SafariSummaryView(SimpleNamespace(summary=summary))
     embeds = view.build_embeds()
 
-    assert len(embeds) == 4
-    assert embeds[0].title == "Safari Summary"
-    assert embeds[1].title == "Safari Ranking"
-    assert embeds[2].title == "Safari Route"
-    assert embeds[3].title == "Safari Encounters"
+    assert len(embeds) == 3
+    assert embeds[0].title == "Safari Complete"
+    assert embeds[1].title == "Ranking"
+    assert embeds[2].title == "Special Encounters"
+    assert expected_text in embeds[0].description
+    assert "The expedition ended after 2 encounters." in embeds[0].description
+    assert "Safari Encounters" not in embeds[0].description
+    assert "Safari Route" not in embeds[0].description
+    assert "UUID" not in embeds[0].description
+    assert "No" not in embeds[2].description
+    assert "collection_number" not in embeds[0].description
+    assert "balls used" not in embeds[0].description.lower()
+
+
+def test_summary_view_omits_special_encounters_when_none_occurred() -> None:
+    summary = SimpleNamespace(
+        safari_map=SimpleNamespace(value="FOREST"),
+        weather=SimpleNamespace(value="CLEAR"),
+        time_of_day=SimpleNamespace(value="DAY"),
+        finish_reason=SafariFinishReason.COMPLETED,
+        level=4,
+        totals=SimpleNamespace(encounters_completed=1),
+        extraordinary=SimpleNamespace(
+            legendary_seen=False,
+            mythical_seen=False,
+            shiny_encounter_seen=False,
+            regional_herd_seen=False,
+        ),
+        ranking=(),
+    )
+
+    view = SafariSummaryView(SimpleNamespace(summary=summary))
+
+    assert len(view.build_embeds()) == 2
