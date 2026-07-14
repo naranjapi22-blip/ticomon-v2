@@ -27,3 +27,4 @@
 - Safari sessions are currently in-memory and do not survive bot restarts.
 - Watch structured logs for Safari open, start, encounter, route, and finish events.
 - Use the simulator for balance analysis; it is read-only and does not write production data.
+- Run `python scripts/check_all.py` or `poetry run pytest -q` before pushing changes.

@@ -162,6 +162,7 @@ The project's architecture and design principles are documented in the **Archite
 The ADD explains the philosophy, responsibilities, and decisions behind the architecture used throughout the project.
 
 Safari-specific user, development, and operations notes live in `docs/safari.md`.
+Run `python scripts/check_all.py` or `poetry run pytest -q` before pushing changes.
 
 ---
 
