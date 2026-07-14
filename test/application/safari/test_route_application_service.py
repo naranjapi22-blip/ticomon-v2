@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -57,10 +58,11 @@ class _RouteRandom:
 class _EncounterGenerator:
     def __init__(self) -> None:
         self.context = None
+        self.compositions = None
 
     async def generate_with_events(self, context, compositions):
         self.context = context
-        assert compositions == (SafariComposition.NORMAL,)
+        self.compositions = compositions
         opportunity = OpportunityFactory.create(create_species(id=25))
         encounter = SafariEncounter(
             uuid4(),
@@ -216,6 +218,56 @@ async def test_resolve_route_vote_applies_destination_and_publishes_next_encount
         session.current_segment.allowed_events
     )
     assert activity.saved_sessions[-1] == session.guild_id
+
+
+@pytest.mark.asyncio
+async def test_resolve_route_vote_forces_special_final_encounter_when_needed():
+    activity = _TrackingActivityRepository()
+    session = _route_ready_session()
+    session._total_encounters = 9
+    session._completed_encounter_count = 8
+    session._encounter_history = tuple()  # type: ignore[assignment]
+    await activity.save_session(session)
+    generator = _EncounterGenerator()
+    service = _service(activity, generator, _RouteRandom())
+    opened = await service.open_route_vote(session.guild_id, NOW)
+    selected_option = opened.options[0]
+    await service.cast_route_vote(session.guild_id, 1, selected_option.id)
+    await service.cast_route_vote(session.guild_id, 2, selected_option.id)
+
+    await service.resolve_route_vote(session.guild_id)
+
+    assert generator.compositions == (
+        SafariComposition.SOLITARY,
+        SafariComposition.NORMAL,
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_route_vote_keeps_normal_sequence_after_special_seen():
+    activity = _TrackingActivityRepository()
+    session = _route_ready_session()
+    session._total_encounters = 9
+    session._completed_encounter_count = 8
+    session._encounter_history = [
+        SimpleNamespace(
+            encounter=SimpleNamespace(
+                composition=SafariComposition.SOLITARY,
+                is_regional_herd=False,
+            )
+        )
+    ]
+    await activity.save_session(session)
+    generator = _EncounterGenerator()
+    service = _service(activity, generator, _RouteRandom())
+    opened = await service.open_route_vote(session.guild_id, NOW)
+    selected_option = opened.options[0]
+    await service.cast_route_vote(session.guild_id, 1, selected_option.id)
+    await service.cast_route_vote(session.guild_id, 2, selected_option.id)
+
+    await service.resolve_route_vote(session.guild_id)
+
+    assert generator.compositions == (SafariComposition.NORMAL,)
 
 
 @pytest.mark.asyncio

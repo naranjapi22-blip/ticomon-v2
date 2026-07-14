@@ -28,10 +28,8 @@ class SafariEncounterRenderer:
         draw = ImageDraw.Draw(canvas)
 
         placements = layout_slot_cards(len(encounter.slots))
-        for index, (slot, placement) in enumerate(
-            zip(encounter.slots, placements), start=1
-        ):
-            self._draw_slot_card(draw, canvas, slot, placement, index)
+        for slot, placement in zip(encounter.slots, placements):
+            self._draw_slot_card(draw, canvas, slot, placement)
         return canvas
 
     def _background(self, safari_map: SafariMap) -> Image.Image:
@@ -51,31 +49,12 @@ class SafariEncounterRenderer:
         canvas: Image.Image,
         slot,
         placement: SlotPlacement,
-        index: int,
     ) -> None:
         card = Image.new("RGBA", (placement.width, placement.height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card)
 
-        number_font = self.assets.get_font(24)
         name = self.format_species_name(slot.opportunity.species.name)
         name_font = self._name_font_for(name, placement.width)
-
-        card_draw.rounded_rectangle(
-            (18, 16, 58, 56),
-            radius=12,
-            fill=(255, 255, 255, 255),
-        )
-        number_text = str(index)
-        bbox = card_draw.textbbox((0, 0), number_text, font=number_font)
-        card_draw.text(
-            (
-                18 + (40 - (bbox[2] - bbox[0])) // 2,
-                16 + (40 - (bbox[3] - bbox[1])) // 2 - 2,
-            ),
-            number_text,
-            font=number_font,
-            fill=(0, 0, 0, 255),
-        )
 
         sprite = self.assets.get_sprite(
             slot.opportunity.species.id,

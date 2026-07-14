@@ -15,6 +15,7 @@ from core.safari.domain import (
     SAFARI_LEVEL_CONFIGS,
     SAFARI_VALID_WEATHER_BY_MAP,
     SAFARI_ZONE_DEFINITION_BY_ZONE,
+    SafariComposition,
     SafariEncounterStatus,
     SafariExtraordinaryFlags,
     SafariFinishReason,
@@ -191,6 +192,14 @@ class SafariSession:
     @property
     def encounter_history(self) -> tuple[SafariEncounterHistoryEntry, ...]:
         return tuple(self._encounter_history)
+
+    @property
+    def has_special_encounter_history(self) -> bool:
+        return any(
+            entry.encounter.composition != SafariComposition.NORMAL
+            or entry.encounter.is_regional_herd
+            for entry in self._encounter_history
+        )
 
     @property
     def completed_encounter_count(self) -> int:

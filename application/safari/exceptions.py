@@ -6,6 +6,10 @@ class SafariUnlockUnavailable(SafariApplicationError):
     pass
 
 
+class SafariUnlockAlreadyExists(SafariApplicationError):
+    pass
+
+
 class SafariActivityAlreadyExists(SafariApplicationError):
     pass
 

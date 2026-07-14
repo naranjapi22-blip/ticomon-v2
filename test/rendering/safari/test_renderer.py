@@ -176,6 +176,36 @@ def test_encounter_renderer_keeps_slot_background_transparent() -> None:
     assert slot_pixel == background_pixel
 
 
+def test_encounter_renderer_does_not_draw_slot_badges() -> None:
+    class _FakeAssets:
+        @staticmethod
+        def get_background(_safari_map):
+            return Image.new("RGBA", (1020, 574), (120, 160, 200, 255))
+
+        @staticmethod
+        def get_sprite(_species_id, _shiny):
+            return Image.new("RGBA", (48, 48), (255, 255, 255, 0))
+
+        @staticmethod
+        def get_font(_size):
+            return ImageFont.load_default()
+
+    session = _session(1)
+    image = SafariEncounterRenderer(assets=_FakeAssets()).render(session)
+    placement = layout_slot_cards(1)[0]
+
+    badge_pixel = image.getpixel((placement.x + 24, placement.y + 24))
+    background_pixel = image.getpixel((10, 10))
+
+    assert badge_pixel == background_pixel
+
+
+def test_encounter_renderer_keeps_long_names_readable() -> None:
+    assert SafariEncounterRenderer.format_species_name(
+        "Dudunsparce-Three-Segment"
+    ) == "Dudunsparce (Three-Segment)"
+
+
 def test_summary_renderer_renders_final_banner() -> None:
     image = SafariSummaryRenderer().render(_summary())
 

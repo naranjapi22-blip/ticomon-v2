@@ -9,11 +9,11 @@ from application.safari import (
     SafariActivityAlreadyExists,
     SafariActivitySnapshot,
     SafariRegistrationNotFound,
+    SafariUnlockAlreadyExists,
     SafariUnlockUnavailable,
 )
 from application.safari.results import OpenSafariRegistrationResult
 from core.safari import (
-    SAFARI_UNLOCK_THRESHOLD,
     SafariRegistration,
     SafariSession,
     SafariSessionStatus,
@@ -59,7 +59,7 @@ class SafariCog(commands.Cog):
                 datetime.now(UTC),
             )
         except SafariUnlockUnavailable:
-            await self._show_unlock_progress(ctx)
+            await self._show_daily_progress(ctx)
             return
         except SafariActivityAlreadyExists:
             await ctx.send(
@@ -103,7 +103,13 @@ class SafariCog(commands.Cog):
             unlocked_at=datetime.now(UTC),
             map_influence=SafariMapInfluence(),
         )
-        saved_unlock = await self.core.safari_unlock_repository.save(unlock)
+        try:
+            saved_unlock = await self.core.safari_unlock_repository.save(unlock)
+        except SafariUnlockAlreadyExists:
+            await ctx.send(
+                f"A Safari unlock for level {level} already exists today."
+            )
+            return
 
         await ctx.send(
             (
@@ -408,19 +414,24 @@ class SafariCog(commands.Cog):
         permissions = getattr(ctx.author, "guild_permissions", None)
         return bool(getattr(permissions, "administrator", False))
 
-    async def _show_unlock_progress(self, ctx: commands.Context) -> None:
-        world_repository = getattr(self.core, "safari_world_repository", None)
-        current_progress = 0
-        if world_repository is not None:
-            world = await world_repository.get_by_guild_id(ctx.guild.id)
-            if world is not None:
-                current_progress = world.current_progress
+    async def _show_daily_progress(self, ctx: commands.Context) -> None:
+        progress_application = getattr(
+            self.core,
+            "safari_daily_progress_application",
+            None,
+        )
+        if progress_application is None:
+            await ctx.send("Safari progress is unavailable right now.")
+            return
 
-        remaining = max(0, SAFARI_UNLOCK_THRESHOLD - current_progress)
+        snapshot = await progress_application.get(ctx.guild.id)
         await ctx.send(
             (
-                "Safari is not unlocked yet.\n\n"
-                f"Safari progress: {current_progress} / {SAFARI_UNLOCK_THRESHOLD}\n"
-                f"{remaining} progress points remaining."
+                "Daily Safari Progress\n\n"
+                f"Active trainers: {snapshot.active_player_count}\n"
+                f"Captures today: {snapshot.daily_capture_count} / "
+                f"{snapshot.daily_capture_target}\n"
+                f"Safaris unlocked: {snapshot.daily_unlock_count} / 5\n"
+                f"Next Safari: {snapshot.captures_remaining} captures remaining."
             )
         )

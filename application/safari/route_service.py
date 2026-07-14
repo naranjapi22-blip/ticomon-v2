@@ -195,7 +195,23 @@ class SafariRouteApplicationService:
             route_allowed_events=frozenset(current_segment.allowed_events),
             extraordinary_flags=session.extraordinary_flags,
         )
+        compositions = self._encounter_compositions_for(session)
         return await self._encounter_generator.generate_with_events(
             context,
-            (SafariComposition.NORMAL,),
+            compositions,
         )
+
+    @staticmethod
+    def _encounter_compositions_for(
+        session: SafariSession,
+    ) -> tuple[SafariComposition, ...]:
+        if (
+            session.total_encounters >= 9
+            and session.completed_encounter_count + 1 == session.total_encounters
+            and not session.has_special_encounter_history
+        ):
+            return (
+                SafariComposition.SOLITARY,
+                SafariComposition.NORMAL,
+            )
+        return (SafariComposition.NORMAL,)

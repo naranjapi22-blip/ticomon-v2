@@ -454,10 +454,26 @@ class SafariCaptureApplicationService:
             route_allowed_events=frozenset(current_segment.allowed_events),
             extraordinary_flags=session.extraordinary_flags,
         )
+        compositions = self._encounter_compositions_for(session)
         return await self._encounter_generator.generate_with_events(
             context,
-            (SafariComposition.NORMAL,),
+            compositions,
         )
+
+    @staticmethod
+    def _encounter_compositions_for(
+        session: SafariSession,
+    ) -> tuple[SafariComposition, ...]:
+        if (
+            session.total_encounters >= 9
+            and session.completed_encounter_count + 2 == session.total_encounters
+            and not session.has_special_encounter_history
+        ):
+            return (
+                SafariComposition.SOLITARY,
+                SafariComposition.NORMAL,
+            )
+        return (SafariComposition.NORMAL,)
 
     async def _require_session(self, guild_id: int) -> SafariSession:
         session = await self._activity_repository.get_session(guild_id)

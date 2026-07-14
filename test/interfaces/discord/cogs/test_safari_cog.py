@@ -8,10 +8,15 @@ from application.safari import (
     OpenSafariRegistrationResult,
     ResolveSafariCaptureResult,
     SafariActivityAlreadyExists,
+    SafariUnlockAlreadyExists,
     SafariUnlockUnavailable,
     StartSafariResult,
 )
-from core.safari import SafariGeneratedEncounter, SafariThematicEvent
+from core.safari import (
+    SafariDailyProgressSnapshot,
+    SafariGeneratedEncounter,
+    SafariThematicEvent,
+)
 from core.safari.domain import (
     SAFARI_LEVEL_CONFIGS,
     SafariMapInfluence,
@@ -69,6 +74,31 @@ def _start_result() -> StartSafariResult:
     )
 
 
+def _daily_progress_snapshot(
+    *,
+    active_player_count: int,
+    daily_capture_count: int,
+    daily_capture_target: int,
+    daily_unlock_count: int,
+    next_threshold: int | None,
+    captures_remaining: int,
+) -> SafariDailyProgressSnapshot:
+    return SafariDailyProgressSnapshot(
+        guild_id=10,
+        cycle_date=datetime(2026, 7, 13, tzinfo=UTC).date(),
+        active_player_count=active_player_count,
+        effective_active_players=max(active_player_count, 1),
+        daily_capture_target=daily_capture_target,
+        daily_capture_count=daily_capture_count,
+        daily_unlock_count=daily_unlock_count,
+        thresholds=(2, 4, 8, 12, 16),
+        next_threshold=next_threshold,
+        captures_remaining=captures_remaining,
+        all_unlocked=daily_unlock_count >= 5,
+        current_influence=SafariMapInfluence(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_safari_command_opens_registration_view() -> None:
     open_registration = AsyncMock(return_value=_registration_result())
@@ -108,6 +138,18 @@ async def test_safari_command_reports_registration_errors() -> None:
     open_registration = AsyncMock(side_effect=SafariUnlockUnavailable())
     core = SimpleNamespace(
         safari_registration_application=SimpleNamespace(open=open_registration),
+        safari_daily_progress_application=SimpleNamespace(
+            get=AsyncMock(
+                return_value=_daily_progress_snapshot(
+                    active_player_count=0,
+                    daily_capture_count=0,
+                    daily_capture_target=16,
+                    daily_unlock_count=0,
+                    next_threshold=2,
+                    captures_remaining=2,
+                )
+            )
+        ),
     )
     cog = SafariCog(core)
     ctx = SimpleNamespace(
@@ -119,10 +161,13 @@ async def test_safari_command_reports_registration_errors() -> None:
     await SafariCog.safari.callback(cog, ctx)
 
     ctx.send.assert_awaited_once_with(
-        "Safari is not unlocked yet.\n\n"
-        "Safari progress: 0 / 100\n"
-        "100 progress points remaining."
+        "Daily Safari Progress\n\n"
+        "Active trainers: 0\n"
+        "Captures today: 0 / 16\n"
+        "Safaris unlocked: 0 / 5\n"
+        "Next Safari: 2 captures remaining."
     )
+    core.safari_daily_progress_application.get.assert_awaited_once_with(10)
 
 
 @pytest.mark.asyncio
@@ -150,8 +195,17 @@ async def test_safari_command_reports_unlock_progress() -> None:
     open_registration = AsyncMock(side_effect=SafariUnlockUnavailable())
     core = SimpleNamespace(
         safari_registration_application=SimpleNamespace(open=open_registration),
-        safari_world_repository=SimpleNamespace(
-            get_by_guild_id=AsyncMock(return_value=SimpleNamespace(current_progress=14))
+        safari_daily_progress_application=SimpleNamespace(
+            get=AsyncMock(
+                return_value=_daily_progress_snapshot(
+                    active_player_count=5,
+                    daily_capture_count=27,
+                    daily_capture_target=80,
+                    daily_unlock_count=2,
+                    next_threshold=36,
+                    captures_remaining=9,
+                )
+            )
         ),
     )
     cog = SafariCog(core)
@@ -164,10 +218,13 @@ async def test_safari_command_reports_unlock_progress() -> None:
     await SafariCog.safari.callback(cog, ctx)
 
     ctx.send.assert_awaited_once_with(
-        "Safari is not unlocked yet.\n\n"
-        "Safari progress: 14 / 100\n"
-        "86 progress points remaining."
+        "Daily Safari Progress\n\n"
+        "Active trainers: 5\n"
+        "Captures today: 27 / 80\n"
+        "Safaris unlocked: 2 / 5\n"
+        "Next Safari: 9 captures remaining."
     )
+    core.safari_daily_progress_application.get.assert_awaited_once_with(10)
 
 
 @pytest.mark.asyncio
@@ -257,6 +314,49 @@ async def test_safariunlock_rejects_invalid_level() -> None:
     assert "Invalid Safari level." in ctx.send.await_args.args[0]
     assert "Available levels" in ctx.send.await_args.args[0]
     core.safari_unlock_repository.save.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_safariunlock_reports_duplicate_unlocks() -> None:
+    core = SimpleNamespace(
+        safari_unlock_repository=SimpleNamespace(
+            save=AsyncMock(side_effect=SafariUnlockAlreadyExists())
+        ),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10, owner_id=20),
+        author=SimpleNamespace(
+            id=20, guild_permissions=SimpleNamespace(administrator=True)
+        ),
+        send=AsyncMock(),
+    )
+
+    await SafariCog.safariunlock.callback(cog, ctx, 1)
+
+    ctx.send.assert_awaited_once_with(
+        "A Safari unlock for level 1 already exists today."
+    )
+
+
+@pytest.mark.asyncio
+async def test_safariunlock_does_not_hide_other_errors() -> None:
+    core = SimpleNamespace(
+        safari_unlock_repository=SimpleNamespace(
+            save=AsyncMock(side_effect=RuntimeError("boom"))
+        ),
+    )
+    cog = SafariCog(core)
+    ctx = SimpleNamespace(
+        guild=SimpleNamespace(id=10, owner_id=20),
+        author=SimpleNamespace(
+            id=20, guild_permissions=SimpleNamespace(administrator=True)
+        ),
+        send=AsyncMock(),
+    )
+
+    with pytest.raises(RuntimeError):
+        await SafariCog.safariunlock.callback(cog, ctx, 1)
 
 
 @pytest.mark.asyncio

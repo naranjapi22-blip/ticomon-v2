@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
+import asyncpg
+
+from application.safari.exceptions import SafariUnlockAlreadyExists
 from core.safari.unlock import SafariUnlock
 from core.safari.unlock_repository import SafariUnlockRepository
 from infrastructure.db_config import get_pool
@@ -16,48 +19,53 @@ class NeonSafariUnlockRepository(SafariUnlockRepository):
     async def save(self, unlock: SafariUnlock) -> SafariUnlock:
         pool = await get_pool()
 
-        async with pool.acquire() as connection:
-            if unlock.id is None:
-                row = await connection.fetchrow(
-                    """
-                    INSERT INTO safari_unlocks (
-                        guild_id,
-                        level,
-                        encounter_count,
-                        balls_per_participant,
-                        cycle_date,
-                        map_influence,
-                        status,
-                        unlocked_at,
-                        consumed_at,
-                        consumed_session_id
+        try:
+            async with pool.acquire() as connection:
+                if unlock.id is None:
+                    row = await connection.fetchrow(
+                        """
+                        INSERT INTO safari_unlocks (
+                            guild_id,
+                            level,
+                            encounter_count,
+                            balls_per_participant,
+                            cycle_date,
+                            map_influence,
+                            status,
+                            unlocked_at,
+                            consumed_at,
+                            consumed_session_id
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+                        RETURNING *
+                        """,
+                        *self._mapper.to_row(unlock),
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
-                    RETURNING *
-                    """,
-                    *self._mapper.to_row(unlock),
-                )
-            else:
-                row = await connection.fetchrow(
-                    """
-                    UPDATE safari_unlocks
-                    SET
-                        guild_id = $1,
-                        level = $2,
-                        encounter_count = $3,
-                        balls_per_participant = $4,
-                        cycle_date = $5,
-                        map_influence = $6::jsonb,
-                        status = $7,
-                        unlocked_at = $8,
-                        consumed_at = $9,
-                        consumed_session_id = $10
-                    WHERE id = $11
-                    RETURNING *
-                    """,
-                    *self._mapper.to_row(unlock),
-                    unlock.id,
-                )
+                else:
+                    row = await connection.fetchrow(
+                        """
+                        UPDATE safari_unlocks
+                        SET
+                            guild_id = $1,
+                            level = $2,
+                            encounter_count = $3,
+                            balls_per_participant = $4,
+                            cycle_date = $5,
+                            map_influence = $6::jsonb,
+                            status = $7,
+                            unlocked_at = $8,
+                            consumed_at = $9,
+                            consumed_session_id = $10
+                        WHERE id = $11
+                        RETURNING *
+                        """,
+                        *self._mapper.to_row(unlock),
+                        unlock.id,
+                    )
+        except asyncpg.UniqueViolationError as error:
+            raise SafariUnlockAlreadyExists(
+                "A Safari unlock for that level already exists today."
+            ) from error
 
         if row is None:
             raise ValueError(f"Safari unlock {unlock.id} was not found.")

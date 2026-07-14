@@ -222,7 +222,7 @@ async def test_map_zone_and_route_modifiers_are_multiplied():
 
 
 @pytest.mark.asyncio
-async def test_dual_type_uses_highest_modifier_once_per_source():
+async def test_dual_type_combines_matching_modifiers_per_source():
     dual = make_species(1, types=["fire", "water"])
     generator, _, _, random_source = make_generator((dual,))
     context = make_context(
@@ -234,7 +234,24 @@ async def test_dual_type_uses_highest_modifier_once_per_source():
     await generator.generate(context)
     _, weights = random_source.calls[0]
 
-    assert weights == (RARITY_CONFIG[Rarity.COMMON].spawn_weight * 3 * 4 * 5,)
+    assert weights == (RARITY_CONFIG[Rarity.COMMON].spawn_weight * 6 * 4 * 5,)
+
+
+@pytest.mark.asyncio
+async def test_affine_species_outweighs_neutral_species_in_matching_context():
+    coast_species = make_species(1, types=["water", "rock"])
+    neutral_species = make_species(2, types=["normal"])
+    generator, _, _, random_source = make_generator((coast_species, neutral_species))
+    context = make_context(
+        map_type_weight_modifiers={"water": 1.4, "rock": 1.1},
+        zone_type_weight_modifiers={"water": 1.5, "rock": 1.2},
+        route_type_weight_modifiers={"water": 1.3, "rock": 1.1},
+    )
+
+    await generator.generate(context)
+    _, weights = random_source.calls[0]
+
+    assert weights[0] > weights[1]
 
 
 @pytest.mark.asyncio

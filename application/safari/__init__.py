@@ -2,6 +2,7 @@ from .abort_service import AbortSafariApplicationService
 from .activity_service import GetSafariActivityApplicationService
 from .activity_state import SafariActivityTracker
 from .capture_application_service import SafariCaptureApplicationService
+from .daily_progress_service import GetSafariDailyProgressApplicationService
 from .exceptions import (
     SafariActivityAlreadyExists,
     SafariActivityNotFound,
@@ -16,6 +17,7 @@ from .exceptions import (
     SafariRouteVoteUnavailable,
     SafariSessionNotFinished,
     SafariSessionNotFound,
+    SafariUnlockAlreadyExists,
     SafariUnlockUnavailable,
 )
 from .finish_service import FinishSafariApplicationService
@@ -63,6 +65,7 @@ __all__ = [
     "SafariActivityNotFound",
     "SafariApplicationError",
     "AbortSafariApplicationService",
+    "GetSafariDailyProgressApplicationService",
     "GetSafariActivityApplicationService",
     "SafariCaptureApplicationService",
     "SafariCaptureResolutionUnavailable",
@@ -89,6 +92,7 @@ __all__ = [
     "SafariRegistrationNotFound",
     "SafariSessionNotFinished",
     "SafariSessionNotFound",
+    "SafariUnlockAlreadyExists",
     "SafariUnlockUnavailable",
     "StartSafariApplicationService",
     "StartSafariResult",

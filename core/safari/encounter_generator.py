@@ -726,4 +726,10 @@ class SafariEncounterGenerator:
             for type_name in set(species.types)
             if type_name in modifiers
         ]
-        return max(matching_modifiers, default=1.0)
+        if not matching_modifiers:
+            return 1.0
+
+        modifier = 1.0
+        for value in matching_modifiers:
+            modifier *= value
+        return modifier

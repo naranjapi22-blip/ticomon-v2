@@ -29,6 +29,7 @@ from application.safari import (
     AbortSafariApplicationService,
     FinishSafariApplicationService,
     GetSafariActivityApplicationService,
+    GetSafariDailyProgressApplicationService,
     SafariCaptureApplicationService,
     SafariRegistrationApplicationService,
     SafariRouteApplicationService,
@@ -110,6 +111,12 @@ from infrastructure.postgres.trainer.neon_trainer_repository import (
 from infrastructure.safari.in_memory_safari_activity_repository import (
     InMemorySafariActivityRepository,
 )
+from infrastructure.safari.neon_safari_daily_active_trainer_repository import (
+    NeonSafariDailyActiveTrainerRepository,
+)
+from infrastructure.safari.neon_safari_daily_world_repository import (
+    NeonSafariDailyWorldRepository,
+)
 from infrastructure.safari.neon_safari_unlock_repository import (
     NeonSafariUnlockRepository,
 )
@@ -147,6 +154,7 @@ class CoreServices:
     safari_finish_application: FinishSafariApplicationService
     safari_abort_application: AbortSafariApplicationService
     safari_activity_application: GetSafariActivityApplicationService
+    safari_daily_progress_application: GetSafariDailyProgressApplicationService
     safari_activity_tracker: SafariActivityTracker
     start_safari_application: StartSafariApplicationService
     evolution_application: EvolutionApplicationService
@@ -213,6 +221,8 @@ def build_core(
     spawn_session_repository = InMemorySpawnSessionRepository()
     safari_activity_repository = InMemorySafariActivityRepository()
     safari_activity_tracker = SafariActivityTracker()
+    safari_daily_world_repository = NeonSafariDailyWorldRepository()
+    safari_daily_active_trainer_repository = NeonSafariDailyActiveTrainerRepository()
     safari_world_repository = NeonSafariWorldRepository()
     safari_unlock_repository = NeonSafariUnlockRepository()
 
@@ -272,6 +282,11 @@ def build_core(
     safari_activity_application = GetSafariActivityApplicationService(
         activity_repository=safari_activity_repository,
         activity_tracker=safari_activity_tracker,
+    )
+    safari_daily_progress_application = GetSafariDailyProgressApplicationService(
+        daily_world_repository=safari_daily_world_repository,
+        daily_active_trainer_repository=safari_daily_active_trainer_repository,
+        daily_progress_service=SafariDailyProgressService(),
     )
     start_safari_application = StartSafariApplicationService(
         activity_repository=safari_activity_repository,
@@ -396,4 +411,5 @@ def build_core(
         trade_display_service=trade_display_service,
         safari_world_repository=safari_world_repository,
         safari_unlock_repository=safari_unlock_repository,
+        safari_daily_progress_application=safari_daily_progress_application,
     )

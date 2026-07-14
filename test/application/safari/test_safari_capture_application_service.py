@@ -60,10 +60,11 @@ class _DeterministicRandom:
 class _EncounterGenerator:
     def __init__(self) -> None:
         self.context = None
+        self.compositions = None
 
     async def generate_with_events(self, context, compositions):
         self.context = context
-        assert compositions == (SafariComposition.NORMAL,)
+        self.compositions = compositions
         opportunity = OpportunityFactory.create(create_species(id=999))
         encounter = SafariEncounter(
             uuid4(),
@@ -358,6 +359,34 @@ async def test_resolve_capture_publishes_followup_encounter_when_segment_continu
     assert session.current_encounter.status is SafariEncounterStatus.OPEN
     assert len(session.current_encounter.slots) == 1
     assert session.current_segment.remaining_encounters == 1
+
+
+@pytest.mark.asyncio
+async def test_resolve_capture_forces_special_final_encounter_when_needed():
+    activity = _TrackingActivityRepository()
+    session = _published_session((SafariParticipant(1, 3, 3),))
+    session._total_encounters = 9
+    session._completed_encounter_count = 7
+    session._route_segments[0].remaining_encounters = 2
+    await activity.save_session(session)
+    transaction = _Transaction()
+    service = _capture_service(activity=activity, unit_of_work=_UnitOfWork(transaction))
+
+    await service.select_capture(
+        session.guild_id, 1, session.current_encounter.slots[0].id, 1
+    )
+    await service.confirm_capture_selection(session.guild_id, 1)
+    await service.close_capture_selection(session.guild_id)
+
+    result = await service.resolve_capture(session.guild_id)
+
+    assert result.next_session_status is SafariSessionStatus.ENCOUNTER
+    assert session.status is SafariSessionStatus.ENCOUNTER
+    assert session.current_encounter is not None
+    assert service._encounter_generator.compositions == (
+        SafariComposition.SOLITARY,
+        SafariComposition.NORMAL,
+    )
 
 
 @pytest.mark.asyncio
