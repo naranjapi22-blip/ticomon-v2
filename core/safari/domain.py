@@ -249,7 +249,6 @@ class SafariExtraordinaryFlags:
 
 
 SAFARI_MIN_PARTICIPANTS = 2
-SAFARI_MAX_PARTICIPANTS = 10
 
 
 def _type_weights(*types: str) -> dict[str, float]:

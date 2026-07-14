@@ -73,11 +73,6 @@ class SafariRegistrationView(discord.ui.View):
             value=participants,
             inline=False,
         )
-        embed.add_field(
-            name="Capacity",
-            value=f"{registration.participant_count}/{self.registration_result.capacity}",
-            inline=False,
-        )
         return embed
 
     @discord.ui.button(

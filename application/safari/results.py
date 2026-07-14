@@ -55,14 +55,12 @@ class OpenSafariRegistrationResult:
     level: int
     encounter_count: int
     balls_per_participant: int
-    capacity: int
 
 
 @dataclass(frozen=True, slots=True)
 class JoinSafariRegistrationResult:
     added: bool
     participant_count: int
-    capacity: int
     status: SafariRegistrationStatus
 
 

@@ -13,7 +13,6 @@ from application.safari.results import (
     OpenSafariRegistrationResult,
 )
 from core.safari.activity_repository import SafariActivityRepository
-from core.safari.domain import SAFARI_MAX_PARTICIPANTS
 from core.safari.registration import SafariRegistration
 from core.safari.unlock_repository import SafariUnlockRepository
 
@@ -61,12 +60,11 @@ class SafariRegistrationApplicationService:
             await self._activity_repository.save_registration(registration)
             logger.info(
                 "safari_registration_opened guild_id=%s unlock_id=%s trainer_id=%s "
-                "participant_count=%s capacity=%s",
+                "participant_count=%s",
                 guild_id,
                 unlock.id,
                 trainer_id,
                 registration.participant_count,
-                SAFARI_MAX_PARTICIPANTS,
             )
             return OpenSafariRegistrationResult(
                 registration=registration,
@@ -74,7 +72,6 @@ class SafariRegistrationApplicationService:
                 level=unlock.level,
                 encounter_count=unlock.encounter_count,
                 balls_per_participant=unlock.balls_per_participant,
-                capacity=SAFARI_MAX_PARTICIPANTS,
             )
 
     async def join(
@@ -88,7 +85,7 @@ class SafariRegistrationApplicationService:
                 raise SafariRegistrationNotFound("Safari registration was not found.")
 
             already_registered = trainer_id in registration.participant_ids
-            registration.join(trainer_id, SAFARI_MAX_PARTICIPANTS)
+            registration.join(trainer_id)
             logger.debug(
                 "safari_participant_joined guild_id=%s trainer_id=%s added=%s "
                 "participant_count=%s",
@@ -100,7 +97,6 @@ class SafariRegistrationApplicationService:
             return JoinSafariRegistrationResult(
                 added=not already_registered,
                 participant_count=registration.participant_count,
-                capacity=SAFARI_MAX_PARTICIPANTS,
                 status=registration.status,
             )
 

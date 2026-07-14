@@ -16,7 +16,6 @@ from core.safari.activity_repository import SafariActivityRepository
 from core.safari.domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
-    SAFARI_MAX_PARTICIPANTS,
     SAFARI_MIN_PARTICIPANTS,
     SAFARI_ZONE_DEFINITION_BY_ZONE,
     SafariComposition,
@@ -27,7 +26,6 @@ from core.safari.encounter_generator import SafariEncounterGenerator
 from core.safari.map_selector import SafariMapSelector
 from core.safari.participant import SafariParticipant
 from core.safari.registration import (
-    SafariParticipantLimitReached,
     SafariRegistrationClosed,
 )
 from core.safari.route import SafariRouteSegment
@@ -107,10 +105,6 @@ class StartSafariApplicationService:
                 started_at,
                 minimum_registration_seconds,
             )
-            if registration.participant_count > SAFARI_MAX_PARTICIPANTS:
-                raise SafariParticipantLimitReached(
-                    "Safari registration participant limit exceeded."
-                )
             if not registration.has_minimum(minimum_participants):
                 raise SafariInsufficientParticipants(
                     "Safari requires at least two participants."

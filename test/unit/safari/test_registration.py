@@ -3,7 +3,6 @@ from datetime import datetime
 import pytest
 
 from core.safari import (
-    SafariParticipantLimitReached,
     SafariRegistration,
     SafariRegistrationClosed,
     SafariRegistrationStatus,
@@ -77,24 +76,18 @@ def test_registration_rejects_invalid_construction_values():
 def test_join_adds_participant_and_is_idempotent():
     registration = make_registration()
 
-    registration.join(10, maximum_participants=2)
-    registration.join(10, maximum_participants=2)
+    registration.join(10)
+    registration.join(10)
 
     assert registration.participant_ids == frozenset({10})
     assert registration.participant_count == 1
 
 
-def test_join_validates_limit_and_participant_id():
+def test_join_validates_participant_id():
     registration = make_registration({10})
 
     with pytest.raises(ValueError):
-        registration.join(20, maximum_participants=0)
-
-    with pytest.raises(ValueError):
-        registration.join(0, maximum_participants=2)
-
-    with pytest.raises(SafariParticipantLimitReached):
-        registration.join(20, maximum_participants=1)
+        registration.join(0)
 
 
 @pytest.mark.parametrize(
@@ -106,7 +99,7 @@ def test_join_is_rejected_after_registration_closes(terminal_action):
     terminal_action(registration)
 
     with pytest.raises(SafariRegistrationClosed):
-        registration.join(10, maximum_participants=2)
+        registration.join(10)
 
 
 def test_leave_removes_existing_participant_and_is_idempotent():
@@ -165,7 +158,7 @@ def test_has_minimum_reports_participant_threshold_and_validates_input():
 
     assert not registration.has_minimum(2)
 
-    registration.join(20, maximum_participants=2)
+    registration.join(20)
 
     assert registration.has_minimum(2)
 

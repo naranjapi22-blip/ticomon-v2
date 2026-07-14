@@ -22,7 +22,6 @@ from .daily_world_repository import SafariDailyWorldRepository
 from .domain import (
     SAFARI_INITIAL_ZONE_BY_MAP,
     SAFARI_LEVEL_CONFIGS,
-    SAFARI_MAX_PARTICIPANTS,
     SAFARI_MIN_PARTICIPANTS,
     SAFARI_VALID_WEATHER_BY_MAP,
     SAFARI_ZONE_DEFINITION_BY_ZONE,
@@ -83,7 +82,6 @@ from .map_selector import SafariMapSelector
 from .participant import NotEnoughSafariBalls, SafariParticipant
 from .regional_encounter import SafariGeneratedRegionalEncounter
 from .registration import (
-    SafariParticipantLimitReached,
     SafariRegistration,
     SafariRegistrationClosed,
 )
@@ -110,7 +108,6 @@ from .weather_selector import SafariWeatherSelector
 __all__ = [
     "SAFARI_INITIAL_ZONE_BY_MAP",
     "SAFARI_LEVEL_CONFIGS",
-    "SAFARI_MAX_PARTICIPANTS",
     "SAFARI_MIN_PARTICIPANTS",
     "SAFARI_VALID_WEATHER_BY_MAP",
     "SAFARI_ZONE_DEFINITION_BY_ZONE",
@@ -159,7 +156,6 @@ __all__ = [
     "SafariRegionalEncounterForm",
     "SafariRegistration",
     "SafariRegistrationClosed",
-    "SafariParticipantLimitReached",
     "SafariActivityRepository",
     "SafariRouteVoteStatus",
     "SafariRouteOption",

@@ -19,7 +19,6 @@ from application.safari import (
 from application.safari.activity_state import SafariActivityTracker
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
-    SAFARI_MAX_PARTICIPANTS,
     SAFARI_MIN_PARTICIPANTS,
     SafariComposition,
     SafariEncounter,
@@ -28,7 +27,6 @@ from core.safari import (
     SafariGeneratedEncounter,
     SafariMap,
     SafariMapInfluence,
-    SafariParticipantLimitReached,
     SafariRegistration,
     SafariRegistrationStatus,
     SafariThematicEvent,
@@ -192,7 +190,6 @@ async def test_open_reserves_available_unlock_without_consuming_it():
     assert result.registration.unlock_id == unlock.id
     assert result.registration.participant_ids == frozenset({10})
     assert result.registration.opened_at == NOW
-    assert result.capacity == SAFARI_MAX_PARTICIPANTS
     assert unlock.status is SafariUnlockStatus.AVAILABLE
     assert unlocks.consumed_ids == []
 
@@ -241,7 +238,7 @@ async def test_concurrent_open_creates_only_one_registration():
 
 
 @pytest.mark.asyncio
-async def test_join_is_idempotent_and_enforces_global_capacity():
+async def test_join_is_idempotent_and_allows_more_than_ten_participants():
     activity = InMemorySafariActivityRepository()
     tracker = SafariActivityTracker()
     unlocks = _UnlockRepository((_unlock(),))
@@ -250,16 +247,15 @@ async def test_join_is_idempotent_and_enforces_global_capacity():
 
     first = await service.join(100, 2)
     duplicate = await service.join(100, 2)
-    for trainer_id in range(3, SAFARI_MAX_PARTICIPANTS + 1):
+    for trainer_id in range(3, 12):
         await service.join(100, trainer_id)
 
     assert registration.opened_at == NOW
     assert first.added
     assert not duplicate.added
     assert duplicate.participant_count == 2
+    assert registration.participant_count == 11
     assert unlocks.consumed_ids == []
-    with pytest.raises(ValueError):
-        await service.join(100, SAFARI_MAX_PARTICIPANTS + 1)
 
 
 @pytest.mark.asyncio
@@ -481,7 +477,7 @@ async def test_abort_clears_registration_and_timer_state():
 
 
 @pytest.mark.asyncio
-async def test_start_rejects_registration_above_global_capacity():
+async def test_start_allows_registration_with_more_than_ten_participants():
     activity = InMemorySafariActivityRepository()
     unlock = _unlock()
     unlocks = _UnlockRepository((unlock,))
@@ -489,15 +485,16 @@ async def test_start_rejects_registration_above_global_capacity():
         SafariRegistration(
             100,
             1,
-            range(1, SAFARI_MAX_PARTICIPANTS + 2),
+            range(1, 12),
             STARTABLE_AT,
         )
     )
     service, _ = _start_service(activity, unlocks)
 
-    with pytest.raises(SafariParticipantLimitReached):
-        await service.start(100, NOW)
-    assert unlock.status is SafariUnlockStatus.AVAILABLE
+    result = await service.start(100, NOW)
+
+    assert result.session is not None
+    assert unlock.status is SafariUnlockStatus.CONSUMED
 
 
 @pytest.mark.asyncio

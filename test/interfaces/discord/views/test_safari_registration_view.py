@@ -40,7 +40,6 @@ def _registration_result() -> OpenSafariRegistrationResult:
         level=4,
         encounter_count=6,
         balls_per_participant=3,
-        capacity=10,
     )
 
 

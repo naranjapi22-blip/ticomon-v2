@@ -21,7 +21,6 @@ from core.safari import (
 )
 from core.safari.domain import (
     SAFARI_LEVEL_CONFIGS,
-    SAFARI_MAX_PARTICIPANTS,
     SafariMapInfluence,
 )
 from core.safari.unlock import SafariUnlock
@@ -449,7 +448,6 @@ class SafariCog(commands.Cog):
             level=unlock.level,
             encounter_count=configuration.encounter_count,
             balls_per_participant=configuration.balls_per_participant,
-            capacity=SAFARI_MAX_PARTICIPANTS,
         )
 
     @staticmethod

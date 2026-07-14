@@ -10,10 +10,6 @@ class SafariRegistrationClosed(ValueError):
     pass
 
 
-class SafariParticipantLimitReached(ValueError):
-    pass
-
-
 class SafariRegistration:
     def __init__(
         self,
@@ -73,23 +69,14 @@ class SafariRegistration:
     def join(
         self,
         trainer_id: int,
-        maximum_participants: int,
     ) -> None:
         self._assert_open()
 
         if trainer_id <= 0:
             raise ValueError("trainer_id must be positive.")
 
-        if maximum_participants <= 0:
-            raise ValueError("maximum_participants must be positive.")
-
         if trainer_id in self._participant_ids:
             return
-
-        if self.participant_count >= maximum_participants:
-            raise SafariParticipantLimitReached(
-                "Safari registration participant limit reached."
-            )
 
         self._participant_ids.add(trainer_id)
 

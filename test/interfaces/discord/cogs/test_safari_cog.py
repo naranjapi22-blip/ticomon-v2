@@ -65,7 +65,6 @@ def _registration_result() -> OpenSafariRegistrationResult:
         level=unlock.level,
         encounter_count=unlock.encounter_count,
         balls_per_participant=unlock.balls_per_participant,
-        capacity=10,
     )
 
 
