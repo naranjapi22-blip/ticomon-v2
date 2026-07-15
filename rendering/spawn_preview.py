@@ -63,7 +63,7 @@ def generate_spawn_preview(
     canvas = Image.new(
         "RGBA",
         (width, SPRITE_SIZE),
-        (224, 224, 224, 255),
+        (0, 0, 0, 0),
     )
 
     x = 0

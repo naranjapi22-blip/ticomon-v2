@@ -6,14 +6,14 @@ from PIL import Image
 from rendering.spawn_preview import generate_silhouette, generate_spawn_preview
 
 
-def test_spawn_preview_places_silhouettes_on_neutral_panel():
+def test_spawn_preview_preserves_transparent_background():
     preview = generate_spawn_preview(
         [SimpleNamespace(species=SimpleNamespace(pokeapi_id=25))]
     )
     image = Image.open(BytesIO(preview.getvalue())).convert("RGBA")
 
     assert image.size == (128, 128)
-    assert image.getpixel((0, 0)) == (224, 224, 224, 255)
+    assert image.getpixel((0, 0)) == (0, 0, 0, 0)
     assert image.getcolors(maxcolors=100_000)
     assert (0, 0, 0, 255) in image.getdata()
 

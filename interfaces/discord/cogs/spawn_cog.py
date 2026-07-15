@@ -65,9 +65,15 @@ class SpawnCog(commands.Cog):
         preview = generate_spawn_preview(
             session.opportunities,
         )
+        embed = discord.Embed(
+            description="**A wild spawn appeared!**",
+        )
+        embed.set_image(
+            url="attachment://spawn.png",
+        )
 
         await ctx.send(
-            content="**A wild spawn appeared!**",
+            embed=embed,
             file=discord.File(
                 preview,
                 filename="spawn.png",
