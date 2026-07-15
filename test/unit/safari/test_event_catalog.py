@@ -87,6 +87,13 @@ def test_event_required_types_are_complete_canonical_and_immutable():
     assert EVENT_REQUIRED_TYPES[SafariThematicEvent.NEST] == frozenset(
         {"bug", "flying", "grass"}
     )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.THUNDERSTORM] == frozenset(
+        {"electric"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.BLIZZARD] == frozenset({"ice"})
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.TOXIC_BLOOM] == frozenset(
+        {"poison"}
+    )
     with pytest.raises(TypeError):
         EVENT_REQUIRED_TYPES[SafariThematicEvent.FISHING] = frozenset()  # type: ignore[index]
 
@@ -117,6 +124,65 @@ def test_zone_and_phase_catalogs_are_complete_and_always_include_none():
         SafariThematicEvent.NONE in events for events in EVENTS_BY_PHASE.values()
     )
     assert all(isinstance(events, frozenset) for events in EVENTS_BY_ZONE.values())
+
+
+def test_new_events_have_exact_zones_phases_compositions_and_type_coverage():
+    expected_zones = {
+        SafariThematicEvent.THUNDERSTORM: {
+            SafariZone.SUMMIT,
+            SafariZone.OPEN_FIELD,
+            SafariZone.COAST_SHORE,
+        },
+        SafariThematicEvent.BLIZZARD: {
+            SafariZone.SUMMIT,
+            SafariZone.ROCKY_SLOPE,
+        },
+        SafariThematicEvent.TOXIC_BLOOM: {
+            SafariZone.DEAD_FOREST,
+            SafariZone.DENSE_REEDS,
+            SafariZone.DEEP_MARSH,
+        },
+    }
+    expected_compositions = frozenset(
+        {
+            SafariComposition.NORMAL,
+            SafariComposition.DUEL,
+            SafariComposition.HERD,
+        }
+    )
+    for event, zones in expected_zones.items():
+        assert {
+            zone for zone, events in EVENTS_BY_ZONE.items() if event in events
+        } == zones
+        assert event not in EVENTS_BY_PHASE[SafariPhase.START]
+        assert event in EVENTS_BY_PHASE[SafariPhase.DEVELOPMENT]
+        assert event in EVENTS_BY_PHASE[SafariPhase.FINAL]
+        assert EVENT_COMPOSITION_COMPATIBILITY[event] == expected_compositions
+
+    covered_types = set().union(*EVENT_REQUIRED_TYPES.values())
+    assert covered_types == {
+        "bug",
+        "dark",
+        "dragon",
+        "electric",
+        "fairy",
+        "fighting",
+        "fire",
+        "flying",
+        "ghost",
+        "grass",
+        "ground",
+        "ice",
+        "normal",
+        "poison",
+        "psychic",
+        "rock",
+        "steel",
+        "water",
+    }
+    assert EVENT_WEIGHTS[SafariThematicEvent.THUNDERSTORM] == 6.0
+    assert EVENT_WEIGHTS[SafariThematicEvent.BLIZZARD] == 5.0
+    assert EVENT_WEIGHTS[SafariThematicEvent.TOXIC_BLOOM] == 6.0
     assert all(isinstance(events, frozenset) for events in EVENTS_BY_PHASE.values())
 
 

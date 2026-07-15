@@ -117,6 +117,9 @@ def test_enum_values_are_exact():
         "RAINBOW",
         "DEN",
         "NEST",
+        "THUNDERSTORM",
+        "BLIZZARD",
+        "TOXIC_BLOOM",
     ]
     assert [member.value for member in SafariUnlockStatus] == [
         "AVAILABLE",

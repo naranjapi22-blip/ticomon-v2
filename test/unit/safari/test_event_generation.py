@@ -155,6 +155,57 @@ async def test_fishing_requires_water_candidates():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event", "type_name", "safari_map", "zone"),
+    [
+        (
+            SafariThematicEvent.THUNDERSTORM,
+            "electric",
+            SafariMap.MOUNTAIN,
+            SafariZone.SUMMIT,
+        ),
+        (
+            SafariThematicEvent.BLIZZARD,
+            "ice",
+            SafariMap.MOUNTAIN,
+            SafariZone.ROCKY_SLOPE,
+        ),
+        (
+            SafariThematicEvent.TOXIC_BLOOM,
+            "poison",
+            SafariMap.SWAMP,
+            SafariZone.DEAD_FOREST,
+        ),
+    ],
+)
+async def test_new_events_filter_exclusively_to_their_type(
+    event,
+    type_name,
+    safari_map,
+    zone,
+):
+    compatible = make_species(1, types=[type_name])
+    incompatible = make_species(2, types=["normal"])
+    random_source = ScriptedRandom(event_order=(event,), species_ids=(1,))
+    generator, _, _, _ = make_generator((compatible, incompatible), random_source)
+    context = make_context(
+        safari_map=safari_map,
+        zone=zone,
+        phase=SafariPhase.DEVELOPMENT,
+        route_allowed_events=frozenset({SafariThematicEvent.NONE, event}),
+    )
+
+    result = await generator.generate_with_events(
+        context,
+        (SafariComposition.NORMAL,),
+    )
+
+    assert result.event is event
+    assert [slot.species_id for slot in result.encounter.slots] == [1]
+    assert random_source.species_calls[0][0] == (compatible,)
+
+
+@pytest.mark.asyncio
 async def test_volcanic_event_filters_to_any_compatible_type_without_extra_weight():
     fire_rock = make_species(1, types=["fire", "rock"])
     neutral = make_species(2, types=["normal"])

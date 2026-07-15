@@ -115,6 +115,21 @@ def test_encounter_slot_selector_labels_show_only_species_names() -> None:
             SafariThematicEvent.FISHING,
             "Special Encounter: Fishing",
         ),
+        (
+            SafariComposition.NORMAL,
+            SafariThematicEvent.THUNDERSTORM,
+            "Special Encounter: Thunderstorm",
+        ),
+        (
+            SafariComposition.NORMAL,
+            SafariThematicEvent.BLIZZARD,
+            "Special Encounter: Blizzard",
+        ),
+        (
+            SafariComposition.NORMAL,
+            SafariThematicEvent.TOXIC_BLOOM,
+            "Special Encounter: Toxic Bloom",
+        ),
     ],
 )
 def test_encounter_view_labels_special_encounters(

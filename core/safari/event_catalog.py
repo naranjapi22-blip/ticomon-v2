@@ -40,6 +40,9 @@ EVENT_WEIGHTS: Mapping[SafariThematicEvent, float] = MappingProxyType(
         SafariThematicEvent.RAINBOW: 5.0,
         SafariThematicEvent.DEN: 7.0,
         SafariThematicEvent.NEST: 8.0,
+        SafariThematicEvent.THUNDERSTORM: 6.0,
+        SafariThematicEvent.BLIZZARD: 5.0,
+        SafariThematicEvent.TOXIC_BLOOM: 6.0,
     }
 )
 
@@ -118,6 +121,27 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
             }
         ),
         SafariThematicEvent.NEST: frozenset({SafariComposition.BABY_NEST}),
+        SafariThematicEvent.THUNDERSTORM: frozenset(
+            {
+                SafariComposition.NORMAL,
+                SafariComposition.DUEL,
+                SafariComposition.HERD,
+            }
+        ),
+        SafariThematicEvent.BLIZZARD: frozenset(
+            {
+                SafariComposition.NORMAL,
+                SafariComposition.DUEL,
+                SafariComposition.HERD,
+            }
+        ),
+        SafariThematicEvent.TOXIC_BLOOM: frozenset(
+            {
+                SafariComposition.NORMAL,
+                SafariComposition.DUEL,
+                SafariComposition.HERD,
+            }
+        ),
     }
 )
 
@@ -135,6 +159,9 @@ EVENT_REQUIRED_TYPES: Mapping[SafariThematicEvent, frozenset[str]] = MappingProx
         SafariThematicEvent.RAINBOW: frozenset({"fairy", "flying"}),
         SafariThematicEvent.DEN: frozenset({"dragon", "dark", "fighting"}),
         SafariThematicEvent.NEST: frozenset({"bug", "flying", "grass"}),
+        SafariThematicEvent.THUNDERSTORM: frozenset({"electric"}),
+        SafariThematicEvent.BLIZZARD: frozenset({"ice"}),
+        SafariThematicEvent.TOXIC_BLOOM: frozenset({"poison"}),
     }
 )
 

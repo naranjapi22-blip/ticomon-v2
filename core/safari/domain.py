@@ -145,6 +145,9 @@ class SafariThematicEvent(str, Enum):
     RAINBOW = "RAINBOW"
     DEN = "DEN"
     NEST = "NEST"
+    THUNDERSTORM = "THUNDERSTORM"
+    BLIZZARD = "BLIZZARD"
+    TOXIC_BLOOM = "TOXIC_BLOOM"
 
 
 class SafariUnlockStatus(str, Enum):
@@ -415,6 +418,7 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         allowed_events=_events(
             SafariThematicEvent.DEPOSIT,
             SafariThematicEvent.VOLCANIC_ACTIVITY,
+            SafariThematicEvent.BLIZZARD,
         ),
         transitions=(
             SafariZone.MOUNTAIN_FOOTHILL,
@@ -488,7 +492,11 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         zone=SafariZone.SUMMIT,
         safari_map=SafariMap.MOUNTAIN,
         base_type_weights=_type_weights("flying", "ice", "dragon"),
-        allowed_events=_events(SafariThematicEvent.VOLCANIC_ACTIVITY),
+        allowed_events=_events(
+            SafariThematicEvent.VOLCANIC_ACTIVITY,
+            SafariThematicEvent.THUNDERSTORM,
+            SafariThematicEvent.BLIZZARD,
+        ),
         transitions=(
             SafariZone.HIGH_RIDGE,
             SafariZone.FROZEN_PASS,
@@ -498,7 +506,10 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         zone=SafariZone.COAST_SHORE,
         safari_map=SafariMap.COAST,
         base_type_weights=_type_weights("water", "flying", "normal"),
-        allowed_events=_events(SafariThematicEvent.MIGRATION),
+        allowed_events=_events(
+            SafariThematicEvent.MIGRATION,
+            SafariThematicEvent.THUNDERSTORM,
+        ),
         transitions=(
             SafariZone.ROCKY_BEACH,
             SafariZone.TIDAL_POOLS,
@@ -631,7 +642,10 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         zone=SafariZone.DENSE_REEDS,
         safari_map=SafariMap.SWAMP,
         base_type_weights=_type_weights("grass", "bug", "flying"),
-        allowed_events=_events(SafariThematicEvent.NEST),
+        allowed_events=_events(
+            SafariThematicEvent.NEST,
+            SafariThematicEvent.TOXIC_BLOOM,
+        ),
         transitions=(
             SafariZone.SWAMP_EDGE,
             SafariZone.SHALLOW_WATER,
@@ -642,7 +656,10 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         zone=SafariZone.DEAD_FOREST,
         safari_map=SafariMap.SWAMP,
         base_type_weights=_type_weights("ghost", "dark", "poison"),
-        allowed_events=_events(SafariThematicEvent.GRAVEYARD),
+        allowed_events=_events(
+            SafariThematicEvent.GRAVEYARD,
+            SafariThematicEvent.TOXIC_BLOOM,
+        ),
         transitions=(
             SafariZone.MUDDY_TRAIL,
             SafariZone.MISTY_CLEARING,
@@ -652,7 +669,10 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         zone=SafariZone.DEEP_MARSH,
         safari_map=SafariMap.SWAMP,
         base_type_weights=_type_weights("water", "poison", "dark"),
-        allowed_events=_events(SafariThematicEvent.FISHING),
+        allowed_events=_events(
+            SafariThematicEvent.FISHING,
+            SafariThematicEvent.TOXIC_BLOOM,
+        ),
         transitions=(
             SafariZone.SHALLOW_WATER,
             SafariZone.NESTING_GROUND,
@@ -696,7 +716,10 @@ SAFARI_ZONE_DEFINITIONS: tuple[SafariZoneDefinition, ...] = (
         zone=SafariZone.OPEN_FIELD,
         safari_map=SafariMap.PLAINS,
         base_type_weights=_type_weights("normal", "flying", "electric"),
-        allowed_events=_events(SafariThematicEvent.MIGRATION),
+        allowed_events=_events(
+            SafariThematicEvent.MIGRATION,
+            SafariThematicEvent.THUNDERSTORM,
+        ),
         transitions=(
             SafariZone.PLAINS_TRAIL,
             SafariZone.FLOWER_MEADOW,
