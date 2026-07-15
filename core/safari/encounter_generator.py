@@ -8,13 +8,18 @@ from uuid import uuid4
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG
 from core.safari.domain import (
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounterStatus,
     SafariPhase,
     SafariRegionalEncounterForm,
     SafariThematicEvent,
 )
-from core.safari.encounter import SafariEncounter, SafariEncounterSlot
+from core.safari.encounter import (
+    SafariEncounter,
+    SafariEncounterSlot,
+    determine_capture_policy,
+)
 from core.safari.encounter_context import SafariEncounterContext
 from core.safari.event_catalog import (
     EVENT_REQUIRED_TYPES,
@@ -470,13 +475,7 @@ class SafariEncounterGenerator:
         is_regional_herd: bool,
         event: SafariThematicEvent = SafariThematicEvent.NONE,
     ) -> SafariEncounter:
-        slots = tuple(
-            SafariEncounterSlot(
-                id=uuid4(),
-                opportunity=self._opportunity_factory.create(species),
-            )
-            for species in selected_species
-        )
+        slots = tuple(self._build_slot(species) for species in selected_species)
         return SafariEncounter(
             id=uuid4(),
             composition=composition,
@@ -485,12 +484,21 @@ class SafariEncounterGenerator:
             event=event,
         )
 
+    def _build_slot(self, species: Species) -> SafariEncounterSlot:
+        opportunity = self._opportunity_factory.create(species)
+        return SafariEncounterSlot(
+            id=uuid4(),
+            opportunity=opportunity,
+            capture_policy=determine_capture_policy(opportunity),
+        )
+
     @staticmethod
     def _copy_encounter_as_shiny(encounter: SafariEncounter) -> SafariEncounter:
         slots = tuple(
             SafariEncounterSlot(
                 id=slot.id,
                 opportunity=replace(slot.opportunity, is_shiny=True),
+                capture_policy=SafariCapturePolicy.UNIQUE,
             )
             for slot in encounter.slots
         )

@@ -13,6 +13,7 @@ from core.safari import (
     SAFARI_ZONE_DEFINITIONS,
     TIME_OF_DAY_WEIGHTS,
     WEATHER_WEIGHTS,
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounterStatus,
     SafariExtraordinaryFlags,
@@ -84,6 +85,10 @@ def test_enum_values_are_exact():
         "AVAILABLE",
         "CAPTURED",
         "ESCAPED",
+    ]
+    assert [member.value for member in SafariCapturePolicy] == [
+        "SHARED",
+        "UNIQUE",
     ]
     assert [member.value for member in SafariRouteVoteStatus] == [
         "OPEN",

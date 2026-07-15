@@ -6,6 +6,7 @@ import pytest
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG, Rarity
 from core.safari import (
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounter,
     SafariEncounterContext,
@@ -185,6 +186,7 @@ async def test_extraordinary_generation_has_one_matching_slot(
     assert len(result.encounter.slots) == 1
     metadata = result.encounter.slots[0].opportunity.species.metadata
     assert getattr(metadata, metadata_field)
+    assert result.encounter.slots[0].capture_policy is SafariCapturePolicy.UNIQUE
     assert len(factory.calls) == 1
     assert result.event == SafariThematicEvent.NONE
 
@@ -462,6 +464,10 @@ def test_global_shiny_preserves_generated_event_and_regional_form():
     assert shiny.regional_form == SafariRegionalEncounterForm.HERD
     assert shiny.encounter.is_regional_herd
     assert all(slot.opportunity.is_shiny for slot in shiny.encounter.slots)
+    assert all(
+        slot.capture_policy is SafariCapturePolicy.UNIQUE
+        for slot in shiny.encounter.slots
+    )
 
 
 def test_global_shiny_preserves_common_generated_event():

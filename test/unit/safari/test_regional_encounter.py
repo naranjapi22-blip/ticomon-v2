@@ -5,6 +5,7 @@ import pytest
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG, Rarity
 from core.safari import (
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounterContext,
     SafariEncounterGenerationError,
@@ -228,6 +229,10 @@ async def test_development_and_final_allow_regional_generation(phase):
     )
 
     assert result.encounter.composition == SafariComposition.REGIONAL
+    assert all(
+        slot.capture_policy is SafariCapturePolicy.SHARED
+        for slot in result.encounter.slots
+    )
 
 
 @pytest.mark.asyncio
@@ -252,6 +257,7 @@ async def test_mixed_encounter_contains_one_regional_and_up_to_two_ordinary(
     assert len({id(item) for item in factory.opportunities}) == slot_count
     assert len({slot.id for slot in result.encounter.slots}) == slot_count
     assert not result.encounter.is_regional_herd
+    assert result.encounter.slots[0].capture_policy is SafariCapturePolicy.SHARED
 
 
 @pytest.mark.asyncio

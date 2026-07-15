@@ -105,6 +105,11 @@ class SafariSlotStatus(str, Enum):
     ESCAPED = "ESCAPED"
 
 
+class SafariCapturePolicy(str, Enum):
+    SHARED = "SHARED"
+    UNIQUE = "UNIQUE"
+
+
 class SafariRouteVoteStatus(str, Enum):
     OPEN = "OPEN"
     RESOLVED = "RESOLVED"

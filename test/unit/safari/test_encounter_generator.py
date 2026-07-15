@@ -5,6 +5,7 @@ import pytest
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.rarity import RARITY_CONFIG, Rarity
 from core.safari import (
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounterContext,
     SafariEncounterGenerationError,
@@ -357,6 +358,9 @@ async def test_factory_creates_independent_opportunity_and_slot_per_species():
     assert len({slot.id for slot in encounter.slots}) == 3
     assert all(slot.id.int > 0 for slot in encounter.slots)
     assert all(slot.status == SafariSlotStatus.AVAILABLE for slot in encounter.slots)
+    assert all(
+        slot.capture_policy is SafariCapturePolicy.SHARED for slot in encounter.slots
+    )
     assert encounter.composition == SafariComposition.NORMAL
     assert not encounter.is_regional_herd
     assert encounter.eligible_participant_ids == frozenset()
@@ -477,6 +481,8 @@ async def test_solitary_selects_one_weighted_regional_species():
     )
 
     encounter = await generator.generate(make_context(), SafariComposition.SOLITARY)
+
+    assert encounter.slots[0].capture_policy is SafariCapturePolicy.SHARED
 
     assert encounter.composition == SafariComposition.SOLITARY
     assert [slot.species_id for slot in encounter.slots] == [2]

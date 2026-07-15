@@ -11,6 +11,7 @@ from core.safari.capture import (
     _require_non_empty_uuid,
 )
 from core.safari.domain import (
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounterStatus,
     SafariSlotStatus,
@@ -26,11 +27,19 @@ class SafariSelectionAlreadyConfirmed(ValueError):
     pass
 
 
+def determine_capture_policy(opportunity: Opportunity) -> SafariCapturePolicy:
+    metadata = opportunity.species.metadata
+    if opportunity.is_shiny or metadata.is_legendary or metadata.is_mythical:
+        return SafariCapturePolicy.UNIQUE
+    return SafariCapturePolicy.SHARED
+
+
 class SafariEncounterSlot:
     def __init__(
         self,
         id: UUID,
         opportunity: Opportunity,
+        capture_policy: SafariCapturePolicy | None = None,
     ) -> None:
         _require_non_empty_uuid(id, "id")
         if opportunity is None:
@@ -38,6 +47,7 @@ class SafariEncounterSlot:
 
         self._id = id
         self._opportunity = opportunity
+        self._capture_policy = capture_policy or determine_capture_policy(opportunity)
         self._status = SafariSlotStatus.AVAILABLE
 
     @property
@@ -47,6 +57,10 @@ class SafariEncounterSlot:
     @property
     def opportunity(self) -> Opportunity:
         return self._opportunity
+
+    @property
+    def capture_policy(self) -> SafariCapturePolicy:
+        return self._capture_policy
 
     @property
     def species_id(self) -> int:
