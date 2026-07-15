@@ -183,13 +183,11 @@ class NeonTradeRepository(TradeRepository):
                         creature_rows,
                     )
 
-                    await connection.execute(
-                        """
+                    await connection.execute("""
                         SET CONSTRAINTS
                             creatures_trainer_collection_number_unique
                         DEFERRED
-                        """
-                    )
+                        """)
 
                     assert trade.counterparty_offer is not None
                     if len(creature_rows) != 2:

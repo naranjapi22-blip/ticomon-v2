@@ -11,8 +11,7 @@ async def create_trade_schema() -> None:
 
     async with pool.acquire() as connection:
         async with connection.transaction():
-            await connection.execute(
-                """
+            await connection.execute("""
                 CREATE TABLE IF NOT EXISTS trades (
                     id BIGSERIAL PRIMARY KEY,
                     initiator_trainer_id BIGINT NOT NULL,
@@ -37,10 +36,8 @@ async def create_trade_schema() -> None:
                             'expired'
                         ))
                 )
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE TABLE IF NOT EXISTS trade_offer_items (
                     trade_id BIGINT NOT NULL
                         REFERENCES trades(id) ON DELETE CASCADE,
@@ -49,26 +46,19 @@ async def create_trade_schema() -> None:
                     collection_number_at_offer INTEGER NOT NULL,
                     PRIMARY KEY (trade_id, creature_id)
                 )
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE INDEX IF NOT EXISTS trades_initiator_status_idx
                 ON trades (initiator_trainer_id, status)
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE INDEX IF NOT EXISTS trades_counterparty_status_idx
                 ON trades (counterparty_trainer_id, status)
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE INDEX IF NOT EXISTS trades_completed_at_idx
                 ON trades (completed_at)
-                """
-            )
+                """)
             for column in (
                 "initiator_accepted_at",
                 "counterparty_accepted_at",
@@ -76,8 +66,7 @@ async def create_trade_schema() -> None:
                 "expires_at",
                 "completed_at",
             ):
-                await connection.execute(
-                    f"""
+                await connection.execute(f"""
                     DO $$
                     BEGIN
                         IF EXISTS (
@@ -96,17 +85,13 @@ async def create_trade_schema() -> None:
                         END IF;
                     END
                     $$;
-                    """
-                )
-            await connection.execute(
-                """
+                    """)
+            await connection.execute("""
                 ALTER TABLE creatures
                 DROP CONSTRAINT IF EXISTS uq_trainer_collection
-                """
-            )
+                """)
             await ensure_creature_original_trainer_id(connection)
-            await connection.execute(
-                """
+            await connection.execute("""
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -123,8 +108,7 @@ async def create_trade_schema() -> None:
                     END IF;
                 END
                 $$
-                """
-            )
+                """)
 
     await close_pool()
 

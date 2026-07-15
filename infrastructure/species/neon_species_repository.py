@@ -42,16 +42,14 @@ class NeonSpeciesRepository(SpeciesRepository):
         connection,
     ) -> dict[int, tuple[Variant, ...]]:
 
-        rows = await connection.fetch(
-            """
+        rows = await connection.fetch("""
             SELECT
                 species_id,
                 id,
                 name
             FROM species_variants
             ORDER BY species_id, id
-            """
-        )
+            """)
 
         variants: dict[int, list[Variant]] = {}
 
@@ -148,13 +146,11 @@ class NeonSpeciesRepository(SpeciesRepository):
 
         async with pool.acquire() as connection:
 
-            rows = await connection.fetch(
-                """
+            rows = await connection.fetch("""
                 SELECT *
                 FROM species
                 ORDER BY id
-                """
-            )
+                """)
 
             variants_map = await self._load_all_variants(
                 connection,
