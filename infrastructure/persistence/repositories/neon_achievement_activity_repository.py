@@ -38,39 +38,45 @@ class NeonAchievementActivityRepository(AchievementActivityRepository):
         pool = await get_pool()
 
         async with pool.acquire() as connection:
-            row = await connection.fetchrow(
+            rows = await connection.fetch(
                 """
-                SELECT
-                    COUNT(*) FILTER (
-                        WHERE activity_type = $2
-                    ) AS capture_count,
-                    COUNT(*) FILTER (
-                        WHERE activity_type = $3
-                    ) AS shiny_capture_count,
-                    COUNT(*) FILTER (
-                        WHERE activity_type = $4
-                    ) AS unique_discovered_species,
-                    COUNT(*) FILTER (
-                        WHERE activity_type = $5
-                    ) AS completed_trade_count,
-                    COUNT(*) FILTER (
-                        WHERE activity_type = $6
-                    ) AS safari_capture_count
-                FROM trainer_achievement_activities
-                WHERE trainer_id = $1
+                SELECT a.activity_type, s.type_1, s.type_2,
+                       s.is_legendary, s.is_mythical, s.is_baby
+                FROM trainer_achievement_activities AS a
+                LEFT JOIN species AS s ON s.id = a.species_id
+                WHERE a.trainer_id = $1
                 """,
                 trainer_id,
-                AchievementActivityType.CAPTURE.value,
-                AchievementActivityType.SHINY_CAPTURE.value,
-                AchievementActivityType.SPECIES_DISCOVERED.value,
-                AchievementActivityType.COMPLETED_TRADE.value,
-                AchievementActivityType.SAFARI_CAPTURE.value,
             )
-        assert row is not None
+        type_counts: dict[str, int] = {}
+        capture_count = shiny_count = discovered = trade_count = safari_count = 0
+        legendary = mythical = baby = 0
+        for row in rows:
+            activity_type = row["activity_type"]
+            if activity_type == AchievementActivityType.CAPTURE.value:
+                capture_count += 1
+                legendary += int(bool(row["is_legendary"]))
+                mythical += int(bool(row["is_mythical"]))
+                baby += int(bool(row["is_baby"]))
+                for species_type in (row["type_1"], row["type_2"]):
+                    if species_type:
+                        type_counts[species_type] = type_counts.get(species_type, 0) + 1
+            elif activity_type == AchievementActivityType.SHINY_CAPTURE.value:
+                shiny_count += 1
+            elif activity_type == AchievementActivityType.SPECIES_DISCOVERED.value:
+                discovered += 1
+            elif activity_type == AchievementActivityType.COMPLETED_TRADE.value:
+                trade_count += 1
+            elif activity_type == AchievementActivityType.SAFARI_CAPTURE.value:
+                safari_count += 1
         return AchievementProgress(
-            capture_count=row["capture_count"],
-            shiny_capture_count=row["shiny_capture_count"],
-            unique_discovered_species=row["unique_discovered_species"],
-            completed_trade_count=row["completed_trade_count"],
-            safari_capture_count=row["safari_capture_count"],
+            capture_count=capture_count,
+            shiny_capture_count=shiny_count,
+            unique_discovered_species=discovered,
+            completed_trade_count=trade_count,
+            safari_capture_count=safari_count,
+            legendary_capture_count=legendary,
+            mythical_capture_count=mythical,
+            baby_capture_count=baby,
+            capture_counts_by_type=type_counts,
         )

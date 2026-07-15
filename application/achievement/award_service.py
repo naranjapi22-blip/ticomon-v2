@@ -4,7 +4,6 @@ from application.achievement.contracts import AchievementProgress
 from core.achievement.definition import (
     ACHIEVEMENT_DEFINITIONS,
     AchievementCriterion,
-    AchievementId,
 )
 from core.achievement.reward_policy import AchievementRewardPolicy
 from core.achievement.unlock_result import AchievementUnlockResult
@@ -31,7 +30,10 @@ class CaptureAchievementAwardService:
         definitions = self._affected_definitions(is_shiny, is_safari)
         awarded: list[AchievementUnlockResult] = []
         for definition in definitions:
-            if self._value(progress, definition.criterion) < definition.threshold:
+            if (
+                self._value(progress, definition.criterion, definition.scope)
+                < definition.threshold
+            ):
                 continue
             reward = self._reward_policy.reward_for(species, definition.reward_amount)
             if await self._unlock_repository.award(
@@ -49,45 +51,53 @@ class CaptureAchievementAwardService:
         species: Species,
     ) -> tuple[AchievementUnlockResult, ...]:
         progress = await self._activity_repository.get_progress(trainer_id)
-        definition = next(
-            item
-            for item in ACHIEVEMENT_DEFINITIONS
-            if item.id is AchievementId.FIRST_COMPLETED_TRADE
-        )
-        if self._value(progress, definition.criterion) < definition.threshold:
-            return ()
-
-        reward = self._reward_policy.reward_for(species, definition.reward_amount)
-        awarded = await self._unlock_repository.award(
-            trainer_id,
-            definition.id.value,
-            reward,
-            datetime.now(UTC),
-        )
-        if not awarded:
-            return ()
-        return (AchievementUnlockResult(definition.id.value, reward),)
+        awarded_results: list[AchievementUnlockResult] = []
+        for definition in ACHIEVEMENT_DEFINITIONS:
+            if definition.criterion is not AchievementCriterion.COMPLETED_TRADE_COUNT:
+                continue
+            if (
+                self._value(progress, definition.criterion, definition.scope)
+                < definition.threshold
+            ):
+                continue
+            reward = self._reward_policy.reward_for(species, definition.reward_amount)
+            if await self._unlock_repository.award(
+                trainer_id,
+                definition.id.value,
+                reward,
+                datetime.now(UTC),
+            ):
+                awarded_results.append(
+                    AchievementUnlockResult(definition.id.value, reward)
+                )
+        return tuple(awarded_results)
 
     @staticmethod
     def _affected_definitions(
         is_shiny: bool,
         is_safari: bool,
     ) -> tuple:
-        ids = {
-            AchievementId.FIRST_CAPTURE,
-            AchievementId.CAPTURES_10,
-            AchievementId.CAPTURES_50,
-            AchievementId.UNIQUE_SPECIES_10,
+        criteria = {
+            AchievementCriterion.CAPTURE_COUNT,
+            AchievementCriterion.UNIQUE_DISCOVERED_SPECIES,
+            AchievementCriterion.LEGENDARY_CAPTURE_COUNT,
+            AchievementCriterion.MYTHICAL_CAPTURE_COUNT,
+            AchievementCriterion.BABY_CAPTURE_COUNT,
+            AchievementCriterion.TYPE_CAPTURE_COUNT,
         }
         if is_shiny:
-            ids.add(AchievementId.FIRST_SHINY_CAPTURE)
+            criteria.add(AchievementCriterion.SHINY_CAPTURE_COUNT)
         if is_safari:
-            ids.add(AchievementId.FIRST_SAFARI_CAPTURE)
-        return tuple(item for item in ACHIEVEMENT_DEFINITIONS if item.id in ids)
+            criteria.add(AchievementCriterion.SAFARI_CAPTURE_COUNT)
+        return tuple(
+            item for item in ACHIEVEMENT_DEFINITIONS if item.criterion in criteria
+        )
 
     @staticmethod
-    def _value(progress: AchievementProgress, criterion: AchievementCriterion) -> int:
-        return {
+    def _value(
+        progress: AchievementProgress, criterion: AchievementCriterion, scope=None
+    ) -> int:
+        values = {
             AchievementCriterion.CAPTURE_COUNT: progress.capture_count,
             AchievementCriterion.SHINY_CAPTURE_COUNT: progress.shiny_capture_count,
             AchievementCriterion.UNIQUE_DISCOVERED_SPECIES: (
@@ -95,4 +105,14 @@ class CaptureAchievementAwardService:
             ),
             AchievementCriterion.SAFARI_CAPTURE_COUNT: progress.safari_capture_count,
             AchievementCriterion.COMPLETED_TRADE_COUNT: progress.completed_trade_count,
-        }.get(criterion, 0)
+            AchievementCriterion.LEGENDARY_CAPTURE_COUNT: (
+                progress.legendary_capture_count
+            ),
+            AchievementCriterion.MYTHICAL_CAPTURE_COUNT: (
+                progress.mythical_capture_count
+            ),
+            AchievementCriterion.BABY_CAPTURE_COUNT: progress.baby_capture_count,
+        }
+        if criterion is AchievementCriterion.TYPE_CAPTURE_COUNT:
+            return progress.capture_counts_by_type.get(scope or "", 0)
+        return values.get(criterion, 0)

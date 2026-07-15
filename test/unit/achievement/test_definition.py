@@ -9,7 +9,8 @@ from core.achievement.definition import (
 
 
 def test_mvp_definitions_have_stable_unique_ids() -> None:
-    assert {definition.id for definition in ACHIEVEMENT_DEFINITIONS} == {
+    ids = {definition.id for definition in ACHIEVEMENT_DEFINITIONS}
+    assert {
         AchievementId.FIRST_CAPTURE,
         AchievementId.CAPTURES_10,
         AchievementId.CAPTURES_50,
@@ -17,7 +18,9 @@ def test_mvp_definitions_have_stable_unique_ids() -> None:
         AchievementId.UNIQUE_SPECIES_10,
         AchievementId.FIRST_COMPLETED_TRADE,
         AchievementId.FIRST_SAFARI_CAPTURE,
-    }
+    } <= ids
+    assert len(ACHIEVEMENT_DEFINITIONS) == 56
+    assert len(ids) == len(ACHIEVEMENT_DEFINITIONS)
 
 
 def test_definition_rejects_invalid_threshold_or_reward() -> None:

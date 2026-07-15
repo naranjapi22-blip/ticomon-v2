@@ -1,12 +1,18 @@
 import logging
 
+from application.achievement.query_service import ACHIEVEMENT_PRESENTATION
+
 logger = logging.getLogger(__name__)
+
+
+def _display_name(achievement_id: str) -> str:
+    return ACHIEVEMENT_PRESENTATION.get(achievement_id, (achievement_id,))[0]
 
 
 def format_unlocks(unlocks) -> str:
     return "\n".join(
         "Achievement unlocked: "
-        f"{unlock.achievement_id} — "
+        f"{_display_name(unlock.achievement_id)} — "
         + ", ".join(
             f"{kind.value.title()} Candy +{amount}"
             for kind, amount in unlock.rewarded_candies.items()

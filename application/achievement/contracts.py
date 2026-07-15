@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from core.achievement.activity import AchievementActivity
@@ -13,6 +13,10 @@ class AchievementProgress:
     unique_discovered_species: int
     completed_trade_count: int
     safari_capture_count: int
+    legendary_capture_count: int = 0
+    mythical_capture_count: int = 0
+    baby_capture_count: int = 0
+    capture_counts_by_type: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
