@@ -3,6 +3,7 @@ from core.spawn.profile import SpawnProfile
 from core.spawn.rarity_selector import RaritySelector
 from core.spawn.rule_engine import RuleEngine
 from core.spawn.weighted_selector import WeightedSelector
+from core.species.regional_species import is_regional_species
 from core.species.species import Species
 from core.species.species_repository import SpeciesRepository
 
@@ -42,6 +43,10 @@ class SpeciesSelector:
 
             species_pool = await self._repository.find_by_spawn_rarity(
                 rarity,
+            )
+
+            species_pool = tuple(
+                species for species in species_pool if not is_regional_species(species)
             )
 
             valid_species = self._rule_engine.apply(

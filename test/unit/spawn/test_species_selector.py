@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from core.rarity import Rarity
@@ -6,6 +8,7 @@ from core.spawn.profile import SpawnProfile
 from core.spawn.region import Region
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.world import World
+from core.species import is_regional_species
 from test.factories import create_species
 from test.unit.spawn.fakes import (
     FakeRaritySelector,
@@ -13,6 +16,13 @@ from test.unit.spawn.fakes import (
     FakeSpeciesRepository,
     FakeWeightedSelector,
 )
+
+
+def regional_species(*, id: int, pokeapi_id: int, name: str):
+    return replace(
+        create_species(id=id, name=name),
+        pokeapi_id=pokeapi_id,
+    )
 
 
 @pytest.mark.asyncio
@@ -81,6 +91,44 @@ async def test_never_returns_duplicate_species():
     ids = [pokemon.id for pokemon in result]
 
     assert len(ids) == len(set(ids))
+
+
+@pytest.mark.asyncio
+async def test_excludes_regional_forms_before_spawn_selection():
+
+    regional_forms = (
+        regional_species(id=10091, pokeapi_id=10091, name="Alolan Rattata"),
+        regional_species(id=10161, pokeapi_id=10161, name="Galarian Meowth"),
+        regional_species(id=10229, pokeapi_id=10229, name="Hisuian Growlithe"),
+        regional_species(id=10250, pokeapi_id=10250, name="Paldean Wooper"),
+    )
+    ordinary_forms = (
+        create_species(id=19, name="Rattata"),
+        create_species(id=52, name="Meowth"),
+        create_species(id=58, name="Growlithe"),
+        create_species(id=194, name="Wooper"),
+    )
+
+    selector = SpeciesSelector(
+        repository=FakeSpeciesRepository(regional_forms + ordinary_forms),
+        rarity_selector=FakeRaritySelector(Rarity.COMMON),
+        rule_engine=FakeRuleEngine(),
+        weighted_selector=FakeWeightedSelector(),
+    )
+
+    result = await selector.select(
+        context=SpawnContext(world=World.MAIN, region=Region.KANTO),
+        profile=SpawnProfile(opportunity_count=len(ordinary_forms)),
+    )
+
+    assert len(result) == len(ordinary_forms)
+    assert all(not is_regional_species(species) for species in result)
+    assert {species.name for species in result} == {
+        "Rattata",
+        "Meowth",
+        "Growlithe",
+        "Wooper",
+    }
 
 
 @pytest.mark.asyncio
