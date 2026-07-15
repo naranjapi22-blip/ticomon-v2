@@ -19,6 +19,7 @@ from application.safari.results import (
     ResolveSafariCaptureResult,
     SafariCaptureSelectionState,
     SafariCaptureSlotApplicationResult,
+    SafariParticipantCaptureApplicationResult,
     SelectSafariCaptureResult,
 )
 from core.candy.candy_bundle import CandyBundle
@@ -34,6 +35,7 @@ from core.safari.capture import (
 from core.safari.capture_resolution import (
     SafariCaptureResolver,
     SafariEncounterResolution,
+    SafariParticipantOutcome,
     SafariSlotOutcome,
 )
 from core.safari.domain import (
@@ -318,24 +320,46 @@ class SafariCaptureApplicationService:
             )
             return slot_results, persisted, {}
 
-        captured_by_trainer: dict[int, list[SafariSlotOutcome]] = defaultdict(list)
+        captured_by_trainer: dict[
+            int, list[tuple[SafariSlotOutcome, SafariParticipantOutcome]]
+        ] = defaultdict(list)
         for outcome in captured_outcomes:
-            assert outcome.winner_trainer_id is not None
-            captured_by_trainer[outcome.winner_trainer_id].append(outcome)
+            captured_participants = [
+                participant_outcome
+                for participant_outcome in outcome.participant_outcomes
+                if participant_outcome.captured
+            ]
+            if len(captured_participants) > 1 and outcome.winner_trainer_id is not None:
+                if outcome.winner_trainer_id not in {
+                    item.trainer_id for item in captured_participants
+                }:
+                    raise ValueError("slot winner must be a captured participant.")
+            for participant_outcome in captured_participants:
+                captured_by_trainer[participant_outcome.trainer_id].append(
+                    (outcome, participant_outcome)
+                )
 
-        slot_results_by_slot: dict[UUID, SafariCaptureSlotApplicationResult] = {}
+        slot_results_by_slot: dict[
+            UUID, list[SafariParticipantCaptureApplicationResult]
+        ] = defaultdict(list)
         rewards_by_trainer: dict[int, CandyBundle] = {}
-        persisted_captures_by_slot: dict[UUID, SafariPersistedCapture] = {}
+        persisted_captures_by_slot: dict[UUID, list[SafariPersistedCapture]] = (
+            defaultdict(list)
+        )
 
         async with self._unit_of_work.transaction() as transaction:
             for trainer_id in sorted(captured_by_trainer):
                 trainer_reward = CandyBundle()
                 trainer_outcomes = captured_by_trainer[trainer_id]
 
-                for outcome in trainer_outcomes:
+                for outcome, participant_outcome in trainer_outcomes:
+                    if participant_outcome.final_opportunity is None:
+                        raise ValueError(
+                            "captured participants require an opportunity."
+                        )
                     creature = self._creature_factory.create(
                         trainer_id=trainer_id,
-                        opportunity=outcome.final_opportunity,
+                        opportunity=participant_outcome.final_opportunity,
                     )
                     saved_creature = await transaction.save_creature(creature)
                     reward = self._reward_policy.reward_for(saved_creature)
@@ -345,11 +369,12 @@ class SafariCaptureApplicationService:
                         slot_id=outcome.slot_id,
                         creature_id=saved_creature.id,
                     )
-                    persisted_captures_by_slot[outcome.slot_id] = persisted_capture
-
-                    slot_results_by_slot[outcome.slot_id] = (
-                        SafariCaptureSlotApplicationResult(
-                            slot_outcome=outcome,
+                    persisted_captures_by_slot[outcome.slot_id].append(
+                        persisted_capture
+                    )
+                    slot_results_by_slot[outcome.slot_id].append(
+                        SafariParticipantCaptureApplicationResult(
+                            participant_outcome=participant_outcome,
                             creature=saved_creature,
                             persisted_capture=persisted_capture,
                             reward=reward,
@@ -365,7 +390,18 @@ class SafariCaptureApplicationService:
         ordered_slot_results: list[SafariCaptureSlotApplicationResult] = []
         for outcome in resolution.slot_outcomes:
             if outcome.status is SafariSlotStatus.CAPTURED:
-                ordered_slot_results.append(slot_results_by_slot[outcome.slot_id])
+                participant_results = tuple(slot_results_by_slot[outcome.slot_id])
+                primary = participant_results[0]
+                ordered_slot_results.append(
+                    SafariCaptureSlotApplicationResult(
+                        slot_outcome=outcome,
+                        creature=primary.creature,
+                        persisted_capture=primary.persisted_capture,
+                        reward=primary.reward,
+                        collection_number=primary.collection_number,
+                        participant_results=participant_results,
+                    )
+                )
             else:
                 ordered_slot_results.append(
                     SafariCaptureSlotApplicationResult(
@@ -383,7 +419,7 @@ class SafariCaptureApplicationService:
                 SafariPersistedSlotResult(
                     outcome.slot_id,
                     outcome.status,
-                    persisted_captures_by_slot.get(outcome.slot_id),
+                    captures=tuple(persisted_captures_by_slot.get(outcome.slot_id, ())),
                 )
                 for outcome in resolution.slot_outcomes
             ),
@@ -404,12 +440,13 @@ class SafariCaptureApplicationService:
         captured_creatures = tuple(
             SafariCapturedCreatureSnapshot(
                 slot_id=result.slot_outcome.slot_id,
-                trainer_id=result.creature.trainer_id,
-                creature_id=result.creature.id,
-                creature=result.creature,
+                trainer_id=participant_result.creature.trainer_id,
+                creature_id=participant_result.creature.id,
+                creature=participant_result.creature,
             )
             for result in slot_application_results
-            if result.creature is not None
+            for participant_result in result.participant_results
+            if participant_result.creature is not None
         )
         return SafariEncounterHistoryEntry(
             encounter=encounter,

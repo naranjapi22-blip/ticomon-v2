@@ -432,29 +432,31 @@ class SafariSession:
             )
             if slot.status != SafariSlotStatus.AVAILABLE:
                 raise ValueError("persisted result references a final slot.")
-            if slot_result.capture is None:
-                continue
+            captures_for_slot = slot_result.captures
+            if slot_result.capture is not None and not captures_for_slot:
+                captures_for_slot = (slot_result.capture,)
+            for capture in captures_for_slot:
+                participant = self._participants_by_trainer.get(capture.trainer_id)
+                if participant is None:
+                    raise ValueError(
+                        "persisted capture references an unknown participant."
+                    )
+                selection = encounter.selection_for(capture.trainer_id)
+                if (
+                    selection is None
+                    or not selection.is_confirmed
+                    or selection.slot_id != capture.slot_id
+                ):
+                    raise ValueError(
+                        "persisted capture does not match a confirmed selection."
+                    )
+                if capture.creature_id in creature_ids:
+                    raise ValueError("persisted creature IDs must be unique.")
+                if capture.creature_id in participant.captured_creature_ids:
+                    raise ValueError("persisted creature is already recorded.")
 
-            capture = slot_result.capture
-            participant = self._participants_by_trainer.get(capture.trainer_id)
-            if participant is None:
-                raise ValueError("persisted capture references an unknown participant.")
-            selection = encounter.selection_for(capture.trainer_id)
-            if (
-                selection is None
-                or not selection.is_confirmed
-                or selection.slot_id != capture.slot_id
-            ):
-                raise ValueError(
-                    "persisted capture does not match a confirmed selection."
-                )
-            if capture.creature_id in creature_ids:
-                raise ValueError("persisted creature IDs must be unique.")
-            if capture.creature_id in participant.captured_creature_ids:
-                raise ValueError("persisted creature is already recorded.")
-
-            creature_ids.add(capture.creature_id)
-            captures.append((capture.trainer_id, capture.creature_id))
+                creature_ids.add(capture.creature_id)
+                captures.append((capture.trainer_id, capture.creature_id))
 
         return tuple(captures)
 

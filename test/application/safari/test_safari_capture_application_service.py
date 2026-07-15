@@ -307,14 +307,18 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
     )
     await service.confirm_capture_selection(session.guild_id, 1)
     await service.select_capture(
-        session.guild_id, 2, session.current_encounter.slots[1].id, 1
+        session.guild_id, 2, session.current_encounter.slots[0].id, 1
     )
+    await service.confirm_capture_selection(session.guild_id, 2)
     await service.close_capture_selection(session.guild_id)
 
     result = await service.resolve_capture(session.guild_id)
 
     assert transaction.events == [
         "begin",
+        "creature",
+        "candies_get",
+        "candies_save",
         "creature",
         "candies_get",
         "candies_save",
@@ -325,11 +329,18 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
     assert result.slot_results[0].collection_number == 1
     assert result.slot_results[0].creature.original_trainer_id == 1
     assert result.slot_results[0].reward.get(CandyType.ELECTRIC) == 2
-    assert result.slot_results[1].creature is None
+    assert len(result.slot_results[0].participant_results) == 2
+    assert {
+        participant_result.creature.original_trainer_id
+        for participant_result in result.slot_results[0].participant_results
+    } == {1, 2}
+    assert len(result.persisted_result.slot_results[0].captures) == 2
     assert result.rewards_by_trainer[1].get(CandyType.ELECTRIC) == 2
+    assert result.rewards_by_trainer[2].get(CandyType.ELECTRIC) == 2
     assert session.current_encounter is None
     assert session.status is SafariSessionStatus.ROUTE_DECISION
     assert session.participants_by_trainer[1].captured_creature_ids == (101,)
+    assert session.participants_by_trainer[2].captured_creature_ids == (102,)
     assert session.participants_by_trainer[1].remaining_balls == 2
 
 

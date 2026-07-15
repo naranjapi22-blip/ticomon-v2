@@ -53,7 +53,7 @@ def _species_catalog() -> tuple:
             name=f"Species-{index}",
             types=["normal" if index % 2 else "water"],
         )
-        for index in range(1, 13)
+        for index in range(1, 25)
     )
 
 
