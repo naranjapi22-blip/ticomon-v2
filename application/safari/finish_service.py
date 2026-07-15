@@ -5,6 +5,7 @@ import sys
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Callable
+from uuid import UUID
 
 from application.safari.activity_state import SafariActivityTracker
 from application.safari.exceptions import (
@@ -179,15 +180,21 @@ class FinishSafariApplicationService:
         self,
         entry: SafariEncounterHistoryEntry,
     ) -> SafariEncounterSummary:
-        captured_by_slot = {
-            snapshot.slot_id: snapshot for snapshot in entry.captured_creatures
-        }
+        captured_by_slot: dict[UUID, list[SafariCapturedCreatureSnapshot]] = (
+            defaultdict(list)
+        )
+        for snapshot in entry.captured_creatures:
+            captured_by_slot[snapshot.slot_id].append(snapshot)
         slot_summaries = []
         for outcome in entry.resolution.slot_outcomes:
             slot = next(
                 slot for slot in entry.encounter.slots if slot.id == outcome.slot_id
             )
-            captured_snapshot = captured_by_slot.get(outcome.slot_id)
+            captured_snapshots = captured_by_slot.get(outcome.slot_id, [])
+            captured_creatures = tuple(
+                self._captured_creature_summary(snapshot)
+                for snapshot in captured_snapshots
+            )
             slot_summaries.append(
                 SafariEncounterSlotSummary(
                     slot_id=outcome.slot_id,
@@ -197,9 +204,12 @@ class FinishSafariApplicationService:
                     attempts_executed=outcome.attempts_executed,
                     balls_committed=outcome.balls_committed,
                     captured_creature=(
-                        self._captured_creature_summary(captured_snapshot)
-                        if captured_snapshot is not None
-                        else None
+                        captured_creatures[0] if captured_creatures else None
+                    ),
+                    captured_creatures=captured_creatures,
+                    participant_outcomes=outcome.participant_outcomes,
+                    balls_spent=sum(
+                        item.balls_spent for item in outcome.participant_outcomes
                     ),
                 )
             )
@@ -221,6 +231,7 @@ class FinishSafariApplicationService:
             ),
             attempts_executed=entry.resolution.attempts_executed,
             balls_committed=entry.resolution.balls_committed,
+            captured_creature_count=len(entry.captured_creatures),
         )
 
     def _build_ranking(
@@ -248,9 +259,10 @@ class FinishSafariApplicationService:
                     self._captured_creature_summary(snapshot)
                 )
 
+            for snapshot in encounter_entry.captured_creatures:
+                slots_won_by_trainer[snapshot.trainer_id] += 1
+
             for outcome in encounter_entry.resolution.slot_outcomes:
-                if outcome.winner_trainer_id is not None:
-                    slots_won_by_trainer[outcome.winner_trainer_id] += 1
                 for attempt in outcome.attempts:
                     attempts_by_trainer[attempt.trainer_id] += 1
 

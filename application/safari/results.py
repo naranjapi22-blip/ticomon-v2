@@ -122,6 +122,9 @@ class SafariEncounterSlotSummary:
     attempts_executed: int
     balls_committed: int
     captured_creature: SafariCapturedCreatureSummary | None
+    captured_creatures: tuple[SafariCapturedCreatureSummary, ...] = ()
+    participant_outcomes: tuple[SafariParticipantOutcome, ...] = ()
+    balls_spent: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +137,7 @@ class SafariEncounterSummary:
     escaped_slot_count: int
     attempts_executed: int
     balls_committed: int
+    captured_creature_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

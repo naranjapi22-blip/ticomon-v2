@@ -23,6 +23,7 @@ from core.safari import (
     SafariExtraordinaryFlags,
     SafariFinishReason,
     SafariParticipant,
+    SafariParticipantOutcome,
     SafariPhase,
     SafariRouteProgressEntry,
     SafariRouteSegment,
@@ -107,7 +108,7 @@ def _captured_creature(
 
 def _finalized_session() -> SafariSession:
     session = make_session(
-        (SafariParticipant(1, 9, 7), SafariParticipant(2, 9, 8)),
+        (SafariParticipant(1, 9, 7), SafariParticipant(2, 9, 7)),
     )
     encounter = make_encounter((25, 26, 27))
     first_slot, second_slot, third_slot = encounter.slots
@@ -115,10 +116,17 @@ def _finalized_session() -> SafariSession:
     first_outcome = SafariSlotOutcome(
         slot_id=first_slot.id,
         status=SafariSlotStatus.CAPTURED,
-        winner_trainer_id=1,
-        attempts=(_capture_attempt(1, first_slot.id, 1, True, 0, 0),),
-        balls_committed_by_trainer={1: 1},
+        winner_trainer_id=None,
+        attempts=(
+            _capture_attempt(1, first_slot.id, 1, True, 0, 0),
+            _capture_attempt(2, first_slot.id, 2, True, 0, 0),
+        ),
+        balls_committed_by_trainer={1: 1, 2: 1},
         final_opportunity=first_slot.opportunity,
+        participant_outcomes=(
+            SafariParticipantOutcome(1, 1, 1, 1, True, first_slot.opportunity),
+            SafariParticipantOutcome(2, 1, 1, 1, True, first_slot.opportunity),
+        ),
     )
     second_outcome = SafariSlotOutcome(
         slot_id=second_slot.id,
@@ -157,11 +165,18 @@ def _finalized_session() -> SafariSession:
         variant_id=44,
         variant_name="Forest Form",
     )
+    capture_three = _captured_creature(
+        slot_id=first_slot.id,
+        trainer_id=2,
+        creature_id=103,
+        collection_number=1,
+        species_id=first_slot.opportunity.species.id,
+    )
     session._encounter_history.append(
         SafariEncounterHistoryEntry(
             encounter=encounter,
             resolution=resolution,
-            captured_creatures=(capture_one, capture_two),
+            captured_creatures=(capture_one, capture_two, capture_three),
             eligible_participant_ids=frozenset({1, 2}),
         )
     )
@@ -243,11 +258,11 @@ async def test_finish_builds_summary_and_clears_activity():
     assert result.summary.ranking[0].captured_creatures[1].current_form is not None
     assert result.summary.ranking[1].trainer_id == 2
     assert result.summary.ranking[1].rank == 2
-    assert result.summary.ranking[1].capture_count == 0
-    assert result.summary.ranking[1].balls_used == 1
-    assert result.summary.ranking[1].balls_remaining == 8
-    assert result.summary.ranking[1].attempts_executed == 1
-    assert result.summary.ranking[1].slots_won == 0
+    assert result.summary.ranking[1].capture_count == 1
+    assert result.summary.ranking[1].balls_used == 2
+    assert result.summary.ranking[1].balls_remaining == 7
+    assert result.summary.ranking[1].attempts_executed == 2
+    assert result.summary.ranking[1].slots_won == 1
     assert result.summary.route.segments[0].phase is SafariPhase.START
     assert result.summary.route.segments[1].phase is SafariPhase.DEVELOPMENT
     assert result.summary.route.segments[1].vote_result is not None
@@ -257,8 +272,11 @@ async def test_finish_builds_summary_and_clears_activity():
     assert result.summary.totals.pokemon_seen == 3
     assert result.summary.totals.slots_captured == 2
     assert result.summary.totals.slots_escaped == 1
-    assert result.summary.totals.attempts_executed == 3
-    assert result.summary.totals.balls_committed == 3
+    assert result.summary.totals.attempts_executed == 4
+    assert result.summary.totals.balls_committed == 4
+    assert result.summary.encounters[0].captured_creature_count == 3
+    assert len(result.summary.encounters[0].slot_summaries[0].captured_creatures) == 2
+    assert result.summary.encounters[0].slot_summaries[0].winner_trainer_id is None
     assert await activity.get_session(session.guild_id) is None
     assert tracker.get(session.guild_id).selection_deadline is None
     assert tracker.get(session.guild_id).route_vote_deadline is None
