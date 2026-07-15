@@ -21,6 +21,7 @@ from core.safari import (
     available_events_for,
     available_extraordinary_events_for,
 )
+from core.safari.domain import SAFARI_ZONE_DEFINITION_BY_ZONE
 
 
 def make_context(**overrides) -> SafariEncounterContext:
@@ -136,11 +137,13 @@ def test_new_events_have_exact_zones_phases_compositions_and_type_coverage():
         SafariThematicEvent.BLIZZARD: {
             SafariZone.SUMMIT,
             SafariZone.ROCKY_SLOPE,
+            SafariZone.FROZEN_PASS,
         },
         SafariThematicEvent.TOXIC_BLOOM: {
             SafariZone.DEAD_FOREST,
             SafariZone.DENSE_REEDS,
             SafariZone.DEEP_MARSH,
+            SafariZone.MUDDY_TRAIL,
         },
     }
     expected_compositions = frozenset(
@@ -279,3 +282,39 @@ def test_context_defaults_route_events_to_zone_events_and_freezes_input():
 def test_route_events_require_none():
     with pytest.raises(ValueError, match="include NONE"):
         make_context(route_allowed_events=frozenset({SafariThematicEvent.FISHING}))
+
+
+def test_every_zone_has_non_none_coverage_in_its_allowed_phases():
+    initial_zones = {
+        SafariZone.FOREST_ENTRANCE,
+        SafariZone.MOUNTAIN_FOOTHILL,
+        SafariZone.COAST_SHORE,
+        SafariZone.SWAMP_EDGE,
+        SafariZone.PLAINS_TRAIL,
+    }
+    for zone in SafariZone:
+        definition = SAFARI_ZONE_DEFINITION_BY_ZONE[zone]
+        for phase in (SafariPhase.DEVELOPMENT, SafariPhase.FINAL):
+            context = make_context(
+                safari_map=definition.safari_map,
+                zone=zone,
+                phase=phase,
+                route_allowed_events=frozenset(definition.allowed_events),
+            )
+            assert any(
+                event is not SafariThematicEvent.NONE
+                for event in available_events_for(context, SafariComposition.NORMAL)
+            )
+
+    for zone in initial_zones:
+        definition = SAFARI_ZONE_DEFINITION_BY_ZONE[zone]
+        context = make_context(
+            safari_map=definition.safari_map,
+            zone=zone,
+            phase=SafariPhase.START,
+            route_allowed_events=frozenset(definition.allowed_events),
+        )
+        assert any(
+            event is not SafariThematicEvent.NONE
+            for event in available_events_for(context, SafariComposition.NORMAL)
+        )

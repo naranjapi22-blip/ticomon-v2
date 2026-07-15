@@ -23,6 +23,7 @@ from core.safari.domain import (
     SafariPhase,
     SafariSessionStatus,
     SafariSlotStatus,
+    SafariThematicEvent,
     SafariTimeOfDay,
     SafariWeather,
 )
@@ -204,6 +205,35 @@ class SafariSession:
     @property
     def completed_encounter_count(self) -> int:
         return self._completed_encounter_count
+
+    @property
+    def event_quota(self) -> int:
+        if self._level <= 2:
+            return 1
+        if self._level <= 4:
+            return 2
+        return 3
+
+    @property
+    def generated_event_count(self) -> int:
+        return sum(
+            getattr(entry.encounter, "event", SafariThematicEvent.NONE)
+            is not SafariThematicEvent.NONE
+            for entry in self._encounter_history
+        )
+
+    @property
+    def generated_event_types(self) -> frozenset[SafariThematicEvent]:
+        return frozenset(
+            getattr(entry.encounter, "event", SafariThematicEvent.NONE)
+            for entry in self._encounter_history
+            if getattr(entry.encounter, "event", SafariThematicEvent.NONE)
+            is not SafariThematicEvent.NONE
+        )
+
+    @property
+    def encounters_remaining(self) -> int:
+        return self._total_encounters - self._completed_encounter_count
 
     @property
     def seen_species_ids(self) -> frozenset[int]:

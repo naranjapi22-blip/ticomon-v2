@@ -506,6 +506,10 @@ class SafariCaptureApplicationService:
             seen_species_ids=session.seen_species_ids,
             route_allowed_events=frozenset(current_segment.allowed_events),
             extraordinary_flags=session.extraordinary_flags,
+            event_quota=session.event_quota,
+            generated_event_count=session.generated_event_count,
+            encounters_remaining=session.encounters_remaining,
+            generated_event_types=session.generated_event_types,
         )
         compositions = self._encounter_compositions_for(session)
         return await self._encounter_generator.generate_with_events(

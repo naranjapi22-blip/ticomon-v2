@@ -44,6 +44,12 @@ class SafariEncounterContext:
     extraordinary_flags: SafariExtraordinaryFlags = field(
         default_factory=SafariExtraordinaryFlags
     )
+    event_quota: int = 0
+    generated_event_count: int = 0
+    encounters_remaining: int = 0
+    generated_event_types: frozenset[SafariThematicEvent] = field(
+        default_factory=frozenset
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.safari_map, SafariMap):
@@ -62,6 +68,12 @@ class SafariEncounterContext:
             raise ValueError("phase must be a SafariPhase.")
         if not isinstance(self.extraordinary_flags, SafariExtraordinaryFlags):
             raise ValueError("extraordinary_flags must be SafariExtraordinaryFlags.")
+        if self.event_quota < 0:
+            raise ValueError("event_quota cannot be negative.")
+        if self.generated_event_count < 0:
+            raise ValueError("generated_event_count cannot be negative.")
+        if self.encounters_remaining < 0:
+            raise ValueError("encounters_remaining cannot be negative.")
 
         seen_species_ids = frozenset(self.seen_species_ids)
         if any(species_id <= 0 for species_id in seen_species_ids):
@@ -99,3 +111,13 @@ class SafariEncounterContext:
         )
         object.__setattr__(self, "seen_species_ids", seen_species_ids)
         object.__setattr__(self, "route_allowed_events", route_allowed_events)
+        generated_event_types = frozenset(self.generated_event_types)
+        if any(
+            not isinstance(event, SafariThematicEvent)
+            or event is SafariThematicEvent.NONE
+            for event in generated_event_types
+        ):
+            raise ValueError(
+                "generated event types must be non-NONE SafariThematicEvent values."
+            )
+        object.__setattr__(self, "generated_event_types", generated_event_types)

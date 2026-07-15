@@ -155,6 +155,79 @@ async def test_fishing_requires_water_candidates():
 
 
 @pytest.mark.asyncio
+async def test_required_event_excludes_none_when_quota_is_due():
+    water = make_species(1, types=["water"])
+    random_source = ScriptedRandom(event_order=(SafariThematicEvent.FISHING,))
+    generator, _, _, _ = make_generator((water,), random_source)
+
+    result = await generator.generate_with_events(
+        make_context(event_quota=1, encounters_remaining=1),
+        (SafariComposition.NORMAL,),
+    )
+
+    assert result.event is SafariThematicEvent.FISHING
+    assert random_source.event_calls[0][0] == (SafariThematicEvent.FISHING,)
+
+
+@pytest.mark.asyncio
+async def test_required_event_tries_next_event_when_first_has_no_species():
+    psychic = make_species(1, types=["psychic"])
+    random_source = ScriptedRandom(
+        event_order=(SafariThematicEvent.GRAVEYARD, SafariThematicEvent.ANCIENT_RUINS)
+    )
+    generator, _, _, _ = make_generator((psychic,), random_source)
+
+    result = await generator.generate_with_events(
+        make_context(
+            zone=SafariZone.ANCIENT_GROVE,
+            phase=SafariPhase.DEVELOPMENT,
+            route_allowed_events=frozenset(
+                {
+                    SafariThematicEvent.NONE,
+                    SafariThematicEvent.GRAVEYARD,
+                    SafariThematicEvent.ANCIENT_RUINS,
+                }
+            ),
+            event_quota=1,
+            encounters_remaining=1,
+        ),
+        (SafariComposition.NORMAL,),
+    )
+
+    assert result.event is SafariThematicEvent.ANCIENT_RUINS
+
+
+@pytest.mark.asyncio
+async def test_existing_event_is_not_repeated_when_a_new_event_is_available():
+    psychic = make_species(1, types=["psychic"])
+    ghost = make_species(2, types=["ghost"])
+    random_source = ScriptedRandom(event_order=(SafariThematicEvent.ANCIENT_RUINS,))
+    generator, _, _, _ = make_generator((psychic, ghost), random_source)
+
+    result = await generator.generate_with_events(
+        make_context(
+            zone=SafariZone.ANCIENT_GROVE,
+            phase=SafariPhase.DEVELOPMENT,
+            route_allowed_events=frozenset(
+                {
+                    SafariThematicEvent.NONE,
+                    SafariThematicEvent.GRAVEYARD,
+                    SafariThematicEvent.ANCIENT_RUINS,
+                }
+            ),
+            generated_event_count=1,
+            generated_event_types=frozenset({SafariThematicEvent.GRAVEYARD}),
+            event_quota=2,
+            encounters_remaining=4,
+        ),
+        (SafariComposition.NORMAL,),
+    )
+
+    assert result.event is SafariThematicEvent.ANCIENT_RUINS
+    assert SafariThematicEvent.GRAVEYARD not in random_source.event_calls[0][0]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("event", "type_name", "safari_map", "zone"),
     [

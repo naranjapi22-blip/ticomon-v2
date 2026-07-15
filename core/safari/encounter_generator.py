@@ -131,7 +131,9 @@ class SafariEncounterGenerator:
 
         for composition in ordered_compositions:
             events = self._event_attempt_order(
-                available_events_for(context, composition)
+                self._events_for_context(
+                    context, available_events_for(context, composition)
+                )
             )
             for event in events:
                 attempted.add((composition, event))
@@ -147,6 +149,10 @@ class SafariEncounterGenerator:
                     last_error = error
 
         fallback = (SafariComposition.NORMAL, SafariThematicEvent.NONE)
+        if self._event_is_required(context):
+            raise SafariEncounterGenerationError(
+                "Safari event quota cannot be satisfied by the available candidates."
+            ) from last_error
         if fallback not in attempted:
             try:
                 encounter = self._generate_from_catalog(
@@ -200,7 +206,11 @@ class SafariEncounterGenerator:
         catalog = await self._species_repository.get_all()
         last_error: SafariEncounterGenerationError | None = None
         for regional_form in ordered_forms:
-            events = self._event_attempt_order(available_regional_events_for(context))
+            events = self._event_attempt_order(
+                self._events_for_context(
+                    context, available_regional_events_for(context)
+                )
+            )
             for event in events:
                 try:
                     encounter = self._generate_regional_from_catalog(
@@ -273,7 +283,9 @@ class SafariEncounterGenerator:
                 last_error = error
                 continue
             events = self._event_attempt_order(
-                available_extraordinary_events_for(context, composition)
+                self._events_for_context(
+                    context, available_extraordinary_events_for(context, composition)
+                )
             )
             for event in events:
                 try:
@@ -673,6 +685,42 @@ class SafariEncounterGenerator:
                 context.route_type_weight_modifiers,
             )
         )
+
+    @staticmethod
+    def _event_is_required(context: SafariEncounterContext) -> bool:
+        missing = context.event_quota - context.generated_event_count
+        return context.event_quota > 0 and context.encounters_remaining <= missing
+
+    @classmethod
+    def _events_for_context(
+        cls,
+        context: SafariEncounterContext,
+        events: frozenset[SafariThematicEvent],
+    ) -> frozenset[SafariThematicEvent]:
+        if not cls._event_is_required(context):
+            fresh_events = frozenset(
+                event
+                for event in events
+                if event is not SafariThematicEvent.NONE
+                and event not in context.generated_event_types
+            )
+            if fresh_events:
+                return fresh_events | (
+                    {SafariThematicEvent.NONE}
+                    if SafariThematicEvent.NONE in events
+                    else set()
+                )
+            return events
+
+        required_events = frozenset(
+            event for event in events if event is not SafariThematicEvent.NONE
+        )
+        fresh_events = frozenset(
+            event
+            for event in required_events
+            if event not in context.generated_event_types
+        )
+        return fresh_events or required_events
 
     def _event_attempt_order(
         self,

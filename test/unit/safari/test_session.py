@@ -34,6 +34,7 @@ from core.safari import (
     SafariWeather,
     SafariZone,
 )
+from core.safari.route_schedule import SafariRouteSchedulePolicy
 from test.factories import create_species
 
 NOW = datetime(2026, 7, 12, tzinfo=UTC)
@@ -61,20 +62,45 @@ def make_segment(
 
 def make_session(
     participants: tuple[SafariParticipant, ...] | None = None,
+    *,
+    level: int = 1,
+    total_encounters: int = 5,
 ) -> SafariSession:
     return SafariSession(
         id=uuid4(),
         guild_id=10,
         participants=participants or (SafariParticipant(1, 9, 9),),
-        total_encounters=5,
-        initial_segment=make_segment(),
+        total_encounters=total_encounters,
+        initial_segment=make_segment(
+            remaining_encounters=SafariRouteSchedulePolicy().segment_lengths_for(
+                total_encounters
+            )[0]
+        ),
         started_at=NOW,
         unlock_id=1,
-        level=1,
+        level=level,
         safari_map=SafariMap.FOREST,
         weather=SafariWeather.CLEAR,
         time_of_day=SafariTimeOfDay.DAY,
     )
+
+
+@pytest.mark.parametrize(
+    ("level", "total_encounters", "expected_quota"),
+    ((1, 5, 1), (2, 7, 1), (3, 9, 2), (4, 11, 2), (5, 13, 3)),
+)
+def test_event_quota_uses_safari_level_not_participant_count(
+    level: int,
+    total_encounters: int,
+    expected_quota: int,
+):
+    session = make_session(
+        tuple(SafariParticipant(i, 9, 9) for i in range(1, 5)),
+        level=level,
+        total_encounters=total_encounters,
+    )
+
+    assert session.event_quota == expected_quota
 
 
 def make_encounter(

@@ -258,6 +258,10 @@ class StartSafariApplicationService:
             route_allowed_events=frozenset(segment.allowed_events),
             seen_species_ids=session.seen_species_ids,
             extraordinary_flags=session.extraordinary_flags,
+            event_quota=session.event_quota,
+            generated_event_count=session.generated_event_count,
+            encounters_remaining=session.encounters_remaining,
+            generated_event_types=session.generated_event_types,
         )
         generated = await self._encounter_generator.generate_with_events(
             context,

@@ -90,6 +90,16 @@ def _species_catalog() -> tuple[Species, ...]:
         ["electric", "steel"],
         ["psychic", "fairy"],
         ["normal", "water"],
+        ["normal", "grass"],
+        ["bug", "flying"],
+        ["rock", "water"],
+        ["ground", "fire"],
+        ["steel", "psychic"],
+        ["ghost", "poison"],
+        ["dragon", "flying"],
+        ["fairy", "water"],
+        ["fighting", "rock"],
+        ["ice", "flying"],
     ]
     rarity_cycle = [
         Rarity.VERY_COMMON,
