@@ -116,7 +116,7 @@ def test_slot_without_selection_escapes_without_attempts():
     assert calculator.calls == []
 
 
-def test_all_attempts_fail_and_shared_fatigue_increases():
+def test_unique_participants_have_independent_fatigue():
     slot = make_slot(1)
     encounter = make_resolving_encounter(
         (slot,),
@@ -132,12 +132,12 @@ def test_all_attempts_fail_and_shared_fatigue_increases():
 
     assert outcome.status == SafariSlotStatus.ESCAPED
     assert [attempt.trainer_id for attempt in outcome.attempts] == [1, 2]
-    assert [attempt.failed_attempts_before for attempt in outcome.attempts] == [0, 1]
-    assert [attempt.failed_attempts_after for attempt in outcome.attempts] == [1, 2]
-    assert outcome.final_opportunity.failed_attempts == 2
+    assert [attempt.failed_attempts_before for attempt in outcome.attempts] == [0, 0]
+    assert [attempt.failed_attempts_after for attempt in outcome.attempts] == [1, 1]
+    assert outcome.final_opportunity.failed_attempts == 0
     assert calculator.calls == [
         (0, CaptureBall.GREAT_BALL),
-        (1, CaptureBall.GREAT_BALL),
+        (0, CaptureBall.GREAT_BALL),
     ]
 
 
@@ -168,7 +168,7 @@ def test_first_success_stops_queue_but_all_balls_remain_committed():
     )
     random_source = ScriptedRandom(
         rolls=(0.1,),
-        shuffle_orders=((2, 1, 1, 2, 1),),
+        shuffle_orders=((2, 1),),
     )
     resolver, calculator = make_resolver(0.5, random_source)
 
@@ -186,19 +186,19 @@ def test_first_success_stops_queue_but_all_balls_remain_committed():
     assert len(calculator.calls) == 1
     assert outcome.participant_outcomes == (
         SafariParticipantOutcome(
-            trainer_id=1,
-            balls_committed=3,
-            attempts_executed=0,
-            balls_spent=0,
-            captured=False,
-        ),
-        SafariParticipantOutcome(
             trainer_id=2,
             balls_committed=2,
             attempts_executed=1,
             balls_spent=1,
             captured=True,
             final_opportunity=outcome.final_opportunity,
+        ),
+        SafariParticipantOutcome(
+            trainer_id=1,
+            balls_committed=3,
+            attempts_executed=0,
+            balls_spent=0,
+            captured=False,
         ),
     )
 
@@ -331,7 +331,7 @@ def test_shared_slot_resolution_is_independent_of_selection_input_order():
     )
 
 
-def test_multiple_balls_create_multiple_queue_positions():
+def test_unique_participant_processes_all_balls_together():
     slot = make_slot(1)
     encounter = make_resolving_encounter((slot,), ((7, slot, 3),))
     random_source = ScriptedRandom(rolls=(0.9, 0.9, 0.9))
@@ -339,7 +339,7 @@ def test_multiple_balls_create_multiple_queue_positions():
 
     outcome = resolver.resolve(encounter).slot_outcomes[0]
 
-    assert random_source.shuffle_inputs == [(7, 7, 7)]
+    assert random_source.shuffle_inputs == [(7,)]
     assert [attempt.trainer_id for attempt in outcome.attempts] == [7, 7, 7]
     assert [attempt.attempt_number for attempt in outcome.attempts] == [1, 2, 3]
 
@@ -367,7 +367,11 @@ def test_slots_have_independent_fatigue_and_stable_outcome_order():
         (0, CaptureBall.GREAT_BALL),
     ]
     assert all(
-        outcome.final_opportunity.failed_attempts == 1
+        outcome.final_opportunity.failed_attempts == 0
+        for outcome in resolution.slot_outcomes
+    )
+    assert all(
+        outcome.participant_outcomes[0].final_opportunity.failed_attempts == 1
         for outcome in resolution.slot_outcomes
     )
 
@@ -405,7 +409,7 @@ def test_resolver_does_not_modify_encounter_slots_selections_or_opportunities():
     assert slot.opportunity.failed_attempts == 4
     assert dict(encounter.selections_by_trainer) == selections_before
     assert resolution.slot_outcomes[0].final_opportunity is not slot.opportunity
-    assert resolution.slot_outcomes[0].final_opportunity.failed_attempts == 5
+    assert resolution.slot_outcomes[0].final_opportunity.failed_attempts == 1
 
 
 def test_every_executed_attempt_uses_great_ball_and_no_creature_is_created():

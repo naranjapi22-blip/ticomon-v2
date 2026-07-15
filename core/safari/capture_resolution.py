@@ -358,58 +358,91 @@ class SafariCaptureResolver:
         slot: SafariEncounterSlot,
         selections: tuple[SafariCaptureSelection, ...] | list[SafariCaptureSelection],
     ) -> SafariSlotOutcome:
-        ordered_selections = sorted(selections, key=lambda item: item.trainer_id)
+        ordered_trainer_ids = [selection.trainer_id for selection in selections]
+        self._random_source.shuffle(ordered_trainer_ids)
+        selections_by_trainer = {
+            selection.trainer_id: selection for selection in selections
+        }
+        ordered_selections = [
+            selections_by_trainer[trainer_id] for trainer_id in ordered_trainer_ids
+        ]
         committed = {
             selection.trainer_id: selection.ball_count
             for selection in ordered_selections
         }
-        queue = [
-            selection.trainer_id
-            for selection in ordered_selections
-            for _ in range(selection.ball_count)
-        ]
-        self._random_source.shuffle(queue)
-
-        opportunity = replace(slot.opportunity)
         attempts: list[SafariCaptureAttempt] = []
+        participant_outcomes: list[SafariParticipantOutcome] = []
         winner: int | None = None
-        for attempt_number, trainer_id in enumerate(queue, start=1):
-            failed_attempts_before = opportunity.failed_attempts
-            result = self._attempt_service.attempt(
-                opportunity,
-                CaptureBall.GREAT_BALL,
-                self._random_source,
-            )
-            opportunity = result.opportunity
-            attempts.append(
-                SafariCaptureAttempt(
-                    trainer_id=trainer_id,
-                    slot_id=slot.id,
-                    attempt_number=attempt_number,
-                    success=result.success,
-                    chance=result.chance,
-                    roll=result.roll,
-                    failed_attempts_before=failed_attempts_before,
-                    failed_attempts_after=opportunity.failed_attempts,
-                    capture_ball=result.capture_ball,
+        final_opportunity = replace(slot.opportunity, failed_attempts=0)
+
+        for selection_index, selection in enumerate(ordered_selections):
+            opportunity = replace(slot.opportunity, failed_attempts=0)
+            participant_attempts = 0
+            captured = False
+
+            for _ in range(selection.ball_count):
+                participant_attempts += 1
+                failed_attempts_before = opportunity.failed_attempts
+                result = self._attempt_service.attempt(
+                    opportunity,
+                    CaptureBall.GREAT_BALL,
+                    self._random_source,
+                )
+                opportunity = result.opportunity
+                attempts.append(
+                    SafariCaptureAttempt(
+                        trainer_id=selection.trainer_id,
+                        slot_id=slot.id,
+                        attempt_number=len(attempts) + 1,
+                        success=result.success,
+                        chance=result.chance,
+                        roll=result.roll,
+                        failed_attempts_before=failed_attempts_before,
+                        failed_attempts_after=opportunity.failed_attempts,
+                        capture_ball=result.capture_ball,
+                    )
+                )
+                if result.success:
+                    winner = selection.trainer_id
+                    captured = True
+                    final_opportunity = opportunity
+                    break
+
+            participant_outcomes.append(
+                SafariParticipantOutcome(
+                    trainer_id=selection.trainer_id,
+                    balls_committed=selection.ball_count,
+                    attempts_executed=participant_attempts,
+                    balls_spent=participant_attempts,
+                    captured=captured,
+                    final_opportunity=opportunity,
                 )
             )
-            if result.success:
-                winner = trainer_id
+            if captured:
+                participant_outcomes.extend(
+                    SafariParticipantOutcome(
+                        trainer_id=unprocessed.trainer_id,
+                        balls_committed=unprocessed.ball_count,
+                        attempts_executed=0,
+                        balls_spent=0,
+                        captured=False,
+                    )
+                    for unprocessed in ordered_selections[selection_index + 1 :]
+                )
                 break
 
-        status = (
-            SafariSlotStatus.CAPTURED
-            if winner is not None
-            else SafariSlotStatus.ESCAPED
-        )
         return SafariSlotOutcome(
             slot_id=slot.id,
-            status=status,
+            status=(
+                SafariSlotStatus.CAPTURED
+                if winner is not None
+                else SafariSlotStatus.ESCAPED
+            ),
             winner_trainer_id=winner,
             attempts=tuple(attempts),
             balls_committed_by_trainer=committed,
-            final_opportunity=opportunity,
+            final_opportunity=final_opportunity,
+            participant_outcomes=tuple(participant_outcomes),
         )
 
     @staticmethod
