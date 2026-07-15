@@ -4,10 +4,9 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class SpeciesMetadata:
     """
-    Información descriptiva de una especie utilizada por
-    las reglas del juego.
+    Descriptive information about a species used by game rules.
 
-    No representa estadísticas ni comportamiento de la especie.
+    Does not represent species statistics or behavior.
     """
 
     generation: int

@@ -5,7 +5,7 @@ from core.creature.stat import Stat
 
 
 class StatCalculator:
-    """Conoce la regla para calcular las estadísticas de una Creature."""
+    """Contains the rule for calculating Creature statistics."""
 
     LEVEL = 50
 

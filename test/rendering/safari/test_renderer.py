@@ -26,7 +26,7 @@ from core.safari import (
 from core.safari.domain import SafariFinishReason
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.participant import SafariParticipant
-from rendering.safari.assets import BACKGROUND_BY_ZONE, FONDOS_ROOT, SafariAssets
+from rendering.safari.assets import BACKGROUND_BY_ZONE, BACKGROUNDS_ROOT, SafariAssets
 from rendering.safari.layout import layout_slot_cards
 from rendering.safari.renderer import SafariEncounterRenderer, SafariSummaryRenderer
 from test.factories import create_species
@@ -297,10 +297,10 @@ def test_zone_background_catalog_covers_all_zones_and_files() -> None:
     assert len(set(BACKGROUND_BY_ZONE.values())) == 42
     assert "safari.png" not in set(BACKGROUND_BY_ZONE.values())
     assert all(
-        (FONDOS_ROOT / filename).is_file()
+        (BACKGROUNDS_ROOT / filename).is_file()
         for filename in set(BACKGROUND_BY_ZONE.values())
     )
-    assert {path.name for path in FONDOS_ROOT.glob("*_*.png")} == set(
+    assert {path.name for path in BACKGROUNDS_ROOT.glob("*_*.png")} == set(
         BACKGROUND_BY_ZONE.values()
     )
 
@@ -311,7 +311,7 @@ def test_registered_zone_with_missing_file_is_reported(
 ) -> None:
     import rendering.safari.assets as assets_module
 
-    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+    monkeypatch.setattr(assets_module, "BACKGROUNDS_ROOT", tmp_path)
 
     with pytest.raises(FileNotFoundError, match="forest_entrance.png"):
         SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
@@ -322,7 +322,7 @@ def test_registered_zone_loads_existing_file(tmp_path, monkeypatch) -> None:
 
     image_path = tmp_path / "forest_entrance.png"
     Image.new("RGBA", (400, 225), (20, 40, 60, 255)).save(image_path)
-    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+    monkeypatch.setattr(assets_module, "BACKGROUNDS_ROOT", tmp_path)
 
     image = SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
 
@@ -351,7 +351,7 @@ def test_second_group_registered_zones_report_missing_files(
 ) -> None:
     import rendering.safari.assets as assets_module
 
-    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+    monkeypatch.setattr(assets_module, "BACKGROUNDS_ROOT", tmp_path)
 
     with pytest.raises(FileNotFoundError):
         SafariAssets().get_background_for_zone(zone)

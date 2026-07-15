@@ -23,7 +23,7 @@ async def main():
 
     image.save("sandbox/pokedex_test.png")
 
-    print("Pokédex renderizada.")
+    print("Pokédex rendered.")
 
 
 if __name__ == "__main__":

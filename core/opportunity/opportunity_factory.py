@@ -8,9 +8,7 @@ from core.species.species import Species
 
 
 class OpportunityFactory:
-    """
-    Crea Opportunities a partir de una Species.
-    """
+    """Creates Opportunities from a Species."""
 
     @staticmethod
     def create(species: Species) -> Opportunity:

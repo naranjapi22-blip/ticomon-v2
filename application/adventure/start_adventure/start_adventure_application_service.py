@@ -48,7 +48,7 @@ class StartAdventureApplicationService:
             opportunity=opportunity,
         )
 
-        # ← Guardar y recuperar la criatura persistida
+        # Save and reload the persisted creature.
         creature = await self._creature_repository.save(
             creature,
         )

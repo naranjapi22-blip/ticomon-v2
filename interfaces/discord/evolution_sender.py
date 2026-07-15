@@ -3,7 +3,7 @@ from pathlib import Path
 import discord
 
 from core.evolution.evolution_result import EvolutionResult
-from rendering.animacion_evolucion import EvolutionAnimation
+from rendering.evolution_animation import EvolutionAnimation
 
 ASSETS_PATH = Path("rendering/assets")
 

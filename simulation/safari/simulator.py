@@ -506,17 +506,17 @@ def _load_species_from_csv(csv_path: Path) -> tuple[Species, ...]:
             rarity = classifier.classify(
                 capture_rate=int(row["capture_rate"]),
                 base_stat_total=base_stat_total,
-                is_legendary=row["es_legendario"].lower() == "true",
-                is_mythical=row["es_mitico"].lower() == "true",
+                is_legendary=row["is_legendary"].lower() == "true",
+                is_mythical=row["is_mythical"].lower() == "true",
                 stage=1,
             )
             species.append(
                 Species(
                     id=int(row["id"]),
                     pokeapi_id=int(row["pokeapi_id"]),
-                    name=row["nombre"],
+                    name=row["name"],
                     types=[
-                        part.strip() for part in row["tipos"].split(",") if part.strip()
+                        part.strip() for part in row["types"].split(",") if part.strip()
                     ],
                     base_stats=stats,
                     height=int(row["height"]),
@@ -526,8 +526,8 @@ def _load_species_from_csv(csv_path: Path) -> tuple[Species, ...]:
                     metadata=SpeciesMetadata(
                         generation=1,
                         is_baby=False,
-                        is_legendary=row["es_legendario"].lower() == "true",
-                        is_mythical=row["es_mitico"].lower() == "true",
+                        is_legendary=row["is_legendary"].lower() == "true",
+                        is_mythical=row["is_mythical"].lower() == "true",
                     ),
                 )
             )

@@ -1,144 +1,140 @@
-# Instrucciones para Codex
+# Codex Repository Instructions
 
-## Identidad del proyecto
+## Project identity
 
-TicoMon es un motor de juego cuya primera interfaz es Discord. Discord es una
-interfaz, no parte del dominio. El Core debe poder probarse sin Discord,
-Railway ni PostgreSQL.
+TicoMon is a game engine whose first interface is Discord. Discord is an
+interface, not part of the domain. The Core must be testable without Discord,
+Railway, or PostgreSQL.
 
-## Arquitectura y dependencias
+## Architecture and dependencies
 
-- `core/`: reglas y objetos del dominio del juego. No importa Discord ni
-  detalles de persistencia o infraestructura externa.
-- `application/`: orquesta casos de uso y coordina servicios del Core con
-  repositorios o puertos.
-- `infrastructure/`: implementa persistencia y servicios externos, incluidos
-  PostgreSQL/Neon y sus mapeadores.
-- `interfaces/discord/`: cogs, vistas, botones y adaptadores de interacción;
-  convierte entradas de Discord en llamadas a Application/Core y presenta sus
-  resultados.
-- `rendering/`: renderizadores y recursos visuales de presentación; no debe
-  asumir reglas de negocio.
-- `test/`: pruebas organizadas por capa, con dobles y fakes para evitar
-  dependencias externas en las pruebas unitarias.
+- `core/`: game-domain rules and objects. It does not import Discord or
+  persistence and external infrastructure details.
+- `application/`: orchestrates use cases and coordinates Core services with
+  repositories and ports.
+- `infrastructure/`: implements persistence and external services, including
+  PostgreSQL/Neon and their mappers.
+- `interfaces/discord/`: cogs, views, buttons, and interaction adapters. It
+  converts Discord input into Application/Core calls and presents their
+  results.
+- `rendering/`: presentation renderers and visual resources. It must not own
+  business rules.
+- `test/`: tests organized by layer, with doubles and fakes for unit tests.
 
-Las dependencias de adaptación apuntan hacia el Core. Application puede
-orquestar el Core; Infrastructure implementa los contratos usados por la
-aplicación; Discord depende de Application/Core para interactuar con el juego.
-No introduzcas imports inversos desde Core hacia Discord, Infrastructure o
-detalles de base de datos.
+Dependencies point toward the Core. Application may orchestrate the Core;
+Infrastructure implements application contracts; Discord depends on
+Application/Core to interact with the game. Do not add reverse imports from
+Core to Discord, Infrastructure, or database details.
 
-El Core devuelve objetos y resultados del dominio, nunca embeds, vistas ni
-componentes de Discord. Cada dato debe tener una sola fuente de verdad y las
-reglas de negocio no deben duplicarse entre capas.
+The Core returns domain objects and results, never Discord embeds, views, or
+components. Every datum has one source of truth, and business rules must not
+be duplicated between layers.
 
-Spawn normal y Safari son sistemas separados. Las formas regionales son
-exclusivas de Safari. Reutiliza los resolvers y catálogos existentes para
-variantes y especies; no mantengas listas paralelas.
+Normal Spawn and Safari are separate systems. Regional forms are exclusive to
+Safari. Reuse existing species and variant resolvers and catalogs; do not keep
+parallel lists.
 
-## Filosofía de implementación
+## Implementation philosophy
 
-- Resuelve el problema actual, no escenarios futuros hipotéticos.
-- Evita sobreprogramación, abstracciones prematuras y refactors no solicitados.
-- Prefiere cambios pequeños, directos y verificables.
-- Reutiliza patrones existentes cuando sean adecuados.
-- No introduzcas capas, servicios, tablas, configuraciones o dependencias sin
-  necesidad demostrada.
-- No modifiques módulos fuera del alcance salvo que sea indispensable.
-- No añadas funcionalidades que el usuario no pidió.
-- Prefiere claridad antes que código ingenioso.
-- Antes de agregar una responsabilidad, determina qué módulo debe ser dueño de
-  ese conocimiento.
-- No cambies pesos, captura, datos persistidos o balance fuera del alcance
-  explícito de la tarea.
+- Solve the current problem, not hypothetical future scenarios.
+- Avoid overengineering, premature abstractions, and unrequested refactors.
+- Prefer small, direct, and verifiable changes.
+- Reuse existing patterns when they are appropriate.
+- Do not introduce layers, services, tables, configuration, or dependencies
+  without demonstrated need.
+- Do not modify modules outside the approved scope unless indispensable.
+- Do not add functionality the user did not request.
+- Prefer clarity over clever code.
+- Before assigning a responsibility, determine which module owns that
+  knowledge.
+- Do not change weights, capture, persisted data, or balance outside the
+  explicit task scope.
 
-## Pruebas y validación
+## Testing and validation
 
-El proyecto usa Python 3.11 y Poetry. El bootstrap confirmado por el proyecto
-y por CI es:
+The project uses Python 3.11 and Poetry. The bootstrap confirmed by the
+project and CI is:
 
 ```powershell
 poetry install --no-interaction
 ```
 
-Comandos de validación:
+Validation commands:
 
 ```powershell
 poetry run pytest -q path/to/test_file.py
 poetry run ruff check .
 poetry run black --check .
 git diff --check
-pre-commit run --files <archivos-cambiados>
+pre-commit run --files <changed-files>
 ```
 
-Para la suite completa local se usa:
+The full local suite uses:
 
 ```powershell
 poetry run pytest -q
 ```
 
-El script `python scripts/check_all.py` ejecuta ese mismo comando:
+The `python scripts/check_all.py` script runs the test suite only:
 
 ```powershell
 python scripts/check_all.py
 ```
 
-La validación de unidad que usa CI, sin pruebas Neon, es:
+The CI unit validation, without Neon tests, is:
 
 ```powershell
 poetry run pytest -q -m "not neon_db"
 ```
 
-Con `NEON_DATABASE_URL` disponible, las pruebas de Neon se ejecutan así:
+With `NEON_DATABASE_URL` available, Neon tests run as follows:
 
 ```powershell
 poetry run pytest -q -m neon_db
 ```
 
-CI está definido en `.github/workflows/ci.yml`. Usa Python 3.11, instala con
-Poetry, ejecuta Ruff y Black en `lint`, la suite `not neon_db` en `unit-tests`,
-y `neon_db` condicionalmente en `neon-tests`. Pre-commit es una validación
-local adicional, no un job separado de CI.
+CI is defined in `.github/workflows/ci.yml`. It uses Python 3.11, installs
+with Poetry, runs Ruff and Black in `lint`, the `not neon_db` suite in
+`unit-tests`, and `neon_db` conditionally in `neon-tests`. Pre-commit is an
+additional local validation, not a separate CI job.
 
-Orden recomendado: inspeccionar el estado, ejecutar pruebas focalizadas,
-Ruff, Black, `git diff --check`, pre-commit y después la suite completa. Si una
-herramienta reformatea archivos, revisa el diff, conserva solo cambios
-intencionados y repite las validaciones. Nunca ocultes, ignores ni desactives
-pruebas fallidas.
+Recommended order: inspect Git state, run focused tests, Ruff, Black,
+`git diff --check`, pre-commit, and then the full suite. If a tool reformats
+files, review the diff, keep only intended changes, and repeat validation.
+Never hide, ignore, or disable failed tests.
 
-La configuración vigente está en `pyproject.toml` y
-`.pre-commit-config.yaml`: Black y Ruff usan longitud 88 y objetivo Python
-3.11; pytest descubre pruebas bajo `test/` y define el marcador `neon_db`.
+Current configuration is in `pyproject.toml` and `.pre-commit-config.yaml`.
+Black and Ruff use line length 88 and target Python 3.11; pytest discovers
+tests under `test/` and defines the `neon_db` marker.
 
-## Reglas para tests
+## Test rules
 
-- Todo cambio de comportamiento debe tener pruebas.
-- Prefiere pruebas unitarias del Core.
-- No dependas de Discord, Railway ni servicios externos para validar reglas
-  del dominio.
-- Ejecuta primero los tests específicos del módulo cambiado y después la
-  suite completa.
-- No alteres tests solo para hacer pasar una implementación incorrecta.
+- Every behavior change must have tests.
+- Prefer Core unit tests.
+- Do not depend on Discord, Railway, or external services to validate domain
+  rules.
+- Run focused tests for the changed module first, then the full suite.
+- Do not alter tests merely to make an incorrect implementation pass.
 
-## Flujo de trabajo con Git
+## Git workflow
 
-- Inspecciona el estado inicial con Git antes de modificar archivos.
-- No sobrescribas cambios ajenos.
-- Mantén el diff limitado al alcance aprobado y revísalo antes del commit.
-- Ejecuta todas las validaciones necesarias.
-- Cuando el cambio solicitado esté terminado y validado, crea el commit
-  directamente sin pedir permiso adicional.
-- Usa un mensaje de commit convencional y descriptivo.
-- Detente después del commit.
-- No hagas push salvo instrucción explícita.
-- Informa hash, mensaje, archivos incluidos, validaciones y estado final del
-  working tree.
+- Inspect the initial Git state before modifying files.
+- Do not overwrite other people's changes.
+- Keep the diff limited to the approved scope and review it before committing.
+- Run all required validation.
+- When the requested change is complete and validated, create the commit
+  directly without asking for additional permission.
+- Use a conventional and descriptive commit message.
+- Stop after the commit.
+- Do not push unless explicitly instructed.
+- Report the hash, message, included files, validations, and final working-tree
+  state.
 
-## Conducta ante ambigüedad
+## Ambiguity
 
-- Inspecciona primero código, pruebas y documentación existentes.
-- Escoge la solución más pequeña compatible con el diseño actual.
-- No conviertas una tarea limitada en un rediseño.
-- Menciona los supuestos relevantes en el resumen final.
-- Detente y explica el conflicto cuando una solicitud contradiga una regla del
-  dominio o implique pérdida de datos.
+- Inspect existing code, tests, and documentation first.
+- Choose the smallest solution compatible with the current design.
+- Do not turn a limited task into a redesign.
+- Mention relevant assumptions in the final summary.
+- Stop and explain the conflict when a request contradicts a domain rule or
+  implies data loss.

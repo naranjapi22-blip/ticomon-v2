@@ -14,10 +14,10 @@ from core.species.variant import Variant
 @dataclass
 class Creature:
     """
-    Representa un individuo único de una Species.
+    Represents a unique individual of a Species.
 
-    Hereda las características comunes de su Species, pero posee su propio
-    estado y características individuales.
+    Inherits the common characteristics of its Species while having its own
+    state and individual characteristics.
     """
 
     species: Species

@@ -7,9 +7,7 @@ from core.opportunity.opportunity import Opportunity
 
 @dataclass
 class Spawn:
-    """
-    Representa un Spawn ocurrido en el mundo.
-    """
+    """Represents a Spawn that occurred in the world."""
 
     opportunities: list[Opportunity]
 

@@ -5,7 +5,7 @@ from time import monotonic
 import discord
 
 from core.spawn.exceptions import NoActiveSpawnSession
-from rendering.animacion_captura import CaptureAnimation
+from rendering.capture_animation import CaptureAnimation
 from rendering.sprites import get_capture_sprite
 
 
@@ -56,7 +56,7 @@ class CaptureButton(discord.ui.Button):
             )
             return
 
-        # El intento fue válido, inicia el cooldown.
+        # The attempt was valid; start the cooldown.
         self._last_attempt[interaction.user.id] = monotonic()
 
         ball_name = result.attempt.capture_ball.name.replace(
@@ -87,8 +87,8 @@ class CaptureButton(discord.ui.Button):
             pokemon_name=result.creature.species.name,
             trainer=trainer.gif.removesuffix(".gif"),
             pokeball=result.attempt.capture_ball.name,
-            capturado=True,
-            tipo=result.creature.species.types[0],
+            captured=True,
+            type_name=result.creature.species.types[0],
         )
 
         gif = await asyncio.to_thread(

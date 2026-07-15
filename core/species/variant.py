@@ -4,10 +4,10 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Variant:
     """
-    Representa una variante estética disponible para una Species.
+    Represents a cosmetic variant available for a Species.
 
-    Una Variant no modifica las reglas del juego; únicamente describe
-    una apariencia que una Creature puede tener.
+    A Variant does not modify game rules; it only describes an appearance
+    that a Creature can have.
     """
 
     id: int

@@ -73,7 +73,7 @@ class PokedexView(discord.ui.View):
                 entry for entry in entries if entry.species.metadata.is_mythical
             )
 
-        # 👇 Agregar aquí
+        # Add additional entries here.
         if (
             self.filter.pokemon_type is not None
             or self.filter.legendary

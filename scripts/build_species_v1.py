@@ -20,13 +20,13 @@ def build_species_v1():
         # identidad
         "pokeapi_id": pokemon["id"],
         "name": pokemon["name"],
-        # clasificación
+        # Classification.
         "types": [t["type"]["name"] for t in pokemon["types"]],
-        # mundo físico
+        # Physical world.
         "height": pokemon["height"],
         "weight": pokemon["weight"],
         "display_scale": 1.0,
-        # economía del juego (FUENTE REAL)
+        # Game economy (authoritative source).
         "capture_rate": species_data["capture_rate"],
         "generation": int(species_data["generation"]["url"].rstrip("/").split("/")[-1]),
         "is_baby": species_data["is_baby"],

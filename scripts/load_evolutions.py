@@ -26,11 +26,11 @@ async def load_evolutions():
 
             for row in reader:
 
-                from_name = row["pokemon_nombre"].strip().lower()
+                from_name = row["pokemon_name"].strip().lower()
 
-                to_name = row["evoluciona_a"].strip().lower()
+                to_name = row["evolves_to"].strip().lower()
 
-                candy_type = row["tipo_caramelo"].strip().lower()
+                candy_type = row["candy_type"].strip().lower()
 
                 tier = row["tier"].strip().lower()
 

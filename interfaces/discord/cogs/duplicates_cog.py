@@ -26,56 +26,46 @@ POKEMON_TYPES = {
 
 
 class DuplicatesCog(commands.Cog):
-
-    def __init__(
-        self,
-        core: CoreServices,
-    ):
+    def __init__(self, core: CoreServices):
         self.core = core
 
-    @commands.command(
-        name="duplicates",
-    )
+    @commands.command(name="duplicates")
     async def duplicates(
         self,
         ctx: commands.Context,
         *,
-        filtro: str | None = None,
+        filter_value: str | None = None,
     ):
+        if filter_value:
+            filter_value = normalize_text(filter_value)
 
-        if filtro:
-            filtro = normalize_text(filtro)
-
-            if filtro in POKEMON_TYPES:
-
+            if filter_value in POKEMON_TYPES:
                 duplicates = (
                     await self.core.duplicate_application.get_duplicates_by_type(
                         trainer_id=ctx.author.id,
-                        pokemon_type=filtro,
+                        pokemon_type=filter_value,
                     )
                 )
 
                 if not duplicates:
                     await ctx.send(
-                        (f"🎉 You don't have duplicate " f"{filtro.title()} Pokémon.")
+                        f"🎉 You don't have duplicate {filter_value.title()} Pokémon."
                     )
                     return
 
                 lines = "\n".join(
-                    (f"• {duplicate.species_name.title()} " f"×{duplicate.amount}")
+                    f"• {duplicate.species_name.title()} ×{duplicate.amount}"
                     for duplicate in duplicates
                 )
 
-                await ctx.send((f"## 📦 {filtro.title()} Duplicates\n\n" f"{lines}"))
-
+                await ctx.send(f"## 📦 {filter_value.title()} Duplicates\n\n{lines}")
                 return
 
             try:
                 species_info = await self.core.species_info_service.get_species_info(
                     trainer_id=ctx.author.id,
-                    species_name=filtro,
+                    species_name=filter_value,
                 )
-
             except ValueError as error:
                 await ctx.send(f"❌ {error}")
                 return
@@ -88,26 +78,20 @@ class DuplicatesCog(commands.Cog):
 
             if len(creatures) < 2:
                 await ctx.send(
-                    (
-                        f"🎉 You don't have duplicate "
-                        f"{species_info.species.name.title()}."
-                    )
+                    f"🎉 You don't have duplicate "
+                    f"{species_info.species.name.title()}."
                 )
                 return
 
             lines = "\n".join(
-                (f"• #{creature.collection_number} " f"{creature.iv_percentage}%")
+                f"• #{creature.collection_number} {creature.iv_percentage}%"
                 for creature in creatures
             )
 
             await ctx.send(
-                (
-                    f"## 📦 {species_info.species.name.title()} "
-                    f"×{len(creatures)}\n\n"
-                    f"{lines}"
-                )
+                f"## 📦 {species_info.species.name.title()} "
+                f"×{len(creatures)}\n\n{lines}"
             )
-
             return
 
         duplicates = await self.core.duplicate_application.get_duplicates(
@@ -119,8 +103,8 @@ class DuplicatesCog(commands.Cog):
             return
 
         lines = "\n".join(
-            (f"• {duplicate.species_name.title()} " f"×{duplicate.amount}")
+            f"• {duplicate.species_name.title()} ×{duplicate.amount}"
             for duplicate in duplicates
         )
 
-        await ctx.send(("## 📦 Duplicates\n\n" f"{lines}"))
+        await ctx.send(f"## 📦 Duplicates\n\n{lines}")

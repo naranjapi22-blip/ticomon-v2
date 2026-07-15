@@ -2,11 +2,11 @@
 ============================================================
 
 TicoMon Animation Engine
-animacion_captura.py
+capture_animation.py
 
-Versión 1.0
+Version 1.0
 
-Motor de animaciones para capturas.
+Capture animation engine.
 
 ============================================================
 """
@@ -29,12 +29,12 @@ BASE_DIR = Path(__file__).resolve().parent
 
 ASSETS_DIR = BASE_DIR / "assets"
 
-FONDOS_DIR = ASSETS_DIR / "fondos"
+BACKGROUNDS_DIR = ASSETS_DIR / "fondos"
 
 POKEBALLS_DIR = ASSETS_DIR / "pokeballs"
 
 # ============================================================
-# CONFIGURACIÓN
+# CONFIGURATION
 # ============================================================
 
 WIDTH = 400
@@ -53,7 +53,7 @@ FRAME_DURATION = 80
 SPRITE_SIZE = 140
 GROUND_Y = HEIGHT - 40
 # ============================================================
-# COLORES
+# COLORS
 # ============================================================
 
 BACKGROUND_TOP = (35, 120, 45)
@@ -74,7 +74,7 @@ CYAN = (150, 240, 255)
 
 
 # ============================================================
-# UTILIDADES
+# UTILITIES
 # ============================================================
 
 
@@ -107,27 +107,27 @@ def ease_in_out(t):
 # ============================================================
 
 
-def cargar_sprite(ruta):
+def load_sprite(path):
 
-    ruta = Path(ruta)
+    path = Path(path)
 
-    if not ruta.exists():
+    if not path.exists():
 
-        raise FileNotFoundError(ruta)
+        raise FileNotFoundError(path)
 
-    return Image.open(ruta).convert("RGBA")
+    return Image.open(path).convert("RGBA")
 
 
-def cargar_frames_gif(ruta, size=SPRITE_SIZE):
+def load_gif_frames(path, size=SPRITE_SIZE):
 
-    if str(ruta).startswith("http"):
+    if str(path).startswith("http"):
 
         from urllib.error import HTTPError
         from urllib.request import Request, urlopen
 
         try:
 
-            req = Request(ruta, headers={"User-Agent": "Mozilla/5.0"})
+            req = Request(path, headers={"User-Agent": "Mozilla/5.0"})
 
             with urlopen(req) as response:
                 data = response.read()
@@ -139,9 +139,9 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
             if e.code != 404:
                 raise
 
-            ruta = ruta.replace("/shiny/", "/regular/")
+            path = path.replace("/shiny/", "/regular/")
 
-            req = Request(ruta, headers={"User-Agent": "Mozilla/5.0"})
+            req = Request(path, headers={"User-Agent": "Mozilla/5.0"})
 
             with urlopen(req) as response:
                 data = response.read()
@@ -150,15 +150,15 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
     else:
 
-        ruta = Path(ruta)
+        path = Path(path)
 
-        if not ruta.exists():
-            raise FileNotFoundError(ruta)
+        if not path.exists():
+            raise FileNotFoundError(path)
 
-        gif = Image.open(ruta)
+        gif = Image.open(path)
 
     frames = []
-    duraciones = []
+    durations = []
 
     for frame in ImageSequence.Iterator(gif):
 
@@ -171,33 +171,33 @@ def cargar_frames_gif(ruta, size=SPRITE_SIZE):
 
         frames.append(img)
 
-        duracion = frame.info.get("duration", 80)
+        duration = frame.info.get("duration", 80)
 
-        if not duracion or duracion <= 0:
-            duracion = 80
+        if not duration or duration <= 0:
+            duration = 80
 
-        duraciones.append(duracion)
+        durations.append(duration)
 
-    return frames, duraciones
+    return frames, durations
 
 
-def cargar_pokeball(tipo):
-    archivo = tipo.lower().replace("é", "e").replace(" ", "_") + ".png"
+def load_pokeball(type_name):
+    filename = type_name.lower().replace("é", "e").replace(" ", "_") + ".png"
 
-    return Image.open(POKEBALLS_DIR / archivo).convert("RGBA")
+    return Image.open(POKEBALLS_DIR / filename).convert("RGBA")
 
 
 TRAINERS_DIR = ASSETS_DIR / "trainers"
 
 
-def cargar_trainer(nombre: str):
+def load_trainer(name: str):
 
-    frames, _ = cargar_frames_gif(TRAINERS_DIR / f"{nombre}.gif")
+    frames, _ = load_gif_frames(TRAINERS_DIR / f"{name}.gif")
 
     return frames
 
 
-def sprite_blanco(sprite):
+def white_sprite(sprite):
 
     alpha = sprite.getchannel("A")
 
@@ -208,43 +208,43 @@ def sprite_blanco(sprite):
     return blanco
 
 
-def redimensionar(sprite, size):
+def resize_sprite(sprite, size):
 
-    escala = min(size / sprite.width, size / sprite.height)
+    scale = min(size / sprite.width, size / sprite.height)
 
     return sprite.resize(
-        (int(sprite.width * escala), int(sprite.height * escala)), Image.LANCZOS
+        (int(sprite.width * scale), int(sprite.height * scale)), Image.LANCZOS
     )
 
 
 # ============================================================
-# FONDO
+# BACKGROUND
 # ============================================================
 
 
 class Background:
 
-    def __init__(self, tipo=None):
+    def __init__(self, type_name=None):
 
-        if tipo:
+        if type_name:
 
-            ruta = FONDOS_DIR / f"{tipo}.png"
+            path = BACKGROUNDS_DIR / f"{type_name}.png"
 
-            if ruta.exists():
+            if path.exists():
 
-                self.background = Image.open(ruta).convert("RGBA")
+                self.background = Image.open(path).convert("RGBA")
 
             else:
 
-                ruta = random.choice(list(FONDOS_DIR.glob("*.png")))
+                path = random.choice(list(BACKGROUNDS_DIR.glob("*.png")))
 
-                self.background = Image.open(ruta).convert("RGBA")
+                self.background = Image.open(path).convert("RGBA")
 
         else:
 
-            ruta = random.choice(list(FONDOS_DIR.glob("*.png")))
+            path = random.choice(list(BACKGROUNDS_DIR.glob("*.png")))
 
-            self.background = Image.open(ruta).convert("RGBA")
+            self.background = Image.open(path).convert("RGBA")
 
         self.background = self.background.resize((WIDTH, HEIGHT), Image.NEAREST)
 
@@ -257,7 +257,7 @@ BACKGROUND = Background()
 
 
 # ============================================================
-# CÁMARA
+# CAMERA
 # ============================================================
 
 
@@ -280,7 +280,7 @@ class Camera:
 
         self.zoom += math.sin(frame * 0.18) * 0.02
 
-        # pequeño zoom durante el impacto
+        # Small impact zoom.
 
         if 8 <= frame <= 13:
 
@@ -294,7 +294,7 @@ class Camera:
 
             self.zoom += (1 - t) * 0.18
 
-        # sacudida
+        # Shake.
 
         if 9 <= frame <= 11:
 
@@ -303,7 +303,7 @@ class Camera:
 
 
 # ============================================================
-# PARTÍCULAS
+# PARTICLES
 # ============================================================
 
 
@@ -359,7 +359,7 @@ class Particle:
 
 
 # ============================================================
-# EMISOR
+# EMITTER
 # ============================================================
 
 
@@ -413,7 +413,7 @@ class ParticleEmitter:
 
 
 # ============================================================
-# INSTANCIAS
+# INSTANCES
 # ============================================================
 
 
@@ -427,9 +427,9 @@ TRAINER_SCALE = 0.55
 
 class Trainer:
 
-    def __init__(self, nombre="red"):
+    def __init__(self, name="red"):
 
-        self.frames = cargar_trainer(nombre)
+        self.frames = load_trainer(name)
 
     def frame(self, frame):
 
@@ -464,9 +464,9 @@ class Trainer:
 
 class Pokeball:
 
-    def __init__(self, tipo="Pokéball"):
+    def __init__(self, type_name="Pokéball"):
 
-        sprite = cargar_pokeball(tipo)
+        sprite = load_pokeball(type_name)
 
         bbox = sprite.getbbox()
 
@@ -475,20 +475,20 @@ class Pokeball:
 
         self.sprite_cerrada = sprite.resize((20, 20), Image.LANCZOS)
 
-        archivo = tipo.lower().replace("é", "e").replace("-", "_").replace(" ", "_")
-
-        sprite_abierta = Image.open(POKEBALLS_DIR / f"{archivo}_open.png").convert(
-            "RGBA"
+        filename = (
+            type_name.lower().replace("é", "e").replace("-", "_").replace(" ", "_")
         )
 
-        bbox = sprite_abierta.getbbox()
+        open_sprite = Image.open(POKEBALLS_DIR / f"{filename}_open.png").convert("RGBA")
+
+        bbox = open_sprite.getbbox()
 
         if bbox:
-            sprite_abierta = sprite_abierta.crop(bbox)
+            open_sprite = open_sprite.crop(bbox)
 
-        self.sprite_abierta = sprite_abierta.resize((20, 20), Image.LANCZOS)
+        self.open_sprite = open_sprite.resize((20, 20), Image.LANCZOS)
 
-        # Sprite actual
+        # Current sprite.
         self.sprite = self.sprite_cerrada
 
         self.frame = 0
@@ -528,7 +528,7 @@ class Pokeball:
             self.rotation = lerp(-90, 720, t)
 
         # ---------------------------------
-        # Impacto
+        # Impact.
         # ---------------------------------
 
         elif frame <= 14:
@@ -539,7 +539,7 @@ class Pokeball:
             self.rotation += 25
 
         # ---------------------------------
-        # Caída
+        # Fall.
         # ---------------------------------
 
         elif frame <= 18:
@@ -623,7 +623,7 @@ class Pokeball:
             return
 
         if 12 <= self.frame <= 15:
-            ball = self.sprite_abierta.copy()
+            ball = self.open_sprite.copy()
         else:
             ball = self.sprite_cerrada.copy()
 
@@ -635,7 +635,7 @@ class Pokeball:
 
 
 # ============================================================
-# DESTELLO DEL IMPACTO
+# IMPACT FLASH
 # ============================================================
 
 
@@ -655,7 +655,7 @@ class ImpactFlash:
 
 
 # ============================================================
-# CHISPAS
+# SPARKS
 # ============================================================
 
 
@@ -688,7 +688,7 @@ class SparkEmitter:
 
 
 # ============================================================
-# INSTANCIAS
+# INSTANCES
 # ============================================================
 
 
@@ -708,44 +708,42 @@ class CaptureAnimation:
         pokemon_name,
         trainer="red",
         pokeball="Pokéball",
-        capturado=True,
-        tipo=None,
+        captured=True,
+        type_name=None,
     ):
 
-        self.sprite_frames, self.sprite_duraciones = cargar_frames_gif(sprite_path)
+        self.sprite_frames, self.sprite_durations = load_gif_frames(sprite_path)
 
-        self.sprite_white_frames = [
-            sprite_blanco(frame) for frame in self.sprite_frames
-        ]
+        self.sprite_white_frames = [white_sprite(frame) for frame in self.sprite_frames]
 
         self.sprite_index = 0
         self.sprite_timer = 0
-        self.nombre = pokemon_name
+        self.name = pokemon_name
 
-        self.capturado = capturado
-        self.tipo = tipo
+        self.captured = captured
+        self.type_name = type_name
         self.frames = []
         self.trainer_name = trainer
-        # Guardar el nombre de la Poké Ball
+        # Store the Poké Ball name.
         self.pokeball = pokeball
 
-        # Crear la Poké Ball con ese sprite
+        # Create the Poké Ball with that sprite.
         self.pokeball_sprite = Pokeball(self.pokeball)
 
     # --------------------------------------------------------
 
-    def sprite_actual(self, frame, gif_frame):
+    def get_sprite(self, frame, gif_frame):
 
         original = self.sprite_frames[gif_frame]
         blanco = self.sprite_white_frames[gif_frame]
 
-        # Antes del impacto
+        # Before impact.
 
         if frame <= 7:
 
             return original
 
-        # Se vuelve blanco
+        # Fade to white.
 
         elif frame <= 10:
 
@@ -753,19 +751,19 @@ class CaptureAnimation:
 
             return Image.blend(original, blanco, t)
 
-        # Totalmente blanco
+        # Fully white.
 
         elif frame <= 13:
 
             return blanco
 
-        # Si escapó vuelve inmediatamente
+        # Escaped Pokémon return immediately.
 
-        elif not self.capturado:
+        elif not self.captured:
 
             return original
 
-        # Capturado
+        # Captured.
 
         return blanco
 
@@ -773,23 +771,23 @@ class CaptureAnimation:
 
     def sprite_scale(self, frame):
 
-        escala = 1.0
+        scale = 1.0
 
-        # Compresión hacia la Poké Ball
+        # Compression toward the Poké Ball.
 
-        if self.capturado and frame >= 12:
+        if self.captured and frame >= 12:
 
             t = ease_out(min(1, (frame - 12) / 4))
 
-            escala = lerp(1.0, 0.15, t)
+            scale = lerp(1.0, 0.15, t)
 
-        return max(0.05, escala)
+        return max(0.05, scale)
 
     # --------------------------------------------------------
 
     def sprite_alpha(self, frame):
 
-        if not self.capturado:
+        if not self.captured:
 
             return 255
 
@@ -808,7 +806,7 @@ class CaptureAnimation:
         x = CENTER_X
         y = CENTER_Y + 35
 
-        if self.capturado and frame >= 12:
+        if self.captured and frame >= 12:
 
             t = ease_out(min(1, (frame - 12) / 4))
 
@@ -843,7 +841,7 @@ class CaptureAnimation:
         )
 
         # =====================================
-        # Partículas del impacto
+        # Impact particles.
         # =====================================
 
         if frame == 12:
@@ -861,27 +859,27 @@ class CaptureAnimation:
 
         contador = 0
 
-        while self.sprite_timer >= self.sprite_duraciones[self.sprite_index]:
+        while self.sprite_timer >= self.sprite_durations[self.sprite_index]:
             contador += 1
 
             if contador > 100:
                 raise RuntimeError(
-                    f"Bucle infinito. "
+                    f"Infinite loop. "
                     f"Frame={self.sprite_index} "
-                    f"Duración={self.sprite_duraciones[self.sprite_index]}"
+                    f"Duration={self.sprite_durations[self.sprite_index]}"
                 )
 
-            self.sprite_timer -= self.sprite_duraciones[self.sprite_index]
+            self.sprite_timer -= self.sprite_durations[self.sprite_index]
 
             self.sprite_index = (self.sprite_index + 1) % len(self.sprite_frames)
-            self.sprite_timer -= self.sprite_duraciones[self.sprite_index]
+            self.sprite_timer -= self.sprite_durations[self.sprite_index]
 
             self.sprite_index = (self.sprite_index + 1) % len(self.sprite_frames)
 
         gif_frame = self.sprite_index
 
-        sprite = self.sprite_actual(frame, gif_frame)
-        # Mantener el tamaño original del GIF
+        sprite = self.get_sprite(frame, gif_frame)
+        # Preserve the original GIF size.
         sprite = sprite.copy()
 
         alpha = self.sprite_alpha(frame)
@@ -912,7 +910,7 @@ class CaptureAnimation:
         global FLASH
         global SPARKS
 
-        BACKGROUND = Background(self.tipo)
+        BACKGROUND = Background(self.type_name)
         self.trainer = Trainer(
             self.trainer_name,
         )
@@ -929,13 +927,13 @@ class CaptureAnimation:
 
             self.frames.append(self.render_frame(frame))
 
-        # Mantener el último frame
+        # Preserve the final frame.
 
-        ultimo = self.frames[-1]
+        final_frame = self.frames[-1]
 
         for _ in range(4):
 
-            self.frames.append(ultimo.copy())
+            self.frames.append(final_frame.copy())
 
     # ========================================================
 
@@ -1008,8 +1006,8 @@ if __name__ == "__main__":
         pokemon_name="Pikachu",
         trainer="leaf",
         pokeball="Poké Ball",
-        capturado=True,
-        tipo="electric",
+        captured=True,
+        type_name="electric",
     )
 
     anim.render()

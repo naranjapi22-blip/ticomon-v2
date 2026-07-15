@@ -32,8 +32,8 @@ def build_species(
 ) -> dict:
     return {
         "pokeapi_id": int(row["pokeapi_id"]),
-        "name": row["nombre"],
-        "types": row["tipos"].split(","),
+        "name": row["name"],
+        "types": row["types"].split(","),
         "height": float(row["height"]),
         "weight": float(row["weight"]),
         "display_scale": float(row["display_scale"]),
@@ -41,8 +41,8 @@ def build_species(
         "spawn_rarity": spawn_rarity,
         "generation": 0,
         "is_baby": False,
-        "is_legendary": str(row["es_legendario"]).lower() == "true",
-        "is_mythical": str(row["es_mitico"]).lower() == "true",
+        "is_legendary": str(row["is_legendary"]).lower() == "true",
+        "is_mythical": str(row["is_mythical"]).lower() == "true",
         "base_stats": {
             "hp": int(row["hp"]),
             "attack": int(row["attack"]),
@@ -74,7 +74,7 @@ async def main():
                     if not is_regional_row(row):
                         continue
 
-                    base_name = get_base_name(row["nombre"])
+                    base_name = get_base_name(row["name"])
 
                     spawn_rarity = await conn.fetchval(
                         """
@@ -87,9 +87,7 @@ async def main():
                     )
 
                     if spawn_rarity is None:
-                        raise ValueError(
-                            f"No se encontró la especie base para {row['nombre']}"
-                        )
+                        raise ValueError(f"Base species not found for {row['name']}")
 
                     species = build_species(
                         row,
@@ -113,7 +111,7 @@ async def main():
     await close_pool()
 
     logger.info(
-        "\n🎉 Importación finalizada.\n%s formas regionales importadas.",
+        "\n🎉 Import completed.\n%s regional forms imported.",
         imported,
     )
 

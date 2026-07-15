@@ -13,10 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from rendering.animacion_captura import CaptureAnimation
+from rendering.capture_animation import CaptureAnimation
 
 # =====================================
-# CONFIGURACIÓN
+# CONFIGURATION
 # =====================================
 
 RUNS = 20
@@ -25,7 +25,7 @@ WARMUP = 3
 SPRITE = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/regular/25.gif"
 
 POKEMON = "Pikachu"
-TIPO = "electric"
+TYPE_NAME = "electric"
 POKEBALL = "Poké Ball"
 
 # =====================================
@@ -47,8 +47,8 @@ def create_animation():
         sprite_path=SPRITE,
         pokemon_name=POKEMON,
         pokeball=POKEBALL,
-        capturado=True,
-        tipo=TIPO,
+        captured=True,
+        type_name=TYPE_NAME,
     )
 
 

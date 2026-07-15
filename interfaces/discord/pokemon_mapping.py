@@ -1,4 +1,4 @@
-MAPA_POKEMON = {
+POKEMON_MAPPING = {
     "736": "739",
     "737": "740",
     "738": "741",
@@ -346,9 +346,9 @@ MAPA_POKEMON = {
 }
 
 
-def obtener_id_gif(dex_id):
+def get_gif_id(dex_id):
     """
-    Retorna el ID correcto para la URL de ShinyHunters.
-    Si el ID no está en el mapa, retorna el mismo dex_id original.
+    Return the correct ID for the ShinyHunters URL.
+    Return the original dex_id when it is not in the mapping.
     """
-    return MAPA_POKEMON.get(str(dex_id), str(dex_id))
+    return POKEMON_MAPPING.get(str(dex_id), str(dex_id))

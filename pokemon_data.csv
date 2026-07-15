@@ -1,4 +1,4 @@
-"id","nombre","tipos","es_legendario","es_mitico","capture_rate","hp","attack","defense","special_attack","special_defense","speed","height","weight","pokeapi_id","display_scale"
+"id","name","types","is_legendary","is_mythical","capture_rate","hp","attack","defense","special_attack","special_defense","speed","height","weight","pokeapi_id","display_scale"
 "1","bulbasaur","grass,poison","false","false","45","45","49","49","65","65","45","7","69","1","1.1"
 "2","ivysaur","grass,poison","false","false","45","60","62","63","80","80","60","10","130","2","1"
 "3","venusaur","grass,poison","false","false","45","80","82","83","100","100","80","20","1000","3","0.9"

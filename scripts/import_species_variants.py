@@ -6,7 +6,7 @@ from infrastructure.db_config import close_pool, get_pool
 BASE_DIR = Path(__file__).resolve().parent.parent
 VARIANTS_FOLDER = BASE_DIR / "showdown_variantes"
 
-# Showdown utiliza un nombre de carpeta distinto al de la Species base.
+# Showdown uses a different folder name from the base Species.
 SPECIES_NAME_MAP = {
     "oricorio": "oricorio-baile",
     "toxtricity": "toxtricity-amped",

@@ -12,26 +12,26 @@ from core.species.variant import Variant
 @dataclass
 class Opportunity:
     """
-    Representa una oportunidad temporal de interacción dentro del mundo.
+    Represents a temporary interaction opportunity within the world.
 
-    Una Opportunity ya conoce todas las características individuales de la
-    futura Creature, pero todavía no pertenece a ningún Trainer.
+    An Opportunity already knows all individual characteristics of the future
+    Creature, but does not yet belong to a Trainer.
     """
 
-    # Identidad de la especie
+    # Species identity.
     species: Species
 
-    # Características individuales
+    # Individual characteristics.
     ivs: IVs
     size: Size
     nature: Nature
     is_shiny: bool
 
-    # Forma visual inicial
+    # Initial visual form.
     initial_form: Variant | None
 
-    # Interacción permitida
+    # Allowed interaction.
     interaction: str
 
-    # Estado de captura
+    # Capture state.
     failed_attempts: int = 0

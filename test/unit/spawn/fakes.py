@@ -49,8 +49,8 @@ class FakeSpeciesRepository(SpeciesRepository):
     ) -> tuple[Species, ...]:
         self.last_requested_rarity = rarity
 
-        # Este fake NO filtra por rareza.
-        # Solo registra cuál rareza fue solicitada.
+        # This fake does not filter by rarity.
+        # It only records which rarity was requested.
         return self._species
 
 

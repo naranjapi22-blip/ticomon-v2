@@ -4,7 +4,7 @@ from pathlib import Path
 import psycopg2
 from dotenv import load_dotenv
 
-# 🔥 cargar .env
+# Load .env from the repository root.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 
@@ -13,7 +13,7 @@ def get_connection():
     db_url = os.getenv("NEON_DATABASE_URL")
 
     if not db_url:
-        raise Exception("❌ NEON_DATABASE_URL no encontrada")
+        raise Exception("❌ NEON_DATABASE_URL was not found")
 
     return psycopg2.connect(db_url)
 
@@ -21,7 +21,8 @@ def get_connection():
 def insert_bulbasaur(conn):
     cur = conn.cursor()
 
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO species (
             pokeapi_id, name,
             type_1, type_2,
@@ -39,7 +40,8 @@ def insert_bulbasaur(conn):
             65, 65, 45
         )
         ON CONFLICT (pokeapi_id) DO NOTHING;
-    """)
+    """
+    )
 
     conn.commit()
     cur.close()
@@ -52,7 +54,7 @@ def main():
 
     conn.close()
 
-    print("✔ Bulbasaur insertado en Neon DB")
+    print("✔ Bulbasaur inserted into Neon DB")
 
 
 if __name__ == "__main__":

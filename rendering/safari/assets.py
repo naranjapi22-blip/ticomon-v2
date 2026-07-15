@@ -11,7 +11,7 @@ from core.species.species import Species
 
 ROOT = Path(__file__).resolve().parents[1]
 FONTS_ROOT = ROOT / "assets" / "fonts"
-FONDOS_ROOT = ROOT / "assets" / "fondos"
+BACKGROUNDS_ROOT = ROOT / "assets" / "fondos"
 REGULAR_ROOT = ROOT / "assets" / "regular"
 SHINY_ROOT = ROOT / "assets" / "shiny"
 PLACEHOLDER_SPECIES_ID = 25
@@ -112,7 +112,7 @@ class SafariAssets:
                 f"Safari zone has no registered background: {zone}"
             ) from error
 
-        path = FONDOS_ROOT / filename
+        path = BACKGROUNDS_ROOT / filename
         if not path.exists():
             raise FileNotFoundError(f"Safari zone background is missing: {path}")
         return Image.open(path).convert("RGBA")
@@ -120,9 +120,9 @@ class SafariAssets:
     @lru_cache(maxsize=32)
     def get_background_by_name(self, name: str) -> Image.Image:
         filename = BACKGROUND_BY_TYPE.get(name, name)
-        path = FONDOS_ROOT / filename
+        path = BACKGROUNDS_ROOT / filename
         if not path.exists():
-            path = FONDOS_ROOT / "safari.png"
+            path = BACKGROUNDS_ROOT / "safari.png"
         return Image.open(path).convert("RGBA")
 
     @lru_cache(maxsize=2048)

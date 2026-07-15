@@ -105,7 +105,9 @@ async def test_duplicates_passes_canonical_type_to_core(value):
         ),
     )
 
-    await DuplicatesCog.duplicates.callback(DuplicatesCog(core), _ctx(), filtro=value)
+    await DuplicatesCog.duplicates.callback(
+        DuplicatesCog(core), _ctx(), filter_value=value
+    )
 
     core.duplicate_application.get_duplicates_by_type.assert_awaited_once_with(
         trainer_id=99,

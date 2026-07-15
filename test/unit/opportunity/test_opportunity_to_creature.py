@@ -4,7 +4,7 @@ from core.opportunity.opportunity_factory import OpportunityFactory
 
 class FakeSpecies:
     """
-    Species mínima para test sin depender de todo el sistema.
+    Minimal Species for testing without depending on the whole system.
     """
 
     def __init__(self):

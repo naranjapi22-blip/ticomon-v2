@@ -2,17 +2,17 @@
 ============================================================
 
 TicoMon Animation Engine
-animacion_evolucion.py
+evolution_animation.py
 
-Versión 2.0
+Version 2.0
 
-Motor de animaciones para:
+Animation engine for:
 
-- Evoluciones
-- Eclosiones
+- Evolutions
+- Hatching
 - Shiny
-- Incursiones
-- Eventos especiales
+- Raids
+- Special events
 
 ============================================================
 """
@@ -32,7 +32,7 @@ from PIL import (
 )
 
 # ============================================================
-# CONFIGURACIÓN GENERAL
+# GENERAL CONFIGURATION
 # ============================================================
 
 WIDTH = 800
@@ -47,7 +47,7 @@ FRAME_DURATION = 70
 SPRITE_SIZE = 280
 
 # ============================================================
-# COLORES
+# COLORS
 # ============================================================
 
 BACKGROUND_TOP = (15, 25, 80)
@@ -67,23 +67,23 @@ BLUE = (70, 170, 255)
 PURPLE = (180, 120, 255)
 
 # ============================================================
-# FUENTES
+# FONTS
 # ============================================================
 
 
 def load_font(size: int):
 
-    posibles_fuentes = [
+    possible_fonts = [
         Path("fonts/DejaVuSans-Bold.ttf"),
         Path("assets/fonts/DejaVuSans-Bold.ttf"),
         Path("DejaVuSans-Bold.ttf"),
         Path("arial.ttf"),
     ]
 
-    for fuente in posibles_fuentes:
+    for font_path in possible_fonts:
 
         try:
-            return ImageFont.truetype(str(fuente), size)
+            return ImageFont.truetype(str(font_path), size)
         except Exception:
             continue
 
@@ -94,7 +94,7 @@ TITLE_FONT = load_font(34)
 TEXT_FONT = load_font(22)
 
 # ============================================================
-# UTILIDADES
+# UTILITIES
 # ============================================================
 
 
@@ -103,9 +103,9 @@ def lerp(a, b, t):
     return a + (b - a) * t
 
 
-def clamp(valor, minimo, maximo):
+def clamp(value, minimum, maximum):
 
-    return max(minimo, min(valor, maximo))
+    return max(minimum, min(value, maximum))
 
 
 def ease_out(t):
@@ -127,18 +127,18 @@ def ease_in_out(t):
 # ============================================================
 
 
-def cargar_sprite(ruta):
+def load_sprite(path):
 
-    ruta = Path(ruta)
+    path = Path(path)
 
-    if not ruta.exists():
+    if not path.exists():
 
-        raise FileNotFoundError(ruta)
+        raise FileNotFoundError(path)
 
-    return Image.open(ruta).convert("RGBA")
+    return Image.open(path).convert("RGBA")
 
 
-def sprite_blanco(sprite):
+def white_sprite(sprite):
 
     alpha = sprite.getchannel("A")
 
@@ -149,13 +149,13 @@ def sprite_blanco(sprite):
     return blanco
 
 
-def redimensionar(sprite, size):
+def resize_sprite(sprite, size):
 
     return sprite.resize((size, size), Image.LANCZOS)
 
 
 # ============================================================
-# FONDO
+# BACKGROUND
 # ============================================================
 
 
@@ -196,13 +196,13 @@ class Background:
 
     def draw_nebula(self, img):
 
-        capa = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
 
-        draw = ImageDraw.Draw(capa)
+        draw = ImageDraw.Draw(layer)
 
-        colores = [(70, 170, 255, 25), (180, 120, 255, 20), (120, 220, 255, 18)]
+        colors = [(70, 170, 255, 25), (180, 120, 255, 20), (120, 220, 255, 18)]
 
-        for color in colores:
+        for color in colors:
 
             x = random.randint(80, WIDTH - 80)
             y = random.randint(60, HEIGHT - 60)
@@ -211,9 +211,9 @@ class Background:
 
             draw.ellipse((x - r, y - r, x + r, y + r), fill=color)
 
-        capa = capa.filter(ImageFilter.GaussianBlur(80))
+        layer = layer.filter(ImageFilter.GaussianBlur(80))
 
-        img.alpha_composite(capa)
+        img.alpha_composite(layer)
 
     def draw_stars(self, img, frame):
 
@@ -221,17 +221,17 @@ class Background:
 
         for star in self.stars:
 
-            brillo = star["alpha"]
+            brightness = star["alpha"]
 
-            brillo += int(math.sin(frame * 0.15 + star["x"]) * 20)
+            brightness += int(math.sin(frame * 0.15 + star["x"]) * 20)
 
-            brillo = clamp(brillo, 80, 255)
+            brightness = clamp(brightness, 80, 255)
 
             r = star["size"]
 
             draw.ellipse(
                 (star["x"] - r, star["y"] - r, star["x"] + r, star["y"] + r),
-                fill=(255, 255, 255, brillo),
+                fill=(255, 255, 255, brightness),
             )
 
     def render(self, frame):
@@ -254,9 +254,9 @@ class Halo:
 
     def draw(self, img, frame):
 
-        capa = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
 
-        draw = ImageDraw.Draw(capa)
+        draw = ImageDraw.Draw(layer)
 
         radio = 130
 
@@ -267,13 +267,13 @@ class Halo:
             fill=(CYAN[0], CYAN[1], CYAN[2], 70),
         )
 
-        capa = capa.filter(ImageFilter.GaussianBlur(45))
+        layer = layer.filter(ImageFilter.GaussianBlur(45))
 
-        img.alpha_composite(capa)
+        img.alpha_composite(layer)
 
 
 # ============================================================
-# ARO DE ENERGÍA
+# ENERGY RING
 # ============================================================
 
 
@@ -281,9 +281,9 @@ class EnergyRing:
 
     def draw(self, img, frame):
 
-        capa = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
 
-        draw = ImageDraw.Draw(capa)
+        draw = ImageDraw.Draw(layer)
 
         giro = frame * 6
 
@@ -308,13 +308,13 @@ class EnergyRing:
                 width=4,
             )
 
-        capa = capa.filter(ImageFilter.GaussianBlur(2))
+        layer = layer.filter(ImageFilter.GaussianBlur(2))
 
-        img.alpha_composite(capa)
+        img.alpha_composite(layer)
 
 
 # ============================================================
-# SOMBRA
+# SHADOW
 # ============================================================
 
 
@@ -322,9 +322,9 @@ class Shadow:
 
     def draw(self, img, frame):
 
-        capa = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
 
-        draw = ImageDraw.Draw(capa)
+        draw = ImageDraw.Draw(layer)
 
         mover = math.sin(frame * 0.35) * 4
 
@@ -338,13 +338,13 @@ class Shadow:
             fill=(0, 0, 0, 120),
         )
 
-        capa = capa.filter(ImageFilter.GaussianBlur(12))
+        layer = layer.filter(ImageFilter.GaussianBlur(12))
 
-        img.alpha_composite(capa)
+        img.alpha_composite(layer)
 
 
 # ============================================================
-# INSTANCIAS
+# INSTANCES
 # ============================================================
 
 BACKGROUND = Background()
@@ -355,7 +355,7 @@ ENERGY_RING = EnergyRing()
 
 SHADOW = Shadow()
 # ============================================================
-# PARTÍCULA
+# PARTICLE
 # ============================================================
 
 
@@ -411,7 +411,7 @@ class Particle:
 
 
 # ============================================================
-# EMISOR
+# EMITTER
 # ============================================================
 
 
@@ -494,7 +494,7 @@ class ParticleEmitter:
 
 
 # ============================================================
-# CÁMARA
+# CAMERA
 # ============================================================
 
 
@@ -515,10 +515,10 @@ class Camera:
         self.offset_x = 0
         self.offset_y = 0
 
-        # Respiración suave
+        # Soft breathing.
         self.zoom += math.sin(frame * 0.18) * 0.02
 
-        # Zoom dramático
+        # Dramatic zoom.
         if 8 <= frame <= 16:
 
             t = ease_out((frame - 8) / 8)
@@ -531,7 +531,7 @@ class Camera:
 
             self.zoom += (1 - t) * 0.30
 
-        # Temblor
+        # Shake.
         if 13 <= frame <= 18:
 
             self.offset_x = random.randint(-4, 4)
@@ -562,7 +562,7 @@ class Glow:
 
 
 # ============================================================
-# INSTANCIAS
+# INSTANCES
 # ============================================================
 
 EMITTER = ParticleEmitter()
@@ -579,11 +579,11 @@ class EvolutionAnimation:
 
     def __init__(self, sprite_from, sprite_to, pokemon_from, pokemon_to, shiny=False):
 
-        self.sprite_from = cargar_sprite(sprite_from)
+        self.sprite_from = load_sprite(sprite_from)
 
-        self.sprite_to = cargar_sprite(sprite_to)
+        self.sprite_to = load_sprite(sprite_to)
 
-        self.sprite_white = sprite_blanco(self.sprite_from)
+        self.sprite_white = white_sprite(self.sprite_from)
 
         self.pokemon_from = pokemon_from
 
@@ -595,7 +595,7 @@ class EvolutionAnimation:
 
     # ========================================================
 
-    def sprite_actual(self, frame):
+    def get_sprite(self, frame):
 
         # 0-8
         if frame <= 8:
@@ -625,15 +625,15 @@ class EvolutionAnimation:
 
     def sprite_size(self, frame):
 
-        escala = 1
+        scale = 1
 
-        escala += math.sin(frame * 0.25) * 0.05
+        scale += math.sin(frame * 0.25) * 0.05
 
         if 11 <= frame <= 17:
 
-            escala += 0.20
+            scale += 0.20
 
-        return int(SPRITE_SIZE * escala * CAMERA.zoom)
+        return int(SPRITE_SIZE * scale * CAMERA.zoom)
 
     # ========================================================
 
@@ -700,28 +700,28 @@ class EvolutionAnimation:
 
         draw = ImageDraw.Draw(img)
 
-        titulo = "⭐ EVOLUCIÓN ⭐"
+        title = "⭐ EVOLUTION ⭐"
 
-        bbox = draw.textbbox((0, 0), titulo, font=TITLE_FONT)
+        bbox = draw.textbbox((0, 0), title, font=TITLE_FONT)
 
         draw.text(
-            ((WIDTH - (bbox[2] - bbox[0])) // 2, 22), titulo, font=TITLE_FONT, fill=GOLD
+            ((WIDTH - (bbox[2] - bbox[0])) // 2, 22), title, font=TITLE_FONT, fill=GOLD
         )
 
         if frame < 20:
 
-            puntos = "." * ((frame % 4) + 1)
+            dots = "." * ((frame % 4) + 1)
 
-            texto = f"{self.pokemon_from}" f" está evolucionando" f"{puntos}"
+            text = f"{self.pokemon_from} is evolving{dots}"
 
         else:
 
-            texto = f"✨ " f"{self.pokemon_to}" f" apareció"
+            text = f"✨ {self.pokemon_to} appeared"
 
-        bbox = draw.textbbox((0, 0), texto, font=TEXT_FONT)
+        bbox = draw.textbbox((0, 0), text, font=TEXT_FONT)
 
         draw.text(
-            ((WIDTH - (bbox[2] - bbox[0])) // 2, 398), texto, font=TEXT_FONT, fill=WHITE
+            ((WIDTH - (bbox[2] - bbox[0])) // 2, 398), text, font=TEXT_FONT, fill=WHITE
         )
 
     # ============================================================
@@ -735,7 +735,7 @@ class EvolutionAnimation:
         EMITTER.update(frame)
 
         # -----------------------------
-        # Fondo
+        # Background.
         # -----------------------------
 
         img = BACKGROUND.render(frame)
@@ -747,19 +747,19 @@ class EvolutionAnimation:
         HALO.draw(img, frame)
 
         # -----------------------------
-        # Aros
+        # Rings.
         # -----------------------------
 
         ENERGY_RING.draw(img, frame)
 
         # -----------------------------
-        # Partículas
+        # Particles.
         # -----------------------------
 
         EMITTER.draw(img)
 
         # -----------------------------
-        # Sombra
+        # Shadow.
         # -----------------------------
 
         SHADOW.draw(img, frame)
@@ -768,11 +768,11 @@ class EvolutionAnimation:
         # Sprite
         # -----------------------------
 
-        sprite = self.sprite_actual(frame)
+        sprite = self.get_sprite(frame)
 
-        lado = self.sprite_size(frame)
+        size = self.sprite_size(frame)
 
-        sprite = redimensionar(sprite, lado)
+        sprite = resize_sprite(sprite, size)
 
         sprite = sprite.rotate(
             self.sprite_rotation(frame), resample=Image.BICUBIC, expand=True
@@ -791,7 +791,7 @@ class EvolutionAnimation:
         self.draw_flash(img, frame)
 
         # -----------------------------
-        # Texto
+        # Text.
         # -----------------------------
 
         self.draw_text(img, frame)
@@ -810,17 +810,17 @@ class EvolutionAnimation:
 
             self.frames.append(self.render_frame(frame))
 
-        # Mantener el último frame visible
-        ultimo = self.frames[-1]
+        # Keep the final frame visible.
+        final_frame = self.frames[-1]
 
         for _ in range(12):
-            self.frames.append(ultimo.copy())
+            self.frames.append(final_frame.copy())
 
         return self.frames
 
     # ========================================================
 
-    def save_gif(self, filename="evolucion.gif"):
+    def save_gif(self, filename="evolution.gif"):
 
         if not self.frames:
 

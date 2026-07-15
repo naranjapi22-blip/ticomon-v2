@@ -3,7 +3,7 @@ import random
 
 class ShinyFactory:
     """
-    Determina si una Opportunity será shiny.
+    Determines whether an Opportunity will be shiny.
     """
 
     SHINY_RATE = 1 / 1024
