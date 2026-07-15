@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
+import discord
 import pytest
 
 from application.safari import ResolveSafariCaptureResult
@@ -12,6 +13,7 @@ from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.views.safari_encounter_view import (
     SafariBallCountView,
+    SafariEncounterSlotButton,
     SafariEncounterView,
 )
 from interfaces.discord.views.safari_route_view import SafariRouteView
@@ -46,30 +48,77 @@ async def test_encounter_view_builds_attachment_message_and_pokedex_button() -> 
     assert "Resolves in 30 seconds." in content
     assert file.filename == "safari-encounter.png"
     assert [child.__class__.__name__ for child in view.children] == [
-        "SafariEncounterSlotSelect",
+        "SafariEncounterSlotButton",
+        "SafariEncounterSlotButton",
         "PokedexButton",
     ]
+    assert not any(isinstance(child, discord.ui.Select) for child in view.children)
+    assert all(child.row == 0 for child in view.children[:2])
+    assert view.children[-1].row == 1
     assert any(isinstance(child, PokedexButton) for child in view.children)
 
 
-def test_encounter_slot_selector_labels_show_only_species_names() -> None:
+@pytest.mark.parametrize("species_ids", [(25,), (25, 26), (25, 26, 27)])
+def test_encounter_slot_buttons_match_visible_species_options(species_ids) -> None:
+    session = make_session()
+    names = {25: "Furret", 26: "Klawf", 27: "Spinda"}
+    slots = tuple(
+        SafariEncounterSlot(
+            uuid4(),
+            OpportunityFactory.create(
+                create_species(id=species_id, name=names[species_id])
+            ),
+        )
+        for species_id in species_ids
+    )
+    encounter = SafariEncounter(
+        id=uuid4(),
+        composition=SafariComposition.NORMAL,
+        slots=slots,
+    )
+    session.publish_encounter(encounter)
+    view = SafariEncounterView(
+        core=SimpleNamespace(),
+        guild_id=session.guild_id,
+        session=session,
+    )
+
+    buttons = view.children[:-1]
+    assert all(isinstance(button, SafariEncounterSlotButton) for button in buttons)
+    assert [button.label for button in buttons] == [
+        names[species_id] for species_id in species_ids
+    ]
+    assert [button._slot_id for button in buttons] == [
+        slot.id for slot in encounter.slots
+    ]
+
+
+@pytest.mark.asyncio
+async def test_each_encounter_slot_button_uses_its_slot_id() -> None:
+    view, session = _encounter_view()
+    view.choose_slot = AsyncMock()
+    interaction = SimpleNamespace()
+
+    for button, slot in zip(view.children[:2], session.current_encounter.slots):
+        await button.callback(interaction)
+
+    assert view.choose_slot.await_args_list == [
+        ((interaction, session.current_encounter.slots[0].id), {}),
+        ((interaction, session.current_encounter.slots[1].id), {}),
+    ]
+
+
+def test_similar_species_names_keep_distinct_slot_ids() -> None:
     session = make_session()
     encounter = SafariEncounter(
         id=uuid4(),
         composition=SafariComposition.NORMAL,
-        slots=(
+        slots=tuple(
             SafariEncounterSlot(
                 uuid4(),
-                OpportunityFactory.create(create_species(id=162, name="Furret")),
-            ),
-            SafariEncounterSlot(
-                uuid4(),
-                OpportunityFactory.create(create_species(id=951, name="Klawf")),
-            ),
-            SafariEncounterSlot(
-                uuid4(),
-                OpportunityFactory.create(create_species(id=327, name="Spinda")),
-            ),
+                OpportunityFactory.create(create_species(id=species_id, name=name)),
+            )
+            for species_id, name in ((29, "Nidoran-f"), (32, "Nidoran-m"))
         ),
     )
     session.publish_encounter(encounter)
@@ -79,17 +128,11 @@ def test_encounter_slot_selector_labels_show_only_species_names() -> None:
         session=session,
     )
 
-    selector = view.children[0]
-    assert [option.label for option in selector.options] == [
-        "Furret",
-        "Klawf",
-        "Spinda",
+    buttons = view.children[:2]
+    assert [button.label for button in buttons] == ["Nidoran F", "Nidoran M"]
+    assert [button._slot_id for button in buttons] == [
+        slot.id for slot in encounter.slots
     ]
-    assert all(not option.label.startswith("Slot") for option in selector.options)
-    assert [option.value for option in selector.options] == [
-        str(slot.id) for slot in encounter.slots
-    ]
-    assert all(option.description == "Shared population" for option in selector.options)
 
 
 @pytest.mark.parametrize(

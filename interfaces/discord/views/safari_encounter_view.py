@@ -150,44 +150,18 @@ async def publish_final_summary(
     return view
 
 
-class SafariEncounterSlotSelect(discord.ui.Select):
-    def __init__(self, view: "SafariEncounterView") -> None:
-        encounter = view.session.current_encounter
-        assert encounter is not None
-
-        options = []
-        for slot in encounter.slots:
-            species = slot.opportunity.species
-            label = view.format_species_name(species.name)
-            description: list[str] = []
-            description.append(
-                "Shared population"
-                if slot.capture_policy is SafariCapturePolicy.SHARED
-                else "Unique specimen"
-            )
-            if slot.opportunity.is_shiny:
-                description.append("Shiny")
-            if slot.opportunity.initial_form is not None:
-                description.append(slot.opportunity.initial_form.name)
-            options.append(
-                discord.SelectOption(
-                    label=label,
-                    value=str(slot.id),
-                    description=", ".join(description) if description else None,
-                )
-            )
-
+class SafariEncounterSlotButton(discord.ui.Button):
+    def __init__(self, view: "SafariEncounterView", slot) -> None:
+        self._encounter_view = view
+        self._slot_id = slot.id
         super().__init__(
-            placeholder="Choose a Safari slot...",
-            min_values=1,
-            max_values=1,
-            options=options,
+            label=view.format_species_name(slot.opportunity.species.name),
+            style=discord.ButtonStyle.primary,
             row=0,
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        slot_id = UUID(self.values[0])
-        await self.view.choose_slot(interaction, slot_id)
+        await self._encounter_view.choose_slot(interaction, self._slot_id)
 
 
 class SafariEncounterView(discord.ui.View):
@@ -211,15 +185,16 @@ class SafariEncounterView(discord.ui.View):
         self._timer_processed = False
         self._phase_ended = False
 
-        self.add_item(SafariEncounterSlotSelect(self))
-        self.add_item(
-            PokedexButton(
-                self.core,
-                species_ids=tuple(
-                    slot.opportunity.species.id for slot in self._encounter().slots
-                ),
-            )
+        for slot in self._encounter().slots:
+            self.add_item(SafariEncounterSlotButton(self, slot))
+        pokedex_button = PokedexButton(
+            self.core,
+            species_ids=tuple(
+                slot.opportunity.species.id for slot in self._encounter().slots
+            ),
         )
+        pokedex_button.row = 1
+        self.add_item(pokedex_button)
 
     def build_content(self) -> str:
         progress = self.session.completed_encounter_count + 1
