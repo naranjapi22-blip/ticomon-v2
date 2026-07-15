@@ -29,6 +29,7 @@ BACKGROUND_BY_MAP: dict[SafariMap, str] = {
 BACKGROUND_BY_ZONE: dict[SafariZone, str] = {
     SafariZone.FOREST_ENTRANCE: "forest_entrance.png",
     SafariZone.DEEP_FOREST: "forest_deep_forest.png",
+    SafariZone.CLEARING: "forest_entrance.png",
     SafariZone.ROCKY_SLOPE: "mountain_rocky_slope.png",
     SafariZone.DEEP_CAVE: "mountain_deep_cave.png",
     SafariZone.COAST_SHORE: "coast_shore.png",
@@ -47,6 +48,27 @@ BACKGROUND_BY_ZONE: dict[SafariZone, str] = {
     SafariZone.DENSE_REEDS: "swamp_dense_reeds.png",
     SafariZone.MISTY_CLEARING: "swamp_misty_clearing.png",
     SafariZone.FLOWER_MEADOW: "plains_flower_meadow.png",
+    SafariZone.MARSH_EDGE: "swamp_edge.png",
+    SafariZone.HILLSIDE_PATH: "mountain_foothill.png",
+    SafariZone.VALLEY: "mountain_foothill.png",
+    SafariZone.HIGH_RIDGE: "mountain_summit.png",
+    SafariZone.FROZEN_PASS: "mountain_summit.png",
+    SafariZone.UNDERGROUND_LAKE: "mountain_deep_cave.png",
+    SafariZone.ROCKY_BEACH: "coast_shore.png",
+    SafariZone.COASTAL_PATH: "coast_shore.png",
+    SafariZone.CLIFFSIDE: "coast_shore.png",
+    SafariZone.LAGOON: "coast_tidal_pools.png",
+    SafariZone.MANGROVE_EDGE: "swamp_edge.png",
+    SafariZone.MUDDY_TRAIL: "swamp_edge.png",
+    SafariZone.SHALLOW_WATER: "coast_tidal_pools.png",
+    SafariZone.DEEP_MARSH: "swamp_edge.png",
+    SafariZone.NESTING_GROUND: "swamp_dense_reeds.png",
+    SafariZone.PLAINS_TRAIL: "plains_open_field.png",
+    SafariZone.LOW_HILLS: "mountain_foothill.png",
+    SafariZone.WINDY_FIELD: "plains_open_field.png",
+    SafariZone.RIVER_CROSSING: "forest_riverbank.png",
+    SafariZone.HERDING_GROUNDS: "plains_tall_grass.png",
+    SafariZone.ROCKY_OUTCROP: "mountain_rocky_slope.png",
 }
 
 BACKGROUND_BY_TYPE: dict[str, str] = {
@@ -82,9 +104,18 @@ class SafariAssets:
         return self.get_background_by_name(filename)
 
     @lru_cache(maxsize=32)
-    def get_background_for_zone(self, zone: SafariZone | None) -> Image.Image:
-        filename = BACKGROUND_BY_ZONE.get(zone, "safari.png")
-        return self.get_background_by_name(filename)
+    def get_background_for_zone(self, zone: SafariZone) -> Image.Image:
+        try:
+            filename = BACKGROUND_BY_ZONE[zone]
+        except KeyError as error:
+            raise ValueError(
+                f"Safari zone has no registered background: {zone}"
+            ) from error
+
+        path = FONDOS_ROOT / filename
+        if not path.exists():
+            raise FileNotFoundError(f"Safari zone background is missing: {path}")
+        return Image.open(path).convert("RGBA")
 
     @lru_cache(maxsize=32)
     def get_background_by_name(self, name: str) -> Image.Image:

@@ -16,6 +16,7 @@ from application.safari import (
 )
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
+    SAFARI_ZONE_DEFINITION_BY_ZONE,
     SafariMap,
     SafariPhase,
     SafariTimeOfDay,
@@ -25,7 +26,7 @@ from core.safari import (
 from core.safari.domain import SafariFinishReason
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.participant import SafariParticipant
-from rendering.safari.assets import BACKGROUND_BY_ZONE, SafariAssets
+from rendering.safari.assets import BACKGROUND_BY_ZONE, FONDOS_ROOT, SafariAssets
 from rendering.safari.layout import layout_slot_cards
 from rendering.safari.renderer import SafariEncounterRenderer, SafariSummaryRenderer
 from test.factories import create_species
@@ -52,7 +53,10 @@ def _session(slot_count: int = 3):
         phase=SafariPhase.START,
         completed_encounter_count=0,
         total_encounters=5,
-        current_segment=SimpleNamespace(remaining_encounters=3),
+        current_segment=SimpleNamespace(
+            zone=SafariZone.FOREST_ENTRANCE,
+            remaining_encounters=3,
+        ),
         participants_by_trainer={1: participant},
     )
     return session
@@ -243,10 +247,11 @@ def test_encounter_renderer_uses_zone_context_for_background() -> None:
     assert assets.requested_backgrounds[0] == "coast_tidal_pools.png"
 
 
-def test_zone_background_catalog_contains_only_the_initial_ten_zones() -> None:
+def test_zone_background_catalog_covers_all_zones_and_files() -> None:
     assert BACKGROUND_BY_ZONE == {
         SafariZone.FOREST_ENTRANCE: "forest_entrance.png",
         SafariZone.DEEP_FOREST: "forest_deep_forest.png",
+        SafariZone.CLEARING: "forest_entrance.png",
         SafariZone.ROCKY_SLOPE: "mountain_rocky_slope.png",
         SafariZone.DEEP_CAVE: "mountain_deep_cave.png",
         SafariZone.COAST_SHORE: "coast_shore.png",
@@ -265,32 +270,46 @@ def test_zone_background_catalog_contains_only_the_initial_ten_zones() -> None:
         SafariZone.DENSE_REEDS: "swamp_dense_reeds.png",
         SafariZone.MISTY_CLEARING: "swamp_misty_clearing.png",
         SafariZone.FLOWER_MEADOW: "plains_flower_meadow.png",
+        SafariZone.MARSH_EDGE: "swamp_edge.png",
+        SafariZone.HILLSIDE_PATH: "mountain_foothill.png",
+        SafariZone.VALLEY: "mountain_foothill.png",
+        SafariZone.HIGH_RIDGE: "mountain_summit.png",
+        SafariZone.FROZEN_PASS: "mountain_summit.png",
+        SafariZone.UNDERGROUND_LAKE: "mountain_deep_cave.png",
+        SafariZone.ROCKY_BEACH: "coast_shore.png",
+        SafariZone.COASTAL_PATH: "coast_shore.png",
+        SafariZone.CLIFFSIDE: "coast_shore.png",
+        SafariZone.LAGOON: "coast_tidal_pools.png",
+        SafariZone.MANGROVE_EDGE: "swamp_edge.png",
+        SafariZone.MUDDY_TRAIL: "swamp_edge.png",
+        SafariZone.SHALLOW_WATER: "coast_tidal_pools.png",
+        SafariZone.DEEP_MARSH: "swamp_edge.png",
+        SafariZone.NESTING_GROUND: "swamp_dense_reeds.png",
+        SafariZone.PLAINS_TRAIL: "plains_open_field.png",
+        SafariZone.LOW_HILLS: "mountain_foothill.png",
+        SafariZone.WINDY_FIELD: "plains_open_field.png",
+        SafariZone.RIVER_CROSSING: "forest_riverbank.png",
+        SafariZone.HERDING_GROUNDS: "plains_tall_grass.png",
+        SafariZone.ROCKY_OUTCROP: "mountain_rocky_slope.png",
     }
+    assert set(BACKGROUND_BY_ZONE) == set(SAFARI_ZONE_DEFINITION_BY_ZONE)
+    assert "safari.png" not in set(BACKGROUND_BY_ZONE.values())
+    assert all(
+        (FONDOS_ROOT / filename).is_file()
+        for filename in set(BACKGROUND_BY_ZONE.values())
+    )
 
 
-def test_registered_zone_with_missing_file_falls_back_to_safari(
+def test_registered_zone_with_missing_file_is_reported(
     tmp_path,
     monkeypatch,
 ) -> None:
     import rendering.safari.assets as assets_module
 
-    Image.new("RGBA", (1020, 574), (1, 2, 3, 255)).save(tmp_path / "safari.png")
     monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
 
-    image = SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
-
-    assert image.size == (1020, 574)
-
-
-def test_unregistered_zone_falls_back_to_safari(tmp_path, monkeypatch) -> None:
-    import rendering.safari.assets as assets_module
-
-    Image.new("RGBA", (1020, 574), (1, 2, 3, 255)).save(tmp_path / "safari.png")
-    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
-
-    image = SafariAssets().get_background_for_zone(SafariZone.VALLEY)
-
-    assert image.size == (1020, 574)
+    with pytest.raises(FileNotFoundError, match="forest_entrance.png"):
+        SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
 
 
 def test_registered_zone_loads_existing_file(tmp_path, monkeypatch) -> None:
@@ -320,19 +339,17 @@ def test_registered_zone_loads_existing_file(tmp_path, monkeypatch) -> None:
         SafariZone.FLOWER_MEADOW,
     ],
 )
-def test_second_group_registered_zones_fall_back_when_files_are_missing(
+def test_second_group_registered_zones_report_missing_files(
     zone,
     tmp_path,
     monkeypatch,
 ) -> None:
     import rendering.safari.assets as assets_module
 
-    Image.new("RGBA", (1020, 574), (1, 2, 3, 255)).save(tmp_path / "safari.png")
     monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
 
-    image = SafariAssets().get_background_for_zone(zone)
-
-    assert image.size == (1020, 574)
+    with pytest.raises(FileNotFoundError):
+        SafariAssets().get_background_for_zone(zone)
 
 
 def test_encounter_renderer_uses_pokeapi_id_not_internal_id() -> None:
