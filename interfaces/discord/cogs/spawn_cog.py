@@ -58,7 +58,7 @@ class SpawnCog(commands.Cog):
 
         except SpawnAlreadyActive:
             await ctx.send(
-                "Ya existe un !spawn activo en este servidor.",
+                "There is already an active !spawn in this server.",
             )
             return
 

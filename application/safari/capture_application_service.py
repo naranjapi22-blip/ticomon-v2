@@ -26,6 +26,7 @@ from core.candy.candy_bundle import CandyBundle
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_unit_of_work import CaptureUnitOfWork
 from core.creature.creature_factory import CreatureFactory
+from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari.activity_repository import SafariActivityRepository
 from core.safari.capture import (
     SafariPersistedCapture,
@@ -40,6 +41,7 @@ from core.safari.capture_resolution import (
 )
 from core.safari.domain import (
     SAFARI_ZONE_DEFINITION_BY_ZONE,
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounterStatus,
     SafariSessionStatus,
@@ -233,7 +235,7 @@ class SafariCaptureApplicationService:
 
             resolution = self._capture_resolver.resolve(encounter)
             slot_application_results, persisted_result, rewards_by_trainer = (
-                await self._persist_resolution(resolution)
+                await self._persist_resolution(resolution, encounter)
             )
             history_entry = self._build_history_entry(
                 encounter,
@@ -287,6 +289,7 @@ class SafariCaptureApplicationService:
     async def _persist_resolution(
         self,
         resolution: SafariEncounterResolution,
+        encounter: SafariEncounter,
     ) -> tuple[
         tuple[SafariCaptureSlotApplicationResult, ...],
         SafariPersistedEncounterResult,
@@ -321,8 +324,13 @@ class SafariCaptureApplicationService:
             return slot_results, persisted, {}
 
         captured_by_trainer: dict[
-            int, list[tuple[SafariSlotOutcome, SafariParticipantOutcome]]
+            int, list[tuple[SafariSlotOutcome, SafariParticipantOutcome, bool]]
         ] = defaultdict(list)
+        shared_slot_ids = {
+            slot.id
+            for slot in encounter.slots
+            if slot.capture_policy is SafariCapturePolicy.SHARED
+        }
         for outcome in captured_outcomes:
             captured_participants = [
                 participant_outcome
@@ -336,7 +344,11 @@ class SafariCaptureApplicationService:
                     raise ValueError("slot winner must be a captured participant.")
             for participant_outcome in captured_participants:
                 captured_by_trainer[participant_outcome.trainer_id].append(
-                    (outcome, participant_outcome)
+                    (
+                        outcome,
+                        participant_outcome,
+                        outcome.slot_id in shared_slot_ids,
+                    )
                 )
 
         slot_results_by_slot: dict[
@@ -352,14 +364,17 @@ class SafariCaptureApplicationService:
                 trainer_reward = CandyBundle()
                 trainer_outcomes = captured_by_trainer[trainer_id]
 
-                for outcome, participant_outcome in trainer_outcomes:
+                for outcome, participant_outcome, is_shared in trainer_outcomes:
                     if participant_outcome.final_opportunity is None:
                         raise ValueError(
                             "captured participants require an opportunity."
                         )
+                    opportunity = participant_outcome.final_opportunity
+                    if is_shared:
+                        opportunity = OpportunityFactory.create(opportunity.species)
                     creature = self._creature_factory.create(
                         trainer_id=trainer_id,
-                        opportunity=participant_outcome.final_opportunity,
+                        opportunity=opportunity,
                     )
                     saved_creature = await transaction.save_creature(creature)
                     reward = self._reward_policy.reward_for(saved_creature)

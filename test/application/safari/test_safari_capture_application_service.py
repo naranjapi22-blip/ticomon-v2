@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -22,6 +23,8 @@ from core.capture.application.capture_unit_of_work import (
 )
 from core.capture.attempt_service import CaptureAttemptService
 from core.capture.domain.capture_ball import CaptureBall
+from core.creature.ivs import IVs
+from core.creature.size import Size
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
     SafariCaptureResolver,
@@ -359,6 +362,50 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
     assert session.participants_by_trainer[1].captured_creature_ids == (101,)
     assert session.participants_by_trainer[2].captured_creature_ids == (102,)
     assert session.participants_by_trainer[1].remaining_balls == 2
+
+
+@pytest.mark.asyncio
+async def test_shared_captures_create_independent_creatures_per_participant():
+    activity = _TrackingActivityRepository()
+    session = _published_session(
+        (
+            SafariParticipant(1, 3, 3),
+            SafariParticipant(2, 3, 3),
+            SafariParticipant(3, 3, 3),
+        )
+    )
+    await activity.save_session(session)
+    transaction = _Transaction()
+    service = _capture_service(activity=activity, unit_of_work=_UnitOfWork(transaction))
+    slot_id = session.current_encounter.slots[0].id
+
+    for trainer_id in (1, 2, 3):
+        await service.select_capture(session.guild_id, trainer_id, slot_id, 1)
+        await service.confirm_capture_selection(session.guild_id, trainer_id)
+    await service.close_capture_selection(session.guild_id)
+
+    base_opportunity = OpportunityFactory.create(create_species(id=25))
+    generated_opportunities = tuple(
+        replace(
+            base_opportunity,
+            ivs=IVs(index, index, index, index, index, index),
+            size=Size(0.5 + index / 10),
+        )
+        for index in (1, 2, 3)
+    )
+    with patch(
+        "application.safari.capture_application_service.OpportunityFactory.create",
+        side_effect=generated_opportunities,
+    ) as opportunity_factory:
+        result = await service.resolve_capture(session.guild_id)
+
+    creatures = [item.creature for item in result.slot_results[0].participant_results]
+    assert opportunity_factory.call_count == 3
+    assert len({id(creature) for creature in creatures}) == 3
+    assert {creature.trainer_id for creature in creatures} == {1, 2, 3}
+    assert {creature.iv_percentage for creature in creatures} == {3, 6, 10}
+    assert len({creature.size.value for creature in creatures}) == 3
+    assert len({creature.species.id for creature in creatures}) == 1
 
 
 @pytest.mark.asyncio

@@ -29,14 +29,14 @@ class OpportunityButton(discord.ui.Button):
 
         if session is None:
             await interaction.response.send_message(
-                "Este !spawn ya terminó.",
+                "This !spawn has already ended.",
                 ephemeral=True,
             )
             return
 
         if interaction.user.id != session.owner_id:
             await interaction.response.send_message(
-                "Solo quien inició el !spawn puede elegir un Pokémon.",
+                "Only the trainer who started the !spawn can select a Pokémon.",
                 ephemeral=True,
             )
             return
