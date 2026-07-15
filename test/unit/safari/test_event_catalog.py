@@ -6,7 +6,6 @@ from core.safari import (
     COMMON_SAFARI_COMPOSITIONS,
     EVENT_COMPOSITION_COMPATIBILITY,
     EVENT_REQUIRED_TYPES,
-    EVENT_TYPE_MODIFIERS,
     EVENT_WEIGHTS,
     EVENTS_BY_PHASE,
     EVENTS_BY_ZONE,
@@ -52,16 +51,44 @@ def test_event_configuration_is_complete_positive_and_immutable():
         EVENT_WEIGHTS[SafariThematicEvent.NONE] = 1.0  # type: ignore[index]
 
 
-def test_event_type_modifiers_are_canonical_non_negative_and_deeply_immutable():
-    assert isinstance(EVENT_TYPE_MODIFIERS, MappingProxyType)
-    assert set(EVENT_TYPE_MODIFIERS) == set(SafariThematicEvent)
-    for modifiers in EVENT_TYPE_MODIFIERS.values():
-        assert isinstance(modifiers, MappingProxyType)
-        assert all(name == name.strip().lower() for name in modifiers)
-        assert all(value >= 0 for value in modifiers.values())
-    assert EVENT_TYPE_MODIFIERS[SafariThematicEvent.NONE] == {}
+def test_event_required_types_are_complete_canonical_and_immutable():
+    assert isinstance(EVENT_REQUIRED_TYPES, MappingProxyType)
+    assert set(EVENT_REQUIRED_TYPES) == set(SafariThematicEvent)
+    assert all(
+        all(name == name.strip().lower() for name in required_types)
+        for required_types in EVENT_REQUIRED_TYPES.values()
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.NONE] == frozenset()
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.VOLCANIC_ACTIVITY] == frozenset(
+        {"fire", "rock"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.FISHING] == frozenset({"water"})
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.MIGRATION] == frozenset(
+        {"flying", "normal"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.DISTORTION] == frozenset(
+        {"psychic", "ghost"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.DEPOSIT] == frozenset(
+        {"rock", "ground", "steel"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.GRAVEYARD] == frozenset(
+        {"ghost", "dark"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.ANCIENT_RUINS] == frozenset(
+        {"rock", "psychic", "ghost"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.RAINBOW] == frozenset(
+        {"fairy", "flying"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.DEN] == frozenset(
+        {"dragon", "dark", "fighting"}
+    )
+    assert EVENT_REQUIRED_TYPES[SafariThematicEvent.NEST] == frozenset(
+        {"bug", "flying", "grass"}
+    )
     with pytest.raises(TypeError):
-        EVENT_TYPE_MODIFIERS[SafariThematicEvent.FISHING]["water"] = 2.0  # type: ignore[index]
+        EVENT_REQUIRED_TYPES[SafariThematicEvent.FISHING] = frozenset()  # type: ignore[index]
 
 
 def test_compatibility_contains_only_supported_compositions():

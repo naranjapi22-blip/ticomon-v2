@@ -122,64 +122,19 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
 )
 
 
-def _freeze_type_modifiers(
-    modifiers_by_event: Mapping[SafariThematicEvent, Mapping[str, float]],
-) -> Mapping[SafariThematicEvent, Mapping[str, float]]:
-    frozen: dict[SafariThematicEvent, Mapping[str, float]] = {}
-    for event, modifiers in modifiers_by_event.items():
-        copied = dict(modifiers)
-        for type_name, modifier in copied.items():
-            if not type_name or type_name != type_name.strip().lower():
-                raise ValueError(
-                    "event type modifier keys must be canonical lowercase."
-                )
-            if modifier < 0:
-                raise ValueError("event type modifiers cannot be negative.")
-        frozen[event] = MappingProxyType(copied)
-    return MappingProxyType(frozen)
-
-
-EVENT_TYPE_MODIFIERS = _freeze_type_modifiers(
-    {
-        SafariThematicEvent.NONE: {},
-        SafariThematicEvent.VOLCANIC_ACTIVITY: {"fire": 1.7, "rock": 1.3},
-        SafariThematicEvent.FISHING: {"water": 1.8},
-        SafariThematicEvent.MIGRATION: {"flying": 1.4, "normal": 1.3},
-        SafariThematicEvent.DISTORTION: {"psychic": 1.5, "ghost": 1.5},
-        SafariThematicEvent.DEPOSIT: {
-            "rock": 1.5,
-            "ground": 1.4,
-            "steel": 1.4,
-        },
-        SafariThematicEvent.GRAVEYARD: {"ghost": 1.8, "dark": 1.2},
-        SafariThematicEvent.ANCIENT_RUINS: {
-            "rock": 1.3,
-            "psychic": 1.3,
-            "ghost": 1.3,
-        },
-        SafariThematicEvent.RAINBOW: {"fairy": 1.5, "flying": 1.2},
-        SafariThematicEvent.DEN: {
-            "dragon": 1.3,
-            "dark": 1.3,
-            "fighting": 1.2,
-        },
-        SafariThematicEvent.NEST: {
-            "bug": 1.3,
-            "flying": 1.2,
-            "grass": 1.2,
-        },
-    }
-)
-
-
 EVENT_REQUIRED_TYPES: Mapping[SafariThematicEvent, frozenset[str]] = MappingProxyType(
     {
-        event: (
-            frozenset({"water"})
-            if event == SafariThematicEvent.FISHING
-            else frozenset()
-        )
-        for event in SafariThematicEvent
+        SafariThematicEvent.NONE: frozenset(),
+        SafariThematicEvent.VOLCANIC_ACTIVITY: frozenset({"fire", "rock"}),
+        SafariThematicEvent.FISHING: frozenset({"water"}),
+        SafariThematicEvent.MIGRATION: frozenset({"flying", "normal"}),
+        SafariThematicEvent.DISTORTION: frozenset({"psychic", "ghost"}),
+        SafariThematicEvent.DEPOSIT: frozenset({"rock", "ground", "steel"}),
+        SafariThematicEvent.GRAVEYARD: frozenset({"ghost", "dark"}),
+        SafariThematicEvent.ANCIENT_RUINS: frozenset({"rock", "psychic", "ghost"}),
+        SafariThematicEvent.RAINBOW: frozenset({"fairy", "flying"}),
+        SafariThematicEvent.DEN: frozenset({"dragon", "dark", "fighting"}),
+        SafariThematicEvent.NEST: frozenset({"bug", "flying", "grass"}),
     }
 )
 

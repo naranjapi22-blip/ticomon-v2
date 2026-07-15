@@ -23,7 +23,6 @@ from core.safari.encounter import (
 from core.safari.encounter_context import SafariEncounterContext
 from core.safari.event_catalog import (
     EVENT_REQUIRED_TYPES,
-    EVENT_TYPE_MODIFIERS,
     EVENT_WEIGHTS,
     available_events_for,
     available_extraordinary_events_for,
@@ -677,10 +676,6 @@ class SafariEncounterGenerator:
             * self._modifier_for(
                 species,
                 context.route_type_weight_modifiers,
-            )
-            * self._modifier_for(
-                species,
-                EVENT_TYPE_MODIFIERS[event],
             )
         )
 

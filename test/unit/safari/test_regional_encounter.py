@@ -365,7 +365,7 @@ async def test_regional_legendary_and_mythical_flags_remain_excluded():
 
 
 @pytest.mark.asyncio
-async def test_compatible_event_modifies_regional_weights_using_dual_type_maximum():
+async def test_compatible_event_filters_regional_types_without_extra_weight():
     fire_rock = make_regional(100, types=["fire", "rock"])
     neutral = make_regional(200, pokeapi_id=10100, types=["normal"])
     random_source = ScriptedRandom(species_ids=(100,))
@@ -387,7 +387,7 @@ async def test_compatible_event_modifies_regional_weights_using_dual_type_maximu
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
     assert result.event == SafariThematicEvent.VOLCANIC_ACTIVITY
-    assert weights == (base_weight * 1.7 * 1.3, base_weight)
+    assert weights == (base_weight,)
 
 
 @pytest.mark.asyncio

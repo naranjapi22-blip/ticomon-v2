@@ -155,7 +155,7 @@ async def test_fishing_requires_water_candidates():
 
 
 @pytest.mark.asyncio
-async def test_volcanic_event_multiplies_type_weight_and_dual_type_uses_maximum():
+async def test_volcanic_event_filters_to_any_compatible_type_without_extra_weight():
     fire_rock = make_species(1, types=["fire", "rock"])
     neutral = make_species(2, types=["normal"])
     random_source = ScriptedRandom(
@@ -172,26 +172,25 @@ async def test_volcanic_event_multiplies_type_weight_and_dual_type_uses_maximum(
         ),
     )
 
-    result = await generator.generate_with_events(
-        context,
-        (SafariComposition.NORMAL,),
-    )
+    result = await generator.generate_with_events(context, (SafariComposition.NORMAL,))
     _, weights = random_source.species_calls[0]
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
     assert result.event == SafariThematicEvent.VOLCANIC_ACTIVITY
-    assert weights == (base_weight * 1.7 * 1.3, base_weight)
+    assert [slot.species_id for slot in result.encounter.slots] == [1]
+    assert weights == (base_weight,)
 
 
 @pytest.mark.asyncio
-async def test_graveyard_favors_ghost_without_requiring_it():
+async def test_graveyard_filters_to_ghost_or_dark_without_extra_weight():
     ghost = make_species(1, types=["ghost"])
-    normal = make_species(2, types=["normal"])
+    dark = make_species(2, types=["dark"])
+    normal = make_species(3, types=["normal"])
     random_source = ScriptedRandom(
         event_order=(SafariThematicEvent.GRAVEYARD,),
         species_ids=(1,),
     )
-    generator, _, _, _ = make_generator((ghost, normal), random_source)
+    generator, _, _, _ = make_generator((ghost, dark, normal), random_source)
     context = make_context(
         safari_map=SafariMap.SWAMP,
         zone=SafariZone.DEAD_FOREST,
@@ -205,7 +204,47 @@ async def test_graveyard_favors_ghost_without_requiring_it():
     _, weights = random_source.species_calls[0]
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
-    assert weights == (base_weight * 1.8, base_weight)
+    assert weights == (base_weight, base_weight)
+
+
+@pytest.mark.asyncio
+async def test_compatible_event_preserves_normal_weights_after_filtering():
+    fire = make_species(1, types=["fire"])
+    rock = make_species(2, types=["rock"])
+    normal = make_species(3, types=["normal"])
+    context = make_context(
+        safari_map=SafariMap.MOUNTAIN,
+        zone=SafariZone.ROCKY_SLOPE,
+        phase=SafariPhase.DEVELOPMENT,
+        route_allowed_events=frozenset(
+            {SafariThematicEvent.NONE, SafariThematicEvent.VOLCANIC_ACTIVITY}
+        ),
+    )
+    event_random = ScriptedRandom(
+        event_order=(SafariThematicEvent.VOLCANIC_ACTIVITY,),
+        species_ids=(1,),
+    )
+    none_random = ScriptedRandom(
+        event_order=(SafariThematicEvent.NONE,),
+        species_ids=(1,),
+    )
+    event_generator, _, _, _ = make_generator((fire, rock, normal), event_random)
+    none_generator, _, _, _ = make_generator((fire, rock, normal), none_random)
+
+    await event_generator.generate_with_events(context, (SafariComposition.SOLITARY,))
+    await none_generator.generate_with_events(
+        context,
+        (SafariComposition.SOLITARY,),
+    )
+
+    assert (
+        event_random.species_calls[0][1]
+        == (RARITY_CONFIG[Rarity.COMMON].spawn_weight,) * 2
+    )
+    assert (
+        none_random.species_calls[0][1]
+        == (RARITY_CONFIG[Rarity.COMMON].spawn_weight,) * 3
+    )
 
 
 @pytest.mark.asyncio
@@ -278,11 +317,11 @@ async def test_nest_works_with_baby_nest_and_independent_opportunities():
     )
 
     assert result.event == SafariThematicEvent.NEST
-    assert len(result.encounter.slots) == 3
+    assert len(result.encounter.slots) == 2
     assert all(
         slot.opportunity.species.metadata.is_baby for slot in result.encounter.slots
     )
-    assert len({id(opportunity) for opportunity in factory.opportunities}) == 3
+    assert len({id(opportunity) for opportunity in factory.opportunities}) == 2
 
 
 @pytest.mark.asyncio

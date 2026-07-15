@@ -272,7 +272,7 @@ async def test_extraordinary_fallback_skips_a_consumed_category():
 
 
 @pytest.mark.asyncio
-async def test_event_modifies_extraordinary_weight_and_uses_dual_type_maximum():
+async def test_event_filters_extraordinary_types_without_extra_weight():
     fire_rock = make_species(1, types=["fire", "rock"], legendary=True)
     neutral = make_species(2, types=["normal"], legendary=True)
     random_source = ScriptedRandom(species_ids=(1,))
@@ -296,7 +296,7 @@ async def test_event_modifies_extraordinary_weight_and_uses_dual_type_maximum():
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
     assert result.event == SafariThematicEvent.VOLCANIC_ACTIVITY
-    assert weights == (base_weight * 1.7 * 1.3, base_weight)
+    assert weights == (base_weight,)
 
 
 @pytest.mark.asyncio
