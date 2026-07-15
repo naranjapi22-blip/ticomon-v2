@@ -8,15 +8,33 @@ from core.species.species_repository import SpeciesRepository
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
 )
+from test.builders.creature_builder import CreatureBuilder
 from test.builders.species_builder import SpeciesBuilder
 
 
 class _FakeConnection:
     def __init__(self, rows: list[dict]) -> None:
         self.rows = rows
+        self.events: list[str] = []
+
+    def transaction(self) -> _FakeTransaction:
+        return _FakeTransaction(self)
 
     async def fetch(self, query: str, trainer_id: int) -> list[dict]:
         return self.rows
+
+
+class _FakeTransaction:
+    def __init__(self, connection: _FakeConnection) -> None:
+        self.connection = connection
+
+    async def __aenter__(self) -> _FakeConnection:
+        self.connection.events.append("transaction_enter")
+        return self.connection
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        self.connection.events.append("transaction_exit")
+        return None
 
 
 class _FakeAcquire:
@@ -36,6 +54,28 @@ class _FakePool:
 
     def acquire(self) -> _FakeAcquire:
         return _FakeAcquire(self.connection)
+
+
+class _SaveFakeConnection(_FakeConnection):
+    def __init__(self, row: dict) -> None:
+        super().__init__([])
+        self.row = row
+
+    async def execute(self, query: str, trainer_id: int) -> None:
+        assert "pg_advisory_xact_lock" in query
+        self.events.append("lock")
+
+    async def fetchval(self, query: str, trainer_id: int) -> int:
+        assert "MAX(collection_number)" in query
+        self.events.append("max")
+        return 4
+
+    async def fetchrow(self, query: str, *args):
+        if "INSERT INTO creatures" in query:
+            self.events.append("insert")
+            return {"id": self.row["id"]}
+        self.events.append("reload")
+        return self.row
 
 
 @pytest.mark.asyncio
@@ -150,3 +190,55 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
     assert creatures[1].is_shiny is False
     assert creatures[1].nature.name == "modest"
     assert creatures[1].size.value == 1.0
+
+
+@pytest.mark.asyncio
+async def test_save_locks_trainer_before_allocating_collection_number(
+    monkeypatch,
+) -> None:
+    species = SpeciesBuilder().with_id(1).with_name("Bulbasaur").build()
+    saved_row = {
+        "id": 20,
+        "collection_number": 5,
+        "species_id": 1,
+        "trainer_id": 99,
+        "original_trainer_id": 99,
+        "hp_iv": 31,
+        "attack_iv": 31,
+        "defense_iv": 31,
+        "special_attack_iv": 31,
+        "special_defense_iv": 31,
+        "speed_iv": 31,
+        "size": 1.0,
+        "nature": "hardy",
+        "is_shiny": False,
+        "variant_id": None,
+        "variant_name": None,
+    }
+    connection = _SaveFakeConnection(saved_row)
+    fake_pool = _FakePool(connection)
+
+    async def fake_get_pool():
+        return fake_pool
+
+    monkeypatch.setattr(
+        "infrastructure.persistence.repositories.neon_creature_repository.get_pool",
+        fake_get_pool,
+    )
+    species_repository = AsyncMock(spec=SpeciesRepository)
+    species_repository.get = AsyncMock(return_value=species)
+    repository = NeonCreatureRepository(species_repository=species_repository)
+
+    creature = await repository.save(
+        CreatureBuilder().with_species(species).with_trainer_id(99).build()
+    )
+
+    assert creature.collection_number == 5
+    assert connection.events == [
+        "transaction_enter",
+        "lock",
+        "max",
+        "insert",
+        "reload",
+        "transaction_exit",
+    ]

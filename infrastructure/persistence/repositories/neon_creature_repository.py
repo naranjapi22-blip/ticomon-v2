@@ -25,61 +25,66 @@ class NeonCreatureRepository(CreatureRepository):
         pool = await get_pool()
 
         async with pool.acquire() as connection:
+            async with connection.transaction():
+                await connection.execute(
+                    "SELECT pg_advisory_xact_lock($1)",
+                    creature.trainer_id,
+                )
 
-            collection_number = await connection.fetchval(
-                """
-                SELECT COALESCE(MAX(collection_number), 0) + 1
-                FROM creatures
-                WHERE trainer_id = $1
-                """,
-                creature.trainer_id,
-            )
+                collection_number = await connection.fetchval(
+                    """
+                    SELECT COALESCE(MAX(collection_number), 0) + 1
+                    FROM creatures
+                    WHERE trainer_id = $1
+                    """,
+                    creature.trainer_id,
+                )
 
-            params = self._mapper.to_row(creature)
+                params = self._mapper.to_row(creature)
 
-            created = await connection.fetchrow(
-                """
-                INSERT INTO creatures (
-                    trainer_id,
-                    original_trainer_id,
+                created = await connection.fetchrow(
+                    """
+                    INSERT INTO creatures (
+                        trainer_id,
+                        original_trainer_id,
+                        collection_number,
+                        species_id,
+                        current_form_id,
+                        is_shiny,
+                        nature,
+                        size,
+                        hp_iv,
+                        attack_iv,
+                        defense_iv,
+                        special_attack_iv,
+                        special_defense_iv,
+                        speed_iv
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7,
+                        $8, $9, $10, $11, $12, $13, $14
+                    )
+                    RETURNING id
+                    """,
+                    params[0],  # trainer_id
+                    params[1],  # original_trainer_id
                     collection_number,
-                    species_id,
-                    current_form_id,
-                    is_shiny,
-                    nature,
-                    size,
-                    hp_iv,
-                    attack_iv,
-                    defense_iv,
-                    special_attack_iv,
-                    special_defense_iv,
-                    speed_iv
+                    *params[2:],
                 )
-                VALUES (
-                    $1, $2, $3, $4, $5, $6, $7,
-                    $8, $9, $10, $11, $12, $13, $14
-                )
-                RETURNING id
-                """,
-                params[0],  # trainer_id
-                params[1],  # original_trainer_id
-                collection_number,
-                *params[2:],
-            )
 
-            row = await connection.fetchrow(
-                """
-                SELECT
-                    c.*,
-                    sv.id AS variant_id,
-                    sv.name AS variant_name
-                FROM creatures c
-                LEFT JOIN species_variants sv
-                    ON sv.id = c.current_form_id
-                WHERE c.id = $1
-                """,
-                created["id"],
-            )
+                row = await connection.fetchrow(
+                    """
+                    SELECT
+                        c.*,
+                        sv.id AS variant_id,
+                        sv.name AS variant_name
+                    FROM creatures c
+                    LEFT JOIN species_variants sv
+                        ON sv.id = c.current_form_id
+                    WHERE c.id = $1
+                    """,
+                    created["id"],
+                )
 
             species = await self._species_repository.get(
                 row["species_id"],
