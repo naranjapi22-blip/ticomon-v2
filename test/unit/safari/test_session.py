@@ -280,7 +280,7 @@ def test_publish_consumes_the_matching_extraordinary_species_flag(
     assert getattr(session.extraordinary_flags, flag_name)
 
 
-def test_selection_replacement_does_not_spend_balls_until_confirmation():
+def test_selection_replacement_does_not_spend_balls_until_resolution():
     participant = SafariParticipant(1, 5, 5)
     session = make_session((participant,))
     encounter = make_encounter((1, 2))
@@ -292,7 +292,7 @@ def test_selection_replacement_does_not_spend_balls_until_confirmation():
     assert participant.remaining_balls == 5
     assert encounter.selection_for(1).slot_id == encounter.slots[1].id
     session.confirm_selection(1)
-    assert participant.remaining_balls == 3
+    assert participant.remaining_balls == 5
     assert session.status == SafariSessionStatus.RESOLUTION
 
 
@@ -307,7 +307,7 @@ def test_second_confirmation_is_rejected_without_spending_again():
     with pytest.raises(SafariSelectionAlreadyConfirmed):
         session.confirm_selection(1)
 
-    assert participant.remaining_balls == 1
+    assert participant.remaining_balls == 3
 
 
 def test_confirmation_rejects_more_balls_than_available_without_mutation():
@@ -366,6 +366,27 @@ def test_persisted_result_records_capture_and_advances_segment():
     assert session.completed_encounter_count == 1
     assert session.current_segment.is_complete
     assert session.status == SafariSessionStatus.ROUTE_DECISION
+
+
+def test_persisted_result_spends_only_reported_balls_once():
+    participant = SafariParticipant(1, 3, 3)
+    session = make_session((participant,))
+    encounter = make_encounter()
+    session.publish_encounter(encounter)
+    session.select_capture(1, encounter.slots[0].id, 3)
+    session.confirm_selection(1)
+
+    assert participant.remaining_balls == 3
+    session.apply_persisted_encounter_result(
+        escaped_result(encounter), balls_spent_by_trainer={1: 2}
+    )
+
+    assert participant.remaining_balls == 1
+    with pytest.raises(SafariInvalidSessionState):
+        session.apply_persisted_encounter_result(
+            escaped_result(encounter), balls_spent_by_trainer={1: 2}
+        )
+    assert participant.remaining_balls == 1
 
 
 def test_partially_invalid_result_does_not_mutate_aggregate():
@@ -462,7 +483,9 @@ def test_session_finishes_when_no_participant_has_balls():
     session.publish_encounter(encounter)
     session.select_capture(1, encounter.slots[0].id, 1)
     session.confirm_selection(1)
-    session.apply_persisted_encounter_result(escaped_result(encounter))
+    session.apply_persisted_encounter_result(
+        escaped_result(encounter), balls_spent_by_trainer={1: 1}
+    )
 
     assert session.status == SafariSessionStatus.FINISHED
     assert session.finish_reason == SafariFinishReason.NO_BALLS_REMAINING

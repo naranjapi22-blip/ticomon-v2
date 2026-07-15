@@ -61,12 +61,15 @@ class SafariParticipant:
     def can_capture(self) -> bool:
         return self._remaining_balls > 0
 
-    def spend_balls(self, amount: int) -> None:
+    def validate_ball_spend(self, amount: int) -> None:
         if amount < 1 or amount > 3:
             raise ValueError("amount must be between 1 and 3.")
 
         if amount > self._remaining_balls:
             raise NotEnoughSafariBalls("Not enough Safari Balls remaining.")
+
+    def spend_balls(self, amount: int) -> None:
+        self.validate_ball_spend(amount)
 
         self._remaining_balls -= amount
 

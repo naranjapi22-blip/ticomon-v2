@@ -249,6 +249,17 @@ class SafariEncounterResolution:
                 totals[trainer_id] = totals.get(trainer_id, 0) + ball_count
         return MappingProxyType(totals)
 
+    @property
+    def balls_spent_by_trainer(self) -> Mapping[int, int]:
+        totals: dict[int, int] = {}
+        for outcome in self.slot_outcomes:
+            for participant_outcome in outcome.participant_outcomes:
+                trainer_id = participant_outcome.trainer_id
+                totals[trainer_id] = (
+                    totals.get(trainer_id, 0) + participant_outcome.balls_spent
+                )
+        return MappingProxyType(totals)
+
 
 class SafariCaptureResolver:
     def __init__(

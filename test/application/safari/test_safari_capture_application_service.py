@@ -244,7 +244,7 @@ async def test_confirm_without_selection_fails():
 
 
 @pytest.mark.asyncio
-async def test_confirm_capture_spends_balls_once_and_blocks_replacement():
+async def test_confirm_capture_records_balls_without_spending_and_blocks_replacement():
     activity = _TrackingActivityRepository()
     session = _published_session(
         (SafariParticipant(1, 3, 3), SafariParticipant(2, 3, 3))
@@ -258,7 +258,8 @@ async def test_confirm_capture_spends_balls_once_and_blocks_replacement():
     confirmed = await service.confirm_capture_selection(session.guild_id, 1)
 
     assert confirmed.state is SafariCaptureSelectionState.CONFIRMED
-    assert session.participants_by_trainer[1].remaining_balls == 1
+    assert confirmed.balls_spent == 0
+    assert session.participants_by_trainer[1].remaining_balls == 3
 
     with pytest.raises(SafariSelectionAlreadyConfirmed):
         await service.select_capture(
@@ -268,7 +269,7 @@ async def test_confirm_capture_spends_balls_once_and_blocks_replacement():
     with pytest.raises(SafariSelectionAlreadyConfirmed):
         await service.confirm_capture_selection(session.guild_id, 1)
 
-    assert session.participants_by_trainer[1].remaining_balls == 1
+    assert session.participants_by_trainer[1].remaining_balls == 3
 
 
 @pytest.mark.asyncio
@@ -329,6 +330,7 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
     assert session.current_encounter is None
     assert session.status is SafariSessionStatus.ROUTE_DECISION
     assert session.participants_by_trainer[1].captured_creature_ids == (101,)
+    assert session.participants_by_trainer[1].remaining_balls == 2
 
 
 @pytest.mark.asyncio

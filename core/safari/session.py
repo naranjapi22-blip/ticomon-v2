@@ -283,7 +283,7 @@ class SafariSession:
         if participant is None:
             raise ValueError("unknown Safari participant.")
 
-        participant.spend_balls(existing.ball_count)
+        participant.validate_ball_spend(existing.ball_count)
         encounter._confirm_selection(trainer_id)
         self._begin_resolution_if_ready(encounter)
 
@@ -300,18 +300,32 @@ class SafariSession:
         self,
         result: SafariPersistedEncounterResult,
         history_entry: SafariEncounterHistoryEntry | None = None,
+        balls_spent_by_trainer: Mapping[int, int] | None = None,
     ) -> None:
         self._require_status(SafariSessionStatus.RESOLUTION)
         encounter = self._require_current_encounter()
 
         captures = self._validate_persisted_result(encounter, result)
-
-        encounter._apply_persisted_result(result)
         if history_entry is not None:
             if history_entry.encounter.id != encounter.id:
                 raise ValueError("history entry must match the current encounter.")
             if history_entry.resolution.encounter_id != encounter.id:
                 raise ValueError("history entry must match the current encounter.")
+
+        for trainer_id, amount in (balls_spent_by_trainer or {}).items():
+            participant = self._participants_by_trainer.get(trainer_id)
+            if participant is None:
+                raise ValueError("unknown Safari participant.")
+            if amount < 0:
+                raise ValueError("balls spent cannot be negative.")
+            if amount:
+                participant.validate_ball_spend(amount)
+
+        for trainer_id, amount in (balls_spent_by_trainer or {}).items():
+            if amount:
+                self._participants_by_trainer[trainer_id].spend_balls(amount)
+
+        encounter._apply_persisted_result(result)
         for trainer_id, creature_id in captures:
             self._participants_by_trainer[trainer_id].record_capture(creature_id)
         if history_entry is not None:

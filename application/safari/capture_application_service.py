@@ -180,7 +180,7 @@ class SafariCaptureApplicationService:
                 encounter=encounter,
                 participant=participant,
                 selection=confirmed,
-                balls_spent=confirmed.ball_count,
+                balls_spent=0,
                 balls_available=participant.remaining_balls,
                 state=SafariCaptureSelectionState.CONFIRMED,
             )
@@ -228,7 +228,6 @@ class SafariCaptureApplicationService:
         async with self._activity_repository.lock(guild_id):
             session = await self._require_session(guild_id)
             encounter = self._require_resolving_encounter(session)
-            next_encounter = await self._next_encounter_if_needed(session)
 
             resolution = self._capture_resolver.resolve(encounter)
             slot_application_results, persisted_result, rewards_by_trainer = (
@@ -243,7 +242,9 @@ class SafariCaptureApplicationService:
                 session.apply_persisted_encounter_result(
                     persisted_result,
                     history_entry=history_entry,
+                    balls_spent_by_trainer=resolution.balls_spent_by_trainer,
                 )
+                next_encounter = await self._next_encounter_if_needed(session)
                 if (
                     next_encounter is not None
                     and session.status is SafariSessionStatus.ENCOUNTER
@@ -423,7 +424,7 @@ class SafariCaptureApplicationService:
     ) -> SafariGeneratedEncounter | None:
         if self._encounter_generator is None or self._random_source is None:
             return None
-        if session.current_segment.remaining_encounters <= 1:
+        if session.current_segment.remaining_encounters <= 0:
             return None
         if not any(
             participant.can_capture
@@ -465,7 +466,7 @@ class SafariCaptureApplicationService:
         session: SafariSession,
     ) -> tuple[SafariComposition, ...]:
         if (
-            session.completed_encounter_count + 2 == session.total_encounters
+            session.completed_encounter_count + 1 == session.total_encounters
             and not session.has_special_encounter_history
         ):
             return (
