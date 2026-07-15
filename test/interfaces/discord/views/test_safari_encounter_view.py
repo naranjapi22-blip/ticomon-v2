@@ -89,7 +89,7 @@ def test_encounter_slot_selector_labels_show_only_species_names() -> None:
     assert [option.value for option in selector.options] == [
         str(slot.id) for slot in encounter.slots
     ]
-    assert all(option.description is None for option in selector.options)
+    assert all(option.description == "Shared population" for option in selector.options)
 
 
 @pytest.mark.parametrize(
@@ -137,6 +137,72 @@ def test_encounter_view_labels_special_encounters(
     assert expected in view.build_content()
 
 
+def test_encounter_results_show_shared_captures_and_hide_unprocessed_unique_trainer():
+    view, _ = _encounter_view()
+    shared_opportunity = SimpleNamespace(species=create_species(id=25, name="Pikachu"))
+    shared_outcome = SimpleNamespace(
+        status=SimpleNamespace(name="CAPTURED"),
+        final_opportunity=shared_opportunity,
+    )
+    shared_result = SimpleNamespace(
+        slot_outcome=shared_outcome,
+        creature=None,
+        participant_results=(
+            SimpleNamespace(
+                participant_outcome=SimpleNamespace(
+                    trainer_id=1,
+                    attempts_executed=1,
+                    balls_spent=1,
+                ),
+                creature=SimpleNamespace(species=shared_opportunity.species),
+            ),
+            SimpleNamespace(
+                participant_outcome=SimpleNamespace(
+                    trainer_id=2,
+                    attempts_executed=2,
+                    balls_spent=2,
+                ),
+                creature=SimpleNamespace(species=shared_opportunity.species),
+            ),
+        ),
+    )
+    unique_result = SimpleNamespace(
+        slot_outcome=SimpleNamespace(
+            status=SimpleNamespace(name="CAPTURED"),
+            final_opportunity=shared_opportunity,
+        ),
+        participant_results=(
+            SimpleNamespace(
+                participant_outcome=SimpleNamespace(
+                    trainer_id=3,
+                    attempts_executed=1,
+                    balls_spent=1,
+                ),
+                creature=SimpleNamespace(species=shared_opportunity.species),
+            ),
+            SimpleNamespace(
+                participant_outcome=SimpleNamespace(
+                    trainer_id=4,
+                    attempts_executed=0,
+                    balls_spent=0,
+                ),
+                creature=None,
+            ),
+        ),
+        creature=None,
+    )
+
+    message = view._build_encounter_results_message(
+        SimpleNamespace(slot_results=(shared_result, unique_result))
+    )
+
+    assert "<@1>" in message
+    assert "<@2>" in message
+    assert "<@3>" in message
+    assert "<@4>" not in message
+    assert "balls spent" in message
+
+
 @pytest.mark.asyncio
 async def test_choose_slot_opens_ball_count_view() -> None:
     view, session = _encounter_view()
@@ -175,7 +241,10 @@ async def test_ball_count_view_uses_player_facing_copy() -> None:
     embed = selection_view.build_embed()
 
     assert embed.title == "Choose Safari Balls"
-    assert embed.description == ("Selected Pokémon: **Starmie**\n" "Remaining Balls: 7")
+    assert "Shared population" in embed.description
+    assert "Committed balls are spent only for executed attempts." in embed.description
+    assert "Selected Pokémon: **Starmie**" in embed.description
+    assert "Remaining Balls: 7" in embed.description
     assert [child.label for child in selection_view.children[:-1]] == [
         "1 Ball",
         "2 Balls",
@@ -237,7 +306,7 @@ async def test_selection_flow_confirms_immediately() -> None:
 
     assert interaction.response.send_message.await_count == 1
     assert (
-        "Selection confirmed:"
+        "Selection committed:"
         in interaction.response.send_message.await_args.kwargs["content"]
     )
     assert (

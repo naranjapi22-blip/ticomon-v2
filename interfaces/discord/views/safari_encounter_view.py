@@ -17,6 +17,7 @@ from application.safari import (
     SafariSessionNotFound,
 )
 from core.safari import (
+    SafariCapturePolicy,
     SafariComposition,
     SafariEncounter,
     SafariRouteOption,
@@ -159,6 +160,11 @@ class SafariEncounterSlotSelect(discord.ui.Select):
             species = slot.opportunity.species
             label = view.format_species_name(species.name)
             description: list[str] = []
+            description.append(
+                "Shared population"
+                if slot.capture_policy is SafariCapturePolicy.SHARED
+                else "Unique specimen"
+            )
             if slot.opportunity.is_shiny:
                 description.append("Shiny")
             if slot.opportunity.initial_form is not None:
@@ -314,6 +320,7 @@ class SafariEncounterView(discord.ui.View):
             trainer_id=interaction.user.id,
             slot_id=slot_id,
             slot_name=self.format_species_name(slot.opportunity.species.name),
+            capture_policy=slot.capture_policy,
             remaining_balls=remaining_balls,
             selectable_balls=min(3, remaining_balls),
         )
@@ -372,8 +379,9 @@ class SafariEncounterView(discord.ui.View):
         )
         await interaction.response.send_message(
             content=(
-                f"Selection confirmed: {species_name} "
+                f"Selection committed: {species_name} "
                 f"with {selection_result.balls_selected} {selected_label}.\n"
+                "Balls will be spent only when attempts execute.\n"
                 f"{result.balls_available} Safari Balls remaining."
             ),
             ephemeral=True,
@@ -605,11 +613,39 @@ class SafariEncounterView(discord.ui.View):
 
     def _build_encounter_results_message(self, result) -> str:
         captured_lines: list[str] = []
+        failed_lines: list[str] = []
         escaped_lines: list[str] = []
 
         for slot_result in result.slot_results:
             outcome = slot_result.slot_outcome
-            if outcome.status.name == "CAPTURED" and slot_result.creature is not None:
+            for participant_result in slot_result.participant_results:
+                participant_outcome = participant_result.participant_outcome
+                if participant_result.creature is not None:
+                    species_name = self.format_species_name(
+                        participant_result.creature.species.name
+                    )
+                    captured_lines.append(
+                        "- "
+                        f"{species_name} "
+                        f"- <@{participant_outcome.trainer_id}> "
+                        f"({participant_outcome.balls_spent} balls spent)"
+                    )
+                elif participant_outcome.attempts_executed:
+                    species_name = self.format_species_name(
+                        outcome.final_opportunity.species.name
+                    )
+                    failed_lines.append(
+                        "- "
+                        f"<@{participant_outcome.trainer_id}> failed to capture "
+                        f"{species_name} "
+                        f"({participant_outcome.balls_spent} balls spent)"
+                    )
+
+            if (
+                not slot_result.participant_results
+                and outcome.status.name == "CAPTURED"
+                and slot_result.creature is not None
+            ):
                 captured_lines.append(
                     "- "
                     f"{self.format_species_name(slot_result.creature.species.name)} "
@@ -617,10 +653,11 @@ class SafariEncounterView(discord.ui.View):
                 )
                 continue
 
-            escaped_lines.append(
-                "- "
-                f"{self.format_species_name(outcome.final_opportunity.species.name)}"
-            )
+            if outcome.status.name == "ESCAPED":
+                escaped_lines.append(
+                    "- "
+                    f"{self.format_species_name(outcome.final_opportunity.species.name)}"
+                )
 
         lines = ["Encounter Results", ""]
         if captured_lines:
@@ -628,6 +665,11 @@ class SafariEncounterView(discord.ui.View):
             lines.extend(captured_lines)
         else:
             lines.append("No Pokémon were captured.")
+
+        if failed_lines:
+            lines.append("")
+            lines.append("Failed attempts")
+            lines.extend(failed_lines)
 
         if escaped_lines:
             lines.append("")
@@ -671,6 +713,7 @@ class SafariBallCountView(discord.ui.View):
         slot_name: str,
         remaining_balls: int,
         selectable_balls: int,
+        capture_policy: SafariCapturePolicy = SafariCapturePolicy.SHARED,
     ) -> None:
         super().__init__(timeout=120)
 
@@ -679,6 +722,7 @@ class SafariBallCountView(discord.ui.View):
         self.trainer_id = trainer_id
         self.slot_id = slot_id
         self.slot_name = slot_name
+        self.capture_policy = capture_policy
         self.remaining_balls = remaining_balls
         self.selectable_balls = selectable_balls
         self.message: discord.Message | None = None
@@ -688,9 +732,16 @@ class SafariBallCountView(discord.ui.View):
         self.add_item(SafariBallDeclineButton(self))
 
     def build_embed(self) -> discord.Embed:
+        selection_kind = (
+            "Shared population"
+            if self.capture_policy is SafariCapturePolicy.SHARED
+            else "Unique specimen"
+        )
         return discord.Embed(
             title="Choose Safari Balls",
             description=(
+                f"Type: {selection_kind}\n"
+                "Committed balls are spent only for executed attempts.\n"
                 f"Selected Pokémon: **{self.slot_name}**\n"
                 f"Remaining Balls: {self.remaining_balls}"
             ),

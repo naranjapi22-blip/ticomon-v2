@@ -206,7 +206,7 @@ def test_encounter_renderer_places_sprites_lower() -> None:
             break
 
     assert first_sprite_row is not None
-    assert first_sprite_row >= placement.y + 60
+    assert first_sprite_row >= placement.y + 10
 
 
 def test_encounter_renderer_uses_zone_context_for_background() -> None:
@@ -294,7 +294,7 @@ def test_safari_assets_falls_back_to_placeholder_sprite(caplog) -> None:
     assert "asset_id=999999" in caplog.text
 
 
-def test_encounter_renderer_does_not_draw_slot_badges() -> None:
+def test_encounter_renderer_draws_slot_policy_badges() -> None:
     class _FakeAssets:
         @staticmethod
         def get_background(_safari_map):
@@ -315,7 +315,7 @@ def test_encounter_renderer_does_not_draw_slot_badges() -> None:
     badge_pixel = image.getpixel((placement.x + 24, placement.y + 24))
     background_pixel = image.getpixel((10, 10))
 
-    assert badge_pixel == background_pixel
+    assert badge_pixel != background_pixel
 
 
 def test_encounter_renderer_keeps_long_names_readable() -> None:

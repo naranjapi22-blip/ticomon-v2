@@ -32,6 +32,7 @@ class SafariSummaryView(discord.ui.View):
         for participant in self.summary.ranking[:3]:
             lines.append(
                 f"{participant.rank}. <@{participant.trainer_id}> — "
-                f"{participant.capture_count}"
+                f"{participant.capture_count} captures "
+                f"({getattr(participant, 'balls_used', 0)} balls spent)"
             )
         return lines
