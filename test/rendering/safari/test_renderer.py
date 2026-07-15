@@ -255,6 +255,16 @@ def test_zone_background_catalog_contains_only_the_initial_ten_zones() -> None:
         SafariZone.DEAD_FOREST: "swamp_dead_forest.png",
         SafariZone.OPEN_FIELD: "plains_open_field.png",
         SafariZone.TALL_GRASS: "plains_tall_grass.png",
+        SafariZone.RIVERBANK: "forest_riverbank.png",
+        SafariZone.ANCIENT_GROVE: "forest_ancient_grove.png",
+        SafariZone.MOUNTAIN_FOOTHILL: "mountain_foothill.png",
+        SafariZone.CAVE_ENTRANCE: "mountain_cave_entrance.png",
+        SafariZone.SUMMIT: "mountain_summit.png",
+        SafariZone.SEA_CAVE: "coast_sea_cave.png",
+        SafariZone.DUNES: "coast_dunes.png",
+        SafariZone.DENSE_REEDS: "swamp_dense_reeds.png",
+        SafariZone.MISTY_CLEARING: "swamp_misty_clearing.png",
+        SafariZone.FLOWER_MEADOW: "plains_flower_meadow.png",
     }
 
 
@@ -293,6 +303,36 @@ def test_registered_zone_loads_existing_file(tmp_path, monkeypatch) -> None:
     image = SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
 
     assert image.size == (400, 225)
+
+
+@pytest.mark.parametrize(
+    "zone",
+    [
+        SafariZone.RIVERBANK,
+        SafariZone.ANCIENT_GROVE,
+        SafariZone.MOUNTAIN_FOOTHILL,
+        SafariZone.CAVE_ENTRANCE,
+        SafariZone.SUMMIT,
+        SafariZone.SEA_CAVE,
+        SafariZone.DUNES,
+        SafariZone.DENSE_REEDS,
+        SafariZone.MISTY_CLEARING,
+        SafariZone.FLOWER_MEADOW,
+    ],
+)
+def test_second_group_registered_zones_fall_back_when_files_are_missing(
+    zone,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import rendering.safari.assets as assets_module
+
+    Image.new("RGBA", (1020, 574), (1, 2, 3, 255)).save(tmp_path / "safari.png")
+    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+
+    image = SafariAssets().get_background_for_zone(zone)
+
+    assert image.size == (1020, 574)
 
 
 def test_encounter_renderer_uses_pokeapi_id_not_internal_id() -> None:

@@ -37,6 +37,16 @@ BACKGROUND_BY_ZONE: dict[SafariZone, str] = {
     SafariZone.DEAD_FOREST: "swamp_dead_forest.png",
     SafariZone.OPEN_FIELD: "plains_open_field.png",
     SafariZone.TALL_GRASS: "plains_tall_grass.png",
+    SafariZone.RIVERBANK: "forest_riverbank.png",
+    SafariZone.ANCIENT_GROVE: "forest_ancient_grove.png",
+    SafariZone.MOUNTAIN_FOOTHILL: "mountain_foothill.png",
+    SafariZone.CAVE_ENTRANCE: "mountain_cave_entrance.png",
+    SafariZone.SUMMIT: "mountain_summit.png",
+    SafariZone.SEA_CAVE: "coast_sea_cave.png",
+    SafariZone.DUNES: "coast_dunes.png",
+    SafariZone.DENSE_REEDS: "swamp_dense_reeds.png",
+    SafariZone.MISTY_CLEARING: "swamp_misty_clearing.png",
+    SafariZone.FLOWER_MEADOW: "plains_flower_meadow.png",
 }
 
 BACKGROUND_BY_TYPE: dict[str, str] = {
