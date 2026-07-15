@@ -22,8 +22,14 @@ class VariantFactory:
         if not species.variants:
             return None
 
-        chance = SPECIAL_VARIANT_CHANCES.get(
-            species.name,
+        normalized_name = species.name.strip().casefold()
+        chance = next(
+            (
+                chance
+                for name, chance in SPECIAL_VARIANT_CHANCES.items()
+                if name.strip().casefold() == normalized_name
+            ),
+            None,
         )
 
         if chance is not None:
