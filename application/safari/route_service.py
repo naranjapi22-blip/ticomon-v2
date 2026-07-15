@@ -59,7 +59,7 @@ class SafariRouteApplicationService:
             vote = SafariRouteVote(options, opened_at)
             session.start_route_vote(vote)
             await self._activity_repository.save_session(session)
-            logger.info(
+            logger.debug(
                 "safari_route_vote_opened guild_id=%s session_id=%s options=%s",
                 guild_id,
                 session.id,
@@ -112,7 +112,7 @@ class SafariRouteApplicationService:
             next_encounter = await self._generate_next_encounter(session)
             session.publish_encounter(next_encounter.encounter)
             await self._activity_repository.save_session(session)
-            logger.info(
+            logger.debug(
                 "safari_route_resolved guild_id=%s session_id=%s selected_option=%s",
                 guild_id,
                 session.id,
@@ -209,8 +209,5 @@ class SafariRouteApplicationService:
             session.completed_encounter_count + 2 == session.total_encounters
             and not session.has_special_encounter_history
         ):
-            return (
-                SafariComposition.SOLITARY,
-                SafariComposition.NORMAL,
-            )
+            return (SafariComposition.NORMAL,)
         return (SafariComposition.NORMAL,)

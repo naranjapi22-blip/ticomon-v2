@@ -238,10 +238,7 @@ async def test_resolve_route_vote_forces_special_final_encounter_when_needed():
 
     await service.resolve_route_vote(session.guild_id)
 
-    assert generator.compositions == (
-        SafariComposition.SOLITARY,
-        SafariComposition.NORMAL,
-    )
+    assert generator.compositions == (SafariComposition.NORMAL,)
 
 
 def test_resolve_route_vote_forces_special_final_encounter_for_short_safari():
@@ -251,7 +248,6 @@ def test_resolve_route_vote_forces_special_final_encounter_for_short_safari():
     session._encounter_history = tuple()  # type: ignore[assignment]
 
     assert SafariRouteApplicationService._encounter_compositions_for(session) == (
-        SafariComposition.SOLITARY,
         SafariComposition.NORMAL,
     )
 

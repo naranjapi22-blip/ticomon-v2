@@ -577,7 +577,7 @@ class SafariEncounterView(discord.ui.View):
         if encounter.composition is SafariComposition.NORMAL:
             return "Regional Herd" if encounter.is_regional_herd else None
         if encounter.composition is SafariComposition.SOLITARY:
-            return "Solitary Pokémon"
+            return None
         if encounter.composition is SafariComposition.DUEL:
             return "Duel"
         if encounter.composition is SafariComposition.HERD:

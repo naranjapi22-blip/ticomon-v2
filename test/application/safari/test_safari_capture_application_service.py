@@ -391,10 +391,7 @@ async def test_resolve_capture_forces_special_final_encounter_when_needed():
     assert result.next_session_status is SafariSessionStatus.ENCOUNTER
     assert session.status is SafariSessionStatus.ENCOUNTER
     assert session.current_encounter is not None
-    assert service._encounter_generator.compositions == (
-        SafariComposition.SOLITARY,
-        SafariComposition.NORMAL,
-    )
+    assert service._encounter_generator.compositions == (SafariComposition.NORMAL,)
 
 
 @pytest.mark.asyncio

@@ -17,7 +17,6 @@ COMMON_SAFARI_COMPOSITIONS = frozenset(
         SafariComposition.NORMAL,
         SafariComposition.DUEL,
         SafariComposition.HERD,
-        SafariComposition.SOLITARY,
         SafariComposition.BABY_NEST,
     }
 )
@@ -60,7 +59,6 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
-                SafariComposition.SOLITARY,
                 SafariComposition.LEGENDARY,
                 SafariComposition.MYTHICAL,
             }
@@ -70,7 +68,6 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
-                SafariComposition.SOLITARY,
                 SafariComposition.LEGENDARY,
                 SafariComposition.MYTHICAL,
             }
@@ -86,7 +83,6 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
             {
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
-                SafariComposition.SOLITARY,
             }
         ),
         SafariThematicEvent.DEPOSIT: frozenset(
@@ -94,7 +90,6 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
-                SafariComposition.SOLITARY,
             }
         ),
         SafariThematicEvent.GRAVEYARD: frozenset(
@@ -102,14 +97,12 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
-                SafariComposition.SOLITARY,
             }
         ),
         SafariThematicEvent.ANCIENT_RUINS: frozenset(
             {
                 SafariComposition.NORMAL,
                 SafariComposition.DUEL,
-                SafariComposition.SOLITARY,
             }
         ),
         SafariThematicEvent.RAINBOW: COMMON_SAFARI_COMPOSITIONS,
@@ -117,7 +110,6 @@ EVENT_COMPOSITION_COMPATIBILITY: Mapping[
             {
                 SafariComposition.DUEL,
                 SafariComposition.HERD,
-                SafariComposition.SOLITARY,
             }
         ),
         SafariThematicEvent.NEST: frozenset({SafariComposition.BABY_NEST}),

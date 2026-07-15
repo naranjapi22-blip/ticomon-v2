@@ -282,10 +282,10 @@ async def test_compatible_event_preserves_normal_weights_after_filtering():
     event_generator, _, _, _ = make_generator((fire, rock, normal), event_random)
     none_generator, _, _, _ = make_generator((fire, rock, normal), none_random)
 
-    await event_generator.generate_with_events(context, (SafariComposition.SOLITARY,))
+    await event_generator.generate_with_events(context, (SafariComposition.NORMAL,))
     await none_generator.generate_with_events(
         context,
-        (SafariComposition.SOLITARY,),
+        (SafariComposition.NORMAL,),
     )
 
     assert (
@@ -332,11 +332,11 @@ async def test_weather_and_time_remain_neutral_with_events(
 
     await first_generator.generate_with_events(
         make_context(**base_context, **first_overrides),
-        (SafariComposition.SOLITARY,),
+        (SafariComposition.NORMAL,),
     )
     await second_generator.generate_with_events(
         make_context(**base_context, **second_overrides),
-        (SafariComposition.SOLITARY,),
+        (SafariComposition.NORMAL,),
     )
 
     assert first_random.species_calls[0][1] == second_random.species_calls[0][1]
@@ -438,10 +438,10 @@ async def test_failed_events_and_composition_continue_in_requested_order():
 
     result = await generator.generate_with_events(
         context,
-        (SafariComposition.BABY_NEST, SafariComposition.SOLITARY),
+        (SafariComposition.BABY_NEST, SafariComposition.NORMAL),
     )
 
-    assert result.encounter.composition == SafariComposition.SOLITARY
+    assert result.encounter.composition == SafariComposition.NORMAL
     assert result.event == SafariThematicEvent.NONE
     assert repository.get_all_calls == 1
 
@@ -461,11 +461,11 @@ async def test_event_generation_deduplicates_compositions():
         (
             SafariComposition.BABY_NEST,
             SafariComposition.BABY_NEST,
-            SafariComposition.SOLITARY,
+            SafariComposition.NORMAL,
         ),
     )
 
-    assert result.encounter.composition == SafariComposition.SOLITARY
+    assert result.encounter.composition == SafariComposition.NORMAL
     assert len(random_source.event_calls) == 2
 
 

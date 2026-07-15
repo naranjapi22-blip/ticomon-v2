@@ -438,10 +438,7 @@ async def test_start_for_testing_allows_a_single_participant():
 async def test_start_for_testing_helper_forces_special_single_encounter_sequence():
     compositions = StartSafariApplicationService._encounter_compositions_for(1)
 
-    assert compositions == (
-        SafariComposition.SOLITARY,
-        SafariComposition.NORMAL,
-    )
+    assert compositions == (SafariComposition.NORMAL,)
 
 
 @pytest.mark.asyncio

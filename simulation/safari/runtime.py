@@ -38,7 +38,6 @@ COMMON_COMPOSITIONS: tuple[SafariComposition, ...] = (
     SafariComposition.NORMAL,
     SafariComposition.DUEL,
     SafariComposition.HERD,
-    SafariComposition.SOLITARY,
     SafariComposition.BABY_NEST,
 )
 

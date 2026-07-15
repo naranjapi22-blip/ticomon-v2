@@ -58,7 +58,7 @@ class SafariRegistrationApplicationService:
                 opened_at=opened_at,
             )
             await self._activity_repository.save_registration(registration)
-            logger.info(
+            logger.debug(
                 "safari_registration_opened guild_id=%s unlock_id=%s trainer_id=%s "
                 "participant_count=%s",
                 guild_id,

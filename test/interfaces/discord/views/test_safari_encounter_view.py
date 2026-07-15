@@ -149,7 +149,11 @@ def test_encounter_view_labels_special_encounters(
         session=session,
     )
 
-    assert expected in view.build_content()
+    content = view.build_content()
+    if composition is SafariComposition.SOLITARY:
+        assert "Special Encounter: Solitary Pokémon" not in content
+    else:
+        assert expected in content
 
 
 def test_encounter_results_show_shared_captures_and_hide_unprocessed_unique_trainer():

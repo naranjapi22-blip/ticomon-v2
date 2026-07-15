@@ -263,7 +263,7 @@ class SafariCaptureApplicationService:
                 )
                 raise
 
-            logger.info(
+            logger.debug(
                 "safari_encounter_resolved guild_id=%s session_id=%s encounter_id=%s "
                 "captured=%s escaped=%s next_status=%s",
                 guild_id,
@@ -506,10 +506,7 @@ class SafariCaptureApplicationService:
             session.completed_encounter_count + 1 == session.total_encounters
             and not session.has_special_encounter_history
         ):
-            return (
-                SafariComposition.SOLITARY,
-                SafariComposition.NORMAL,
-            )
+            return (SafariComposition.NORMAL,)
         return (SafariComposition.NORMAL,)
 
     async def _require_session(self, guild_id: int) -> SafariSession:

@@ -32,7 +32,7 @@ async def get_pool() -> asyncpg.Pool:
             max_size=10,
             statement_cache_size=0,
         )
-        logger.info("PostgreSQL pool created")
+        logger.debug("PostgreSQL pool created")
 
     return _pool
 

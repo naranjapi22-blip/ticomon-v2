@@ -6,7 +6,6 @@ from PIL import Image, ImageDraw, ImageOps
 
 from application.safari import SafariFinalSummary
 from core.safari import SafariSession
-from core.safari.domain import SafariCapturePolicy
 
 from .assets import BACKGROUND_BY_ZONE, SafariAssets
 from .layout import SlotPlacement, layout_slot_cards
@@ -25,11 +24,10 @@ class SafariEncounterRenderer:
             raise ValueError("Safari encounter is required.")
 
         canvas = self._background(session)
-        draw = ImageDraw.Draw(canvas)
 
         placements = layout_slot_cards(len(encounter.slots))
         for slot, placement in zip(encounter.slots, placements):
-            self._draw_slot_card(draw, canvas, slot, placement)
+            self._draw_slot_card(canvas, slot, placement)
         return canvas
 
     def _background(self, session: SafariSession) -> Image.Image:
@@ -60,30 +58,12 @@ class SafariEncounterRenderer:
 
     def _draw_slot_card(
         self,
-        draw: ImageDraw.ImageDraw,
         canvas: Image.Image,
         slot,
         placement: SlotPlacement,
     ) -> None:
         card = Image.new("RGBA", (placement.width, placement.height), (0, 0, 0, 0))
         card_draw = ImageDraw.Draw(card)
-
-        policy_label = (
-            "SHARED POPULATION"
-            if getattr(slot, "capture_policy", SafariCapturePolicy.SHARED)
-            is SafariCapturePolicy.SHARED
-            else "UNIQUE SPECIMEN"
-        )
-        badge_font = self.assets.get_font(12)
-        badge_width = badge_font.getbbox(policy_label)[2] + 20
-        card_draw.rounded_rectangle(
-            (10, 10, min(placement.width - 10, badge_width), 34),
-            radius=8,
-            fill=(18, 38, 48, 220),
-            outline=(120, 220, 220, 230),
-            width=1,
-        )
-        card_draw.text((20, 16), policy_label, font=badge_font, fill="white")
 
         name = self.format_species_name(slot.opportunity.species.name)
         name_font = self._name_font_for(name, placement.width)

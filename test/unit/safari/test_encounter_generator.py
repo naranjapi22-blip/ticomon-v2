@@ -466,29 +466,19 @@ async def test_herd_preserves_generated_shiny_and_variant_values():
 
 
 @pytest.mark.asyncio
-async def test_solitary_does_not_select_regional_species():
+async def test_solitary_rejects_ordinary_and_regional_species():
     ordinary = make_species(1)
     regional = make_regional(2)
-    random_source = FakeWeightedRandom(selected_ids=(1,))
     generator, _, _, _ = make_generator(
         (ordinary, regional),
-        random_source,
     )
 
-    encounter = await generator.generate(make_context(), SafariComposition.SOLITARY)
-
-    assert encounter.composition == SafariComposition.SOLITARY
-    assert [slot.species_id for slot in encounter.slots] == [1]
-    assert encounter.slots[0].capture_policy is SafariCapturePolicy.SHARED
-    assert not any(
-        slot.opportunity.species.metadata.is_legendary
-        or slot.opportunity.species.metadata.is_mythical
-        for slot in encounter.slots
-    )
+    with pytest.raises(SafariEncounterGenerationError, match="unsupported"):
+        await generator.generate(make_context(), SafariComposition.SOLITARY)
 
 
 @pytest.mark.asyncio
-async def test_solitary_falls_back_to_another_special_when_no_regional_is_available():
+async def test_common_generation_uses_requested_fallback_order():
     ordinary_a = make_species(1)
     ordinary_b = make_species(2)
     generator, _, _, _ = make_generator(
@@ -499,13 +489,12 @@ async def test_solitary_falls_back_to_another_special_when_no_regional_is_availa
     encounter = await generator.generate_with_events(
         make_context(),
         (
-            SafariComposition.SOLITARY,
             SafariComposition.DUEL,
             SafariComposition.NORMAL,
         ),
     )
 
-    assert encounter.encounter.composition == SafariComposition.SOLITARY
+    assert encounter.encounter.composition == SafariComposition.DUEL
 
 
 @pytest.mark.asyncio
@@ -553,7 +542,6 @@ async def test_baby_nest_fails_with_one_baby_and_does_not_fill_with_non_baby():
         SafariComposition.NORMAL,
         SafariComposition.DUEL,
         SafariComposition.HERD,
-        SafariComposition.SOLITARY,
         SafariComposition.BABY_NEST,
     ],
 )
@@ -626,7 +614,7 @@ async def test_fallback_fails_when_normal_cannot_generate_without_relaxing_filte
     ):
         await generator.generate_from_compositions(
             make_context(seen_species_ids={2}),
-            (SafariComposition.BABY_NEST, SafariComposition.SOLITARY),
+            (SafariComposition.BABY_NEST, SafariComposition.NORMAL),
         )
 
     assert factory.species == []
@@ -656,7 +644,6 @@ async def test_common_composition_sequence_respects_seen_species():
         SafariComposition.NORMAL,
         SafariComposition.DUEL,
         SafariComposition.HERD,
-        SafariComposition.SOLITARY,
         SafariComposition.BABY_NEST,
     ):
         encounter = await generator.generate(
@@ -667,4 +654,4 @@ async def test_common_composition_sequence_respects_seen_species():
         assert not (encounter_species_ids & seen_species_ids)
         seen_species_ids.update(encounter_species_ids)
 
-    assert len(seen_species_ids) >= 9
+    assert len(seen_species_ids) >= 8

@@ -132,7 +132,7 @@ class StartSafariApplicationService:
                     "The Safari unlock reserved by this registration is unavailable."
                 )
 
-            logger.info(
+            logger.debug(
                 "safari_unlocked guild_id=%s unlock_id=%s session_id=%s level=%s "
                 "encounter_count=%s participants=%s",
                 guild_id,
@@ -156,7 +156,7 @@ class StartSafariApplicationService:
                 raise
 
             registration.consume()
-            logger.info(
+            logger.debug(
                 "safari_started guild_id=%s session_id=%s unlock_id=%s "
                 "participants=%s encounter_count=%s level=%s",
                 guild_id,
@@ -271,10 +271,7 @@ class StartSafariApplicationService:
         encounter_count: int,
     ) -> tuple[SafariComposition, ...]:
         if encounter_count <= 1:
-            return (
-                SafariComposition.SOLITARY,
-                SafariComposition.NORMAL,
-            )
+            return (SafariComposition.NORMAL,)
         return (SafariComposition.NORMAL,)
 
     @staticmethod

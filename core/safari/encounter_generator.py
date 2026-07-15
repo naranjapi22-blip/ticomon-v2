@@ -46,7 +46,6 @@ class SafariEncounterGenerator:
             SafariComposition.NORMAL,
             SafariComposition.DUEL,
             SafariComposition.HERD,
-            SafariComposition.SOLITARY,
             SafariComposition.BABY_NEST,
         }
     )
@@ -524,10 +523,6 @@ class SafariEncounterGenerator:
             self._require_candidates(composition, candidate_count, 1)
             species = self._select_without_replacement(weighted_candidates, 1)[0]
             return (species,)
-        if composition == SafariComposition.SOLITARY:
-            self._require_candidates(composition, candidate_count, 1)
-            return self._select_without_replacement(weighted_candidates, 1)
-
         self._require_candidates(composition, candidate_count, 2)
         target_count = 2 if candidate_count == 2 else self._random_source.choice((2, 3))
         return self._select_without_replacement(weighted_candidates, target_count)
