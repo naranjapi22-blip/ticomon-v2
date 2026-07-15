@@ -11,7 +11,7 @@ from core.species.species import Species
 
 ROOT = Path(__file__).resolve().parents[1]
 FONTS_ROOT = ROOT / "assets" / "fonts"
-BACKGROUNDS_ROOT = ROOT / "assets" / "fondos"
+BACKGROUNDS_ROOT = ROOT / "assets" / "backgrounds"
 REGULAR_ROOT = ROOT / "assets" / "regular"
 SHINY_ROOT = ROOT / "assets" / "shiny"
 PLACEHOLDER_SPECIES_ID = 25

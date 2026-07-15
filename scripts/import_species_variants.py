@@ -4,7 +4,7 @@ from pathlib import Path
 from infrastructure.db_config import close_pool, get_pool
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VARIANTS_FOLDER = BASE_DIR / "showdown_variantes"
+VARIANTS_FOLDER = BASE_DIR / "showdown_variants"
 
 # Showdown uses a different folder name from the base Species.
 SPECIES_NAME_MAP = {

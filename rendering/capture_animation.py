@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 ASSETS_DIR = BASE_DIR / "assets"
 
-BACKGROUNDS_DIR = ASSETS_DIR / "fondos"
+BACKGROUNDS_DIR = ASSETS_DIR / "backgrounds"
 
 POKEBALLS_DIR = ASSETS_DIR / "pokeballs"
 
@@ -1011,4 +1011,4 @@ if __name__ == "__main__":
     )
 
     anim.render()
-    anim.save_gif("captura.gif")
+    anim.save_gif("capture.gif")
