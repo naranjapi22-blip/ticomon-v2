@@ -5,6 +5,7 @@ from time import monotonic
 import discord
 
 from core.spawn.exceptions import NoActiveSpawnSession
+from interfaces.discord.achievement_notifications import send_unlocks
 from rendering.capture_animation import CaptureAnimation
 from rendering.sprites import get_capture_sprite
 
@@ -113,6 +114,12 @@ class CaptureButton(discord.ui.Button):
                 gif,
                 filename="capture.gif",
             ),
+        )
+
+        await send_unlocks(
+            interaction.followup.send,
+            result.achievements,
+            context=f"capture_button trainer_id={interaction.user.id}",
         )
 
         await interaction.delete_original_response()
