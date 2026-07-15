@@ -26,10 +26,15 @@ class CaptureAttemptService:
         opportunity: Opportunity,
         capture_ball: CaptureBall,
         random_source: random.Random,
+        chance_override: float | None = None,
     ) -> CaptureAttemptResult:
-        chance = self._chance_calculator.calculate(
-            opportunity=opportunity,
-            capture_ball=capture_ball,
+        chance = (
+            chance_override
+            if chance_override is not None
+            else self._chance_calculator.calculate(
+                opportunity=opportunity,
+                capture_ball=capture_ball,
+            )
         )
         roll = random_source.random()
         success = roll < chance

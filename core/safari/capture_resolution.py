@@ -23,6 +23,29 @@ class SafariCaptureResolutionError(ValueError):
     pass
 
 
+def _unique_capture_target(opportunity: Opportunity) -> float | None:
+    if opportunity.is_shiny:
+        return 0.35
+    if opportunity.species.metadata.is_legendary:
+        return 0.25
+    if opportunity.species.metadata.is_mythical:
+        return 0.15
+    return None
+
+
+def _calculate_unique_attempt_chance(
+    opportunity: Opportunity,
+    total_committed_balls: int,
+    participant_count: int,
+) -> float | None:
+    target = _unique_capture_target(opportunity)
+    if target is None or total_committed_balls <= 0 or participant_count <= 0:
+        return None
+    average_balls = total_committed_balls / participant_count
+    effective_target = 1 - (1 - target) ** (average_balls / 2)
+    return 1 - (1 - effective_target) ** (1 / total_committed_balls)
+
+
 @dataclass(frozen=True, slots=True)
 class SafariCaptureAttempt:
     trainer_id: int
@@ -381,6 +404,11 @@ class SafariCaptureResolver:
             selection.trainer_id: selection.ball_count
             for selection in ordered_selections
         }
+        unique_attempt_chance = _calculate_unique_attempt_chance(
+            slot.opportunity,
+            sum(committed.values()),
+            len(ordered_selections),
+        )
         attempts: list[SafariCaptureAttempt] = []
         participant_outcomes: list[SafariParticipantOutcome] = []
         winner: int | None = None
@@ -398,6 +426,7 @@ class SafariCaptureResolver:
                     opportunity,
                     CaptureBall.GREAT_BALL,
                     self._random_source,
+                    chance_override=unique_attempt_chance,
                 )
                 opportunity = result.opportunity
                 attempts.append(

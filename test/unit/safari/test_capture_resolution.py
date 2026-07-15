@@ -1,4 +1,5 @@
 from collections import Counter
+from dataclasses import replace
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -20,7 +21,11 @@ from core.safari import (
     SafariSlotOutcome,
     SafariSlotStatus,
 )
-from core.safari.capture_resolution import SafariCaptureResolutionError
+from core.safari.capture_resolution import (
+    SafariCaptureResolutionError,
+    _calculate_unique_attempt_chance,
+    _unique_capture_target,
+)
 from test.factories import create_species
 
 
@@ -98,6 +103,104 @@ def make_resolver(chance: float, random_source: ScriptedRandom):
         random_source,  # type: ignore[arg-type]
     )
     return resolver, calculator
+
+
+def mark_unique_kind(slot: SafariEncounterSlot, kind: str) -> None:
+    slot.opportunity.is_shiny = kind == "shiny"
+    slot.opportunity.species = replace(
+        slot.opportunity.species,
+        metadata=replace(
+            slot.opportunity.species.metadata,
+            is_legendary=kind == "legendary",
+            is_mythical=kind == "mythical",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("kind", "target"),
+    [("shiny", 0.35), ("legendary", 0.25), ("mythical", 0.15)],
+)
+def test_unique_capture_target_uses_conservative_objectives(kind, target):
+    slot = make_slot(1)
+    mark_unique_kind(slot, kind)
+
+    assert _unique_capture_target(slot.opportunity) == target
+
+
+@pytest.mark.parametrize("participant_count", (5, 20, 50, 100))
+def test_unique_attempt_chance_is_stable_for_two_balls_per_participant(
+    participant_count,
+):
+    slot = make_slot(1)
+    mark_unique_kind(slot, "shiny")
+
+    chance = _calculate_unique_attempt_chance(
+        slot.opportunity,
+        total_committed_balls=participant_count * 2,
+        participant_count=participant_count,
+    )
+
+    assert chance == pytest.approx(1 - (1 - 0.35) ** (1 / (participant_count * 2)))
+
+
+def test_unique_community_capture_increases_with_committed_balls():
+    slot = make_slot(1)
+    mark_unique_kind(slot, "legendary")
+    chances = []
+
+    for balls in (1, 2, 3):
+        chance = _calculate_unique_attempt_chance(
+            slot.opportunity,
+            total_committed_balls=20 * balls,
+            participant_count=20,
+        )
+        chances.append(1 - (1 - chance) ** (20 * balls))
+
+    assert chances[0] < chances[1] < chances[2]
+
+
+def test_unique_does_not_apply_personal_fatigue_to_attempt_chance():
+    slot = make_slot(1)
+    mark_unique_kind(slot, "shiny")
+    encounter = make_resolving_encounter((slot,), ((1, slot, 3),))
+    resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.99, 0.99, 0.99)),
+    )
+
+    outcome = resolver.resolve(encounter).slot_outcomes[0]
+
+    assert len(outcome.attempts) == 3
+    assert len({attempt.chance for attempt in outcome.attempts}) == 1
+    assert [attempt.failed_attempts_before for attempt in outcome.attempts] == [
+        0,
+        1,
+        2,
+    ]
+
+
+def test_unique_stops_at_first_success_and_unprocessed_participant_spends_nothing():
+    slot = make_slot(1)
+    mark_unique_kind(slot, "legendary")
+    encounter = make_resolving_encounter(
+        (slot,),
+        ((1, slot, 3), (2, slot, 3)),
+    )
+    resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.0,), shuffle_orders=((1, 2),)),
+    )
+
+    outcome = resolver.resolve(encounter).slot_outcomes[0]
+
+    assert len(outcome.attempts) == 1
+    assert [item.attempts_executed for item in outcome.participant_outcomes] == [
+        1,
+        0,
+    ]
+    assert [item.balls_spent for item in outcome.participant_outcomes] == [1, 0]
+    assert [item.captured for item in outcome.participant_outcomes] == [True, False]
 
 
 def test_slot_without_selection_escapes_without_attempts():
