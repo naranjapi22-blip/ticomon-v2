@@ -8,6 +8,7 @@ from core.capture import CaptureAttemptService
 from core.capture.domain.capture_ball import CaptureBall
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
+    SafariCapturePolicy,
     SafariCaptureResolver,
     SafariCaptureSelection,
     SafariComposition,
@@ -51,10 +52,15 @@ class ScriptedRandom:
         return self.rolls.pop(0)
 
 
-def make_slot(species_id: int, *, failed_attempts: int = 0) -> SafariEncounterSlot:
+def make_slot(
+    species_id: int,
+    *,
+    failed_attempts: int = 0,
+    capture_policy: SafariCapturePolicy = SafariCapturePolicy.UNIQUE,
+) -> SafariEncounterSlot:
     opportunity = OpportunityFactory.create(create_species(id=species_id))
     opportunity.failed_attempts = failed_attempts
-    return SafariEncounterSlot(uuid4(), opportunity)
+    return SafariEncounterSlot(uuid4(), opportunity, capture_policy)
 
 
 def make_resolving_encounter(
@@ -214,6 +220,115 @@ def test_slot_outcome_accepts_multiple_participant_outcomes():
     )
 
     assert outcome.participant_outcomes == participant_outcomes
+
+
+def test_shared_slot_allows_multiple_independent_captures():
+    slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
+    encounter = make_resolving_encounter(
+        (slot,),
+        ((1, slot, 1), (2, slot, 1)),
+    )
+    resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.1, 0.1)),
+    )
+
+    outcome = resolver.resolve(encounter).slot_outcomes[0]
+
+    assert outcome.status is SafariSlotStatus.CAPTURED
+    assert outcome.winner_trainer_id is None
+    assert [item.trainer_id for item in outcome.participant_outcomes] == [1, 2]
+    assert all(item.captured for item in outcome.participant_outcomes)
+    assert (
+        len({id(item.final_opportunity) for item in outcome.participant_outcomes}) == 2
+    )
+
+
+def test_shared_slot_keeps_fatigue_and_attempts_independent():
+    slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
+    encounter = make_resolving_encounter(
+        (slot,),
+        ((1, slot, 2), (2, slot, 2)),
+    )
+    resolver, calculator = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.9, 0.1, 0.9, 0.9)),
+    )
+
+    outcome = resolver.resolve(encounter).slot_outcomes[0]
+
+    assert [item.trainer_id for item in outcome.attempts] == [1, 1, 2, 2]
+    assert [attempt.failed_attempts_before for attempt in outcome.attempts] == [
+        0,
+        1,
+        0,
+        1,
+    ]
+    assert calculator.calls == [
+        (0, CaptureBall.GREAT_BALL),
+        (1, CaptureBall.GREAT_BALL),
+        (0, CaptureBall.GREAT_BALL),
+        (1, CaptureBall.GREAT_BALL),
+    ]
+    assert [item.attempts_executed for item in outcome.participant_outcomes] == [
+        2,
+        2,
+    ]
+    assert [item.balls_spent for item in outcome.participant_outcomes] == [2, 2]
+    assert [item.captured for item in outcome.participant_outcomes] == [True, False]
+
+
+def test_shared_slot_stops_only_the_successful_participants_remaining_balls():
+    slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
+    encounter = make_resolving_encounter(
+        (slot,),
+        ((1, slot, 1), (2, slot, 3)),
+    )
+    resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.1, 0.9, 0.9, 0.9)),
+    )
+
+    outcome = resolver.resolve(encounter).slot_outcomes[0]
+
+    assert [item.attempts_executed for item in outcome.participant_outcomes] == [
+        1,
+        3,
+    ]
+    assert [item.balls_spent for item in outcome.participant_outcomes] == [1, 3]
+    assert outcome.attempts_executed == 4
+
+
+def test_shared_slot_resolution_is_independent_of_selection_input_order():
+    slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
+    first_encounter = make_resolving_encounter(
+        (slot,),
+        ((1, slot, 2), (2, slot, 1)),
+    )
+    first_resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.9, 0.1, 0.9)),
+    )
+    first_outcome = first_resolver.resolve(first_encounter).slot_outcomes[0]
+
+    slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
+    second_encounter = make_resolving_encounter(
+        (slot,),
+        ((2, slot, 1), (1, slot, 2)),
+    )
+    second_resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.9, 0.1, 0.9)),
+    )
+    second_outcome = second_resolver.resolve(second_encounter).slot_outcomes[0]
+
+    assert tuple(
+        (item.trainer_id, item.attempts_executed, item.captured)
+        for item in first_outcome.participant_outcomes
+    ) == tuple(
+        (item.trainer_id, item.attempts_executed, item.captured)
+        for item in second_outcome.participant_outcomes
+    )
 
 
 def test_multiple_balls_create_multiple_queue_positions():

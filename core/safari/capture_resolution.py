@@ -11,7 +11,11 @@ from core.capture import CaptureAttemptService
 from core.capture.domain.capture_ball import CaptureBall
 from core.opportunity.opportunity import Opportunity
 from core.safari.capture import SafariCaptureSelection, _require_non_empty_uuid
-from core.safari.domain import SafariEncounterStatus, SafariSlotStatus
+from core.safari.domain import (
+    SafariCapturePolicy,
+    SafariEncounterStatus,
+    SafariSlotStatus,
+)
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 
 
@@ -86,8 +90,25 @@ class SafariSlotOutcome:
         _require_non_empty_uuid(self.slot_id, "slot_id")
         if self.status not in (SafariSlotStatus.CAPTURED, SafariSlotStatus.ESCAPED):
             raise ValueError("slot outcome status must be final.")
+        participant_outcomes = tuple(self.participant_outcomes)
+        captured_participant_ids = {
+            item.trainer_id for item in participant_outcomes if item.captured
+        }
         if self.status == SafariSlotStatus.CAPTURED:
-            if self.winner_trainer_id is None or self.winner_trainer_id <= 0:
+            if participant_outcomes:
+                if not captured_participant_ids:
+                    raise ValueError("captured outcomes require a capture.")
+                if (
+                    self.winner_trainer_id is None
+                    and len(captured_participant_ids) == 1
+                ):
+                    raise ValueError("captured outcomes require a winner.")
+                if (
+                    self.winner_trainer_id is not None
+                    and self.winner_trainer_id not in captured_participant_ids
+                ):
+                    raise ValueError("winner must match a captured participant.")
+            elif self.winner_trainer_id is None or self.winner_trainer_id <= 0:
                 raise ValueError("captured outcomes require a winner.")
         elif self.winner_trainer_id is not None:
             raise ValueError("escaped outcomes cannot have a winner.")
@@ -114,7 +135,18 @@ class SafariSlotOutcome:
         ):
             raise ValueError("executed attempts exceed committed Balls.")
         successful_attempts = [attempt for attempt in attempts if attempt.success]
-        if self.status == SafariSlotStatus.CAPTURED:
+        if participant_outcomes:
+            if len(successful_attempts) != len(captured_participant_ids):
+                raise ValueError("successful attempts must match participant captures.")
+            if self.status == SafariSlotStatus.ESCAPED and successful_attempts:
+                raise ValueError("escaped outcomes cannot contain successful attempts.")
+            if (
+                self.winner_trainer_id is not None
+                and len(captured_participant_ids) == 1
+                and successful_attempts[0].trainer_id != self.winner_trainer_id
+            ):
+                raise ValueError("winner must match the successful attempt.")
+        elif self.status == SafariSlotStatus.CAPTURED:
             if len(successful_attempts) != 1 or not attempts[-1].success:
                 raise ValueError(
                     "captured outcome requires one final successful attempt."
@@ -124,7 +156,6 @@ class SafariSlotOutcome:
         elif successful_attempts:
             raise ValueError("escaped outcomes cannot contain successful attempts.")
 
-        participant_outcomes = tuple(self.participant_outcomes)
         if not participant_outcomes:
             participant_ids = sorted(set(committed) | set(executed_by_trainer))
             participant_outcomes = tuple(
@@ -239,10 +270,88 @@ class SafariCaptureResolver:
             selections_by_slot.setdefault(selection.slot_id, []).append(selection)
 
         outcomes = tuple(
-            self._resolve_slot(slot, selections_by_slot.get(slot.id, ()))
+            (
+                self._resolve_shared_slot(slot, selections_by_slot.get(slot.id, ()))
+                if slot.capture_policy is SafariCapturePolicy.SHARED
+                else self._resolve_slot(slot, selections_by_slot.get(slot.id, ()))
+            )
             for slot in encounter.slots
         )
         return SafariEncounterResolution(encounter.id, outcomes)
+
+    def _resolve_shared_slot(
+        self,
+        slot: SafariEncounterSlot,
+        selections: tuple[SafariCaptureSelection, ...] | list[SafariCaptureSelection],
+    ) -> SafariSlotOutcome:
+        ordered_selections = sorted(selections, key=lambda item: item.trainer_id)
+        committed = {
+            selection.trainer_id: selection.ball_count
+            for selection in ordered_selections
+        }
+        attempts: list[SafariCaptureAttempt] = []
+        participant_outcomes: list[SafariParticipantOutcome] = []
+
+        for selection in ordered_selections:
+            opportunity = replace(slot.opportunity, failed_attempts=0)
+            captured = False
+            participant_attempts = 0
+
+            for _ in range(selection.ball_count):
+                participant_attempts += 1
+                failed_attempts_before = opportunity.failed_attempts
+                result = self._attempt_service.attempt(
+                    opportunity,
+                    CaptureBall.GREAT_BALL,
+                    self._random_source,
+                )
+                opportunity = result.opportunity
+                attempts.append(
+                    SafariCaptureAttempt(
+                        trainer_id=selection.trainer_id,
+                        slot_id=slot.id,
+                        attempt_number=len(attempts) + 1,
+                        success=result.success,
+                        chance=result.chance,
+                        roll=result.roll,
+                        failed_attempts_before=failed_attempts_before,
+                        failed_attempts_after=opportunity.failed_attempts,
+                        capture_ball=result.capture_ball,
+                    )
+                )
+                if result.success:
+                    captured = True
+                    break
+
+            participant_outcomes.append(
+                SafariParticipantOutcome(
+                    trainer_id=selection.trainer_id,
+                    balls_committed=selection.ball_count,
+                    attempts_executed=participant_attempts,
+                    balls_spent=participant_attempts,
+                    captured=captured,
+                    final_opportunity=opportunity,
+                )
+            )
+
+        captured_participants = [item for item in participant_outcomes if item.captured]
+        return SafariSlotOutcome(
+            slot_id=slot.id,
+            status=(
+                SafariSlotStatus.CAPTURED
+                if captured_participants
+                else SafariSlotStatus.ESCAPED
+            ),
+            winner_trainer_id=(
+                captured_participants[0].trainer_id
+                if len(captured_participants) == 1
+                else None
+            ),
+            attempts=tuple(attempts),
+            balls_committed_by_trainer=committed,
+            final_opportunity=replace(slot.opportunity, failed_attempts=0),
+            participant_outcomes=tuple(participant_outcomes),
+        )
 
     def _resolve_slot(
         self,
