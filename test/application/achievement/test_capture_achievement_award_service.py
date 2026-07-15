@@ -64,3 +64,23 @@ async def test_capture_milestones_and_safari_award_only_affected_definitions():
         "captures_10",
         "first_safari_capture",
     }
+
+
+@pytest.mark.asyncio
+async def test_first_completed_trade_awards_once_with_offered_species_types():
+    activities = FakeAchievementActivityRepository()
+    unlocks = FakeAchievementUnlockRepository()
+    species = SpeciesBuilder().with_types(["fire", "water"]).build()
+    await activities.record(
+        AchievementActivity(1, AchievementActivityType.COMPLETED_TRADE, "trade:1")
+    )
+    service = CaptureAchievementAwardService(activities, unlocks)
+
+    awarded = await service.award_for_completed_trade(1, species)
+    retry = await service.award_for_completed_trade(1, species)
+
+    assert [unlock.achievement_id for unlock in awarded] == ["first_completed_trade"]
+    assert retry == ()
+    inventory = unlocks.inventory_by_trainer[1]
+    assert inventory.get_amount(CandyType.FIRE) == 2
+    assert inventory.get_amount(CandyType.WATER) == 2

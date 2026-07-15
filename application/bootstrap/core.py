@@ -384,6 +384,7 @@ def build_core(
         trade_repository=trade_repository,
         trainer_repository=trainer_repository,
         creature_repository=creature_repository,
+        achievement_award_service=capture_achievement_award_service,
     )
     trade_display_service = TradeDisplayService(
         trade_repository=trade_repository,

@@ -43,6 +43,31 @@ class CaptureAchievementAwardService:
                 awarded.append(AchievementUnlockResult(definition.id.value, reward))
         return tuple(awarded)
 
+    async def award_for_completed_trade(
+        self,
+        trainer_id: int,
+        species: Species,
+    ) -> tuple[AchievementUnlockResult, ...]:
+        progress = await self._activity_repository.get_progress(trainer_id)
+        definition = next(
+            item
+            for item in ACHIEVEMENT_DEFINITIONS
+            if item.id is AchievementId.FIRST_COMPLETED_TRADE
+        )
+        if self._value(progress, definition.criterion) < definition.threshold:
+            return ()
+
+        reward = self._reward_policy.reward_for(species, definition.reward_amount)
+        awarded = await self._unlock_repository.award(
+            trainer_id,
+            definition.id.value,
+            reward,
+            datetime.now(UTC),
+        )
+        if not awarded:
+            return ()
+        return (AchievementUnlockResult(definition.id.value, reward),)
+
     @staticmethod
     def _affected_definitions(
         is_shiny: bool,
@@ -69,4 +94,5 @@ class CaptureAchievementAwardService:
                 progress.unique_discovered_species
             ),
             AchievementCriterion.SAFARI_CAPTURE_COUNT: progress.safari_capture_count,
+            AchievementCriterion.COMPLETED_TRADE_COUNT: progress.completed_trade_count,
         }.get(criterion, 0)

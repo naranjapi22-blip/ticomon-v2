@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+from core.achievement.activity import AchievementActivity
 from core.trade.trade import Trade
 
 
@@ -20,6 +21,7 @@ class TradeRepository(ABC):
         self,
         trade: Trade,
         completed_at: datetime,
+        activities: tuple[AchievementActivity, ...] = (),
     ) -> Trade:
         """Atomically exchanges ownership and returns committed trade state.
 

@@ -9,6 +9,8 @@ from application.trade.exceptions import (
     TradeTrainerNotFound,
 )
 from application.trade.trade_application_service import TradeApplicationService
+from core.achievement.unlock_result import AchievementUnlockResult
+from core.candy.candy_bundle import CandyBundle
 from core.trade.exceptions import TradeOfferMustContainExactlyOneCreature
 from core.trade.trade_status import TradeStatus
 from core.trainer.trainer import Trainer
@@ -20,6 +22,18 @@ from test.fakes.fake_trainer_repository import FakeTrainerRepository
 NOW = datetime(2026, 7, 12, 12, 0, 0)
 INITIATOR_ID = 10
 COUNTERPARTY_ID = 20
+
+
+class _AwardService:
+    def __init__(self, failing_trainer_id=None) -> None:
+        self.failing_trainer_id = failing_trainer_id
+        self.calls = []
+
+    async def award_for_completed_trade(self, trainer_id, species):
+        self.calls.append((trainer_id, species))
+        if trainer_id == self.failing_trainer_id:
+            raise RuntimeError("award")
+        return (AchievementUnlockResult("first_completed_trade", CandyBundle()),)
 
 
 @pytest.fixture
@@ -328,6 +342,7 @@ async def test_second_acceptance_executes_exchange_and_returns_committed_trade(
         initiator_creature.is_shiny,
         initiator_creature.current_form,
     )
+
     counterparty_snapshot = (
         counterparty_creature.id,
         counterparty_creature.collection_number,
@@ -364,6 +379,18 @@ async def test_second_acceptance_executes_exchange_and_returns_committed_trade(
 
     assert completed.status is TradeStatus.COMPLETED
     assert completed.completed_at == NOW
+    assert [
+        activity.trainer_id
+        for activity in service_context["trade_repository"].activities
+    ] == [INITIATOR_ID, COUNTERPARTY_ID]
+    assert [
+        activity.species_id
+        for activity in service_context["trade_repository"].activities
+    ] == [initiator_creature.species.id, counterparty_creature.species.id]
+    assert [
+        activity.idempotency_key
+        for activity in service_context["trade_repository"].activities
+    ] == ["trade:1:trainer:10", "trade:1:trainer:20"]
     assert service_context["trade_repository"].execute_calls == 1
     assert initiator_creature.trainer_id == COUNTERPARTY_ID
     assert counterparty_creature.trainer_id == INITIATOR_ID
@@ -399,6 +426,35 @@ async def test_second_acceptance_executes_exchange_and_returns_committed_trade(
         counterparty_snapshot[5],
         counterparty_snapshot[6],
     )
+
+
+@pytest.mark.asyncio
+async def test_completed_trade_awards_each_participant_independently(service_context):
+    await add_trainers(service_context["trainer_repository"])
+    award_service = _AwardService(failing_trainer_id=INITIATOR_ID)
+    service_context["service"]._achievement_award_service = award_service
+    trade = await service_context["service"].create_trade(
+        INITIATOR_ID,
+        COUNTERPARTY_ID,
+        101,
+        NOW,
+    )
+    await service_context["service"].set_offer(trade.id, COUNTERPARTY_ID, 202, NOW)
+    await service_context["service"].accept_trade(trade.id, INITIATOR_ID, NOW)
+
+    result = await service_context["service"].accept_trade(
+        trade.id,
+        COUNTERPARTY_ID,
+        NOW,
+    )
+
+    assert result.status is TradeStatus.COMPLETED
+    assert set(result.achievements_by_trainer) == {COUNTERPARTY_ID}
+    assert [trainer_id for trainer_id, _ in award_service.calls] == [
+        INITIATOR_ID,
+        COUNTERPARTY_ID,
+    ]
+    assert len(service_context["trade_repository"].activities) == 2
 
 
 @pytest.mark.asyncio

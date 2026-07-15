@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from core.achievement.activity import AchievementActivity
 from core.trade.exceptions import TradeExecutionConflict
 from core.trade.trade import Trade
 from core.trade.trade_repository import TradeRepository
@@ -15,6 +16,7 @@ class FakeTradeRepository(TradeRepository):
         self._trades: dict[int, Trade] = {}
         self._next_id = 1
         self.execute_calls = 0
+        self.activities: list[AchievementActivity] = []
 
     async def save(self, trade: Trade) -> Trade:
         trade_id = trade.id
@@ -34,6 +36,7 @@ class FakeTradeRepository(TradeRepository):
         self,
         trade: Trade,
         completed_at: datetime,
+        activities: tuple[AchievementActivity, ...] = (),
     ) -> Trade:
         self.execute_calls += 1
         trade.assert_ready_to_execute(completed_at)
@@ -89,6 +92,7 @@ class FakeTradeRepository(TradeRepository):
             completed_at=completed_at,
         )
         self._trades[trade.id] = completed
+        self.activities.extend(activities)
         return completed
 
     @staticmethod

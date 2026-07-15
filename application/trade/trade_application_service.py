@@ -1,4 +1,6 @@
+import logging
 from datetime import datetime
+from types import MappingProxyType
 
 from application.trade.exceptions import (
     TradeCreatureNotFound,
@@ -6,11 +8,15 @@ from application.trade.exceptions import (
     TradeNotFound,
     TradeTrainerNotFound,
 )
+from application.trade.results import AcceptTradeResult
+from core.achievement.activity import AchievementActivity, AchievementActivityType
 from core.creature.creature_repository import CreatureRepository
 from core.trade.exceptions import TradeOfferMustContainExactlyOneCreature
 from core.trade.trade import Trade
 from core.trade.trade_repository import TradeRepository
 from core.trainer.repository import TrainerRepository
+
+logger = logging.getLogger(__name__)
 
 
 class TradeApplicationService:
@@ -21,10 +27,12 @@ class TradeApplicationService:
         trade_repository: TradeRepository,
         trainer_repository: TrainerRepository,
         creature_repository: CreatureRepository,
+        achievement_award_service=None,
     ) -> None:
         self._trade_repository = trade_repository
         self._trainer_repository = trainer_repository
         self._creature_repository = creature_repository
+        self._achievement_award_service = achievement_award_service
 
     async def create_trade(
         self,
@@ -33,7 +41,7 @@ class TradeApplicationService:
         initiator_creature_id: int,
         created_at: datetime,
         expires_at: datetime | None = None,
-    ) -> Trade:
+    ) -> AcceptTradeResult:
         await self._ensure_trainers_exist(
             initiator_trainer_id,
             counterparty_trainer_id,
@@ -167,14 +175,59 @@ class TradeApplicationService:
         )
 
         if not trade.is_ready_to_execute:
-            return await self._trade_repository.save(trade)
+            return AcceptTradeResult(await self._trade_repository.save(trade))
 
         trade.assert_ready_to_execute(at)
 
-        return await self._trade_repository.execute_completed_trade(
+        activities, species_by_trainer = await self._completed_trade_activities(trade)
+        completed_trade = await self._trade_repository.execute_completed_trade(
             trade,
             completed_at=at,
+            activities=activities,
         )
+        achievements = await self._award_completed_trade(species_by_trainer)
+        return AcceptTradeResult(completed_trade, achievements)
+
+    async def _completed_trade_activities(self, trade: Trade):
+        assert trade.id is not None
+        assert trade.counterparty_offer is not None
+        offers = (trade.initiator_offer, trade.counterparty_offer)
+        activities = []
+        species_by_trainer = {}
+        for offer in offers:
+            creature = await self._creature_repository.get(offer.creature_id)
+            species_by_trainer[offer.trainer_id] = creature.species
+            activities.append(
+                AchievementActivity(
+                    trainer_id=offer.trainer_id,
+                    activity_type=AchievementActivityType.COMPLETED_TRADE,
+                    species_id=creature.species.id,
+                    idempotency_key=(f"trade:{trade.id}:trainer:{offer.trainer_id}"),
+                )
+            )
+        return tuple(activities), species_by_trainer
+
+    async def _award_completed_trade(self, species_by_trainer):
+        if self._achievement_award_service is None:
+            return MappingProxyType({})
+        results = {}
+        for trainer_id, species in species_by_trainer.items():
+            try:
+                unlocks = (
+                    await self._achievement_award_service.award_for_completed_trade(
+                        trainer_id,
+                        species,
+                    )
+                )
+            except Exception:
+                logger.exception(
+                    "trade achievement award failed trainer_id=%s",
+                    trainer_id,
+                )
+                continue
+            if unlocks:
+                results[trainer_id] = unlocks
+        return MappingProxyType(results)
 
     async def cancel_trade(
         self,

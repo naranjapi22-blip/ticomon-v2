@@ -2,6 +2,7 @@ from datetime import datetime
 
 import asyncpg
 
+from core.achievement.activity import AchievementActivity
 from core.trade.exceptions import TradeExecutionConflict
 from core.trade.trade import Trade
 from core.trade.trade_repository import TradeRepository
@@ -137,6 +138,7 @@ class NeonTradeRepository(TradeRepository):
         self,
         trade: Trade,
         completed_at: datetime,
+        activities: tuple[AchievementActivity, ...] = (),
     ) -> Trade:
         trade.assert_ready_to_execute(completed_at)
 
@@ -259,6 +261,11 @@ class NeonTradeRepository(TradeRepository):
                     if completed_row is None:
                         raise TradeExecutionConflict()
 
+                    await self._record_achievement_activities(
+                        connection,
+                        activities,
+                    )
+
                     completed_trade = self._mapper.from_rows(
                         completed_row,
                         offer_rows,
@@ -268,6 +275,29 @@ class NeonTradeRepository(TradeRepository):
             raise TradeExecutionConflict() from error
 
         return completed_trade
+
+    @staticmethod
+    async def _record_achievement_activities(
+        connection,
+        activities: tuple[AchievementActivity, ...],
+    ) -> None:
+        for activity in activities:
+            await connection.execute(
+                """
+                INSERT INTO trainer_achievement_activities (
+                    trainer_id, activity_type, species_id, source,
+                    occurred_at, idempotency_key
+                )
+                VALUES ($1, $2, $3, $4, COALESCE($5, NOW()), $6)
+                ON CONFLICT DO NOTHING
+                """,
+                activity.trainer_id,
+                activity.activity_type.value,
+                activity.species_id,
+                activity.source.value if activity.source else None,
+                activity.occurred_at,
+                activity.idempotency_key,
+            )
 
     async def _replace_offer_rows(
         self,

@@ -5,13 +5,15 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 
+from core.achievement.activity import AchievementActivity, AchievementActivityType
 from core.trade.exceptions import TradeExecutionConflict
 from core.trade.trade import Trade
 from core.trade.trade_status import TradeStatus
-from infrastructure.db_config import get_pool
+from infrastructure.db_config import close_pool, get_pool
 from infrastructure.persistence.repositories.neon_trade_repository import (
     NeonTradeRepository,
 )
+from scripts.create_achievement_schema import create_achievement_schema
 from scripts.create_trade_schema import create_trade_schema
 
 NOW = datetime(2026, 7, 12, 12, 0, 0, tzinfo=UTC)
@@ -19,7 +21,9 @@ NOW = datetime(2026, 7, 12, 12, 0, 0, tzinfo=UTC)
 
 @pytest_asyncio.fixture
 async def trade_data_factory():
+    await close_pool()
     await create_trade_schema()
+    await create_achievement_schema()
     pool = await get_pool()
     created_creature_ids: list[int] = []
     participant_ids: list[int] = []
@@ -56,6 +60,16 @@ async def trade_data_factory():
                     counterparty_creature_id,
                 ]
             )
+            await connection.executemany(
+                """
+                INSERT INTO trainers (trainer_id, starter_creature_id, started_at)
+                VALUES ($1, $2, NOW())
+                """,
+                [
+                    (initiator_id, initiator_creature_id),
+                    (counterparty_id, counterparty_creature_id),
+                ],
+            )
 
         return {
             "initiator_id": initiator_id,
@@ -68,6 +82,10 @@ async def trade_data_factory():
 
     async with pool.acquire() as connection:
         if participant_ids:
+            await connection.execute(
+                "DELETE FROM trainer_achievement_activities WHERE trainer_id = ANY($1)",
+                participant_ids,
+            )
             await connection.execute(
                 """
                 DELETE FROM trades
@@ -85,6 +103,12 @@ async def trade_data_factory():
                 """,
                 created_creature_ids,
             )
+        if participant_ids:
+            await connection.execute(
+                "DELETE FROM trainers WHERE trainer_id = ANY($1)",
+                participant_ids,
+            )
+    await close_pool()
 
 
 @pytest.mark.asyncio
@@ -186,6 +210,43 @@ async def test_executes_atomic_trade_and_swaps_collection_numbers(
             "speed_iv",
         ):
             assert after[field] == before[field]
+
+
+@pytest.mark.asyncio
+async def test_completed_trade_records_one_activity_per_participant(
+    trade_data_factory,
+):
+    data = await trade_data_factory()
+    repository = NeonTradeRepository()
+    trade = await _create_ready_trade(repository, data)
+    activities = (
+        AchievementActivity(
+            data["initiator_id"],
+            AchievementActivityType.COMPLETED_TRADE,
+            f"trade:{trade.id}:trainer:{data['initiator_id']}",
+            1,
+        ),
+        AchievementActivity(
+            data["counterparty_id"],
+            AchievementActivityType.COMPLETED_TRADE,
+            f"trade:{trade.id}:trainer:{data['counterparty_id']}",
+            1,
+        ),
+    )
+
+    await repository.execute_completed_trade(trade, NOW, activities)
+
+    pool = await get_pool()
+    async with pool.acquire() as connection:
+        count = await connection.fetchval(
+            """
+            SELECT COUNT(*) FROM trainer_achievement_activities
+            WHERE trainer_id = ANY($1::bigint[])
+              AND activity_type = 'completed_trade'
+            """,
+            [data["initiator_id"], data["counterparty_id"]],
+        )
+    assert count == 2
 
 
 @pytest.mark.asyncio
