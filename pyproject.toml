@@ -47,6 +47,9 @@ select = [
 [tool.pytest.ini_options]
 testpaths = ["test"]
 python_files = ["test_*.py"]
+markers = [
+    "neon_db: tests that require NEON_DATABASE_URL",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

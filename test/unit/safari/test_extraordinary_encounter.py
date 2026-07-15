@@ -294,7 +294,7 @@ async def test_event_modifies_extraordinary_weight_and_uses_dual_type_maximum():
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
     assert result.event == SafariThematicEvent.VOLCANIC_ACTIVITY
-    assert weights == (base_weight * 1.7, base_weight)
+    assert weights == (base_weight * 1.7 * 1.3, base_weight)
 
 
 @pytest.mark.asyncio

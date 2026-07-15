@@ -304,7 +304,7 @@ class SafariSimulationRunner:
         for trainer_id in range(2, participant_count + 1):
             await registration_service.join(guild_id=guild_id, trainer_id=trainer_id)
 
-        await start_service.start(
+        await start_service.start_for_testing(
             guild_id=guild_id, started_at=datetime.now(timezone.utc)
         )
 

@@ -164,7 +164,6 @@ def test_regional_forms_are_exact_and_explicit():
         SafariComposition.NORMAL,
         SafariComposition.DUEL,
         SafariComposition.HERD,
-        SafariComposition.SOLITARY,
         SafariComposition.BABY_NEST,
     ],
 )
@@ -323,7 +322,7 @@ async def test_seen_species_uses_internal_id_without_linking_normal_and_regional
     )
     ordinary_result = await generator.generate(
         make_context(seen_species_ids={regional.id}),
-        SafariComposition.SOLITARY,
+        SafariComposition.NORMAL,
     )
 
     assert regional_result.encounter.slots[0].species_id == regional.id
@@ -384,7 +383,7 @@ async def test_compatible_event_modifies_regional_weights_using_dual_type_maximu
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
     assert result.event == SafariThematicEvent.VOLCANIC_ACTIVITY
-    assert weights == (base_weight * 1.7, base_weight)
+    assert weights == (base_weight * 1.7 * 1.3, base_weight)
 
 
 @pytest.mark.asyncio

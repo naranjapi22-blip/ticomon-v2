@@ -105,10 +105,10 @@ def _species_catalog() -> tuple[Species, ...]:
             name=f"ordinary-{index}",
             rarity=rarity_cycle[(index - 1) % len(rarity_cycle)],
             types=ordinary_types[index - 1],
-            baby=index == 7,
+            baby=index in {7, 8, 9},
             variants=(
                 [Variant(id=700 + index, name=f"Variant {index}")]
-                if index == 7
+                if index in {7, 8, 9}
                 else None
             ),
         )
@@ -117,20 +117,34 @@ def _species_catalog() -> tuple[Species, ...]:
     specials = (
         _species(
             species_id=101,
-            name="regional",
+            name="regional-1",
             rarity=Rarity.RARE,
             pokeapi_id=10091,
             types=["steel"],
         ),
         _species(
             species_id=102,
+            name="regional-2",
+            rarity=Rarity.RARE,
+            pokeapi_id=10092,
+            types=["water"],
+        ),
+        _species(
+            species_id=103,
+            name="regional-3",
+            rarity=Rarity.RARE,
+            pokeapi_id=10100,
+            types=["grass"],
+        ),
+        _species(
+            species_id=104,
             name="legend",
             rarity=Rarity.LEGENDARY,
             types=["dragon"],
             legendary=True,
         ),
         _species(
-            species_id=103,
+            species_id=105,
             name="myth",
             rarity=Rarity.MYTHICAL,
             types=["fairy"],

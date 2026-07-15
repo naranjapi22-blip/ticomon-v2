@@ -122,7 +122,7 @@ async def test_complete_safari_flow_in_memory():
 
     await registration_service.open(100, 1, NOW)
     await registration_service.join(100, 2)
-    start = await start_service.start(100, NOW)
+    start = await start_service.start_for_testing(100, NOW)
     assert start.unlock.status is SafariUnlockStatus.CONSUMED
 
     while True:

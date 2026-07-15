@@ -174,13 +174,13 @@ async def test_volcanic_event_multiplies_type_weight_and_dual_type_uses_maximum(
 
     result = await generator.generate_with_events(
         context,
-        (SafariComposition.SOLITARY,),
+        (SafariComposition.NORMAL,),
     )
     _, weights = random_source.species_calls[0]
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
     assert result.event == SafariThematicEvent.VOLCANIC_ACTIVITY
-    assert weights == (base_weight * 1.7, base_weight)
+    assert weights == (base_weight * 1.7 * 1.3, base_weight)
 
 
 @pytest.mark.asyncio
@@ -201,7 +201,7 @@ async def test_graveyard_favors_ghost_without_requiring_it():
         ),
     )
 
-    await generator.generate_with_events(context, (SafariComposition.SOLITARY,))
+    await generator.generate_with_events(context, (SafariComposition.NORMAL,))
     _, weights = random_source.species_calls[0]
     base_weight = RARITY_CONFIG[Rarity.COMMON].spawn_weight
 
@@ -329,6 +329,7 @@ async def test_event_without_candidates_tries_next_event_once():
 @pytest.mark.asyncio
 async def test_failed_events_and_composition_continue_in_requested_order():
     normal = make_species(1)
+    regional = make_species(2, pokeapi_id=10100)
     random_source = ScriptedRandom(
         event_order=(
             SafariThematicEvent.NEST,
@@ -336,7 +337,7 @@ async def test_failed_events_and_composition_continue_in_requested_order():
             SafariThematicEvent.NONE,
         )
     )
-    generator, repository, _, _ = make_generator((normal,), random_source)
+    generator, repository, _, _ = make_generator((normal, regional), random_source)
     context = make_context(
         safari_map=SafariMap.SWAMP,
         zone=SafariZone.DENSE_REEDS,
@@ -358,10 +359,11 @@ async def test_failed_events_and_composition_continue_in_requested_order():
 @pytest.mark.asyncio
 async def test_event_generation_deduplicates_compositions():
     normal = make_species(1)
+    regional = make_species(2, pokeapi_id=10100)
     random_source = ScriptedRandom(
         event_order=(SafariThematicEvent.NONE, SafariThematicEvent.NONE)
     )
-    generator, _, _, _ = make_generator((normal,), random_source)
+    generator, _, _, _ = make_generator((normal, regional), random_source)
     context = make_context(route_allowed_events=frozenset({SafariThematicEvent.NONE}))
 
     result = await generator.generate_with_events(
@@ -436,7 +438,8 @@ async def test_generated_result_keeps_event_outside_encounter_and_context_unchan
 
     assert isinstance(result, SafariGeneratedEncounter)
     assert result.encounter.composition == SafariComposition.NORMAL
-    assert not hasattr(result.encounter, "event")
+    assert result.event == SafariThematicEvent.FISHING
+    assert result.encounter.event == SafariThematicEvent.FISHING
     assert context.route_allowed_events == original_route_events
     assert len({slot.id for slot in result.encounter.slots}) == len(
         result.encounter.slots
