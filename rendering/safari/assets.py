@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageFont
 
-from core.safari.domain import SafariMap
+from core.safari.domain import SafariMap, SafariZone
 from core.species.species import Species
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +24,19 @@ BACKGROUND_BY_MAP: dict[SafariMap, str] = {
     SafariMap.COAST: "water.png",
     SafariMap.SWAMP: "poison.png",
     SafariMap.PLAINS: "normal.png",
+}
+
+BACKGROUND_BY_ZONE: dict[SafariZone, str] = {
+    SafariZone.FOREST_ENTRANCE: "forest_entrance.png",
+    SafariZone.DEEP_FOREST: "forest_deep_forest.png",
+    SafariZone.ROCKY_SLOPE: "mountain_rocky_slope.png",
+    SafariZone.DEEP_CAVE: "mountain_deep_cave.png",
+    SafariZone.COAST_SHORE: "coast_shore.png",
+    SafariZone.TIDAL_POOLS: "coast_tidal_pools.png",
+    SafariZone.SWAMP_EDGE: "swamp_edge.png",
+    SafariZone.DEAD_FOREST: "swamp_dead_forest.png",
+    SafariZone.OPEN_FIELD: "plains_open_field.png",
+    SafariZone.TALL_GRASS: "plains_tall_grass.png",
 }
 
 BACKGROUND_BY_TYPE: dict[str, str] = {
@@ -56,6 +69,11 @@ class SafariAssets:
     @lru_cache(maxsize=32)
     def get_background(self, safari_map: SafariMap) -> Image.Image:
         filename = BACKGROUND_BY_MAP.get(safari_map, "safari.png")
+        return self.get_background_by_name(filename)
+
+    @lru_cache(maxsize=32)
+    def get_background_for_zone(self, zone: SafariZone | None) -> Image.Image:
+        filename = BACKGROUND_BY_ZONE.get(zone, "safari.png")
         return self.get_background_by_name(filename)
 
     @lru_cache(maxsize=32)

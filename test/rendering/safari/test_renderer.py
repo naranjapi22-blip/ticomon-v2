@@ -25,7 +25,7 @@ from core.safari import (
 from core.safari.domain import SafariFinishReason
 from core.safari.encounter import SafariEncounter, SafariEncounterSlot
 from core.safari.participant import SafariParticipant
-from rendering.safari.assets import SafariAssets
+from rendering.safari.assets import BACKGROUND_BY_ZONE, SafariAssets
 from rendering.safari.layout import layout_slot_cards
 from rendering.safari.renderer import SafariEncounterRenderer, SafariSummaryRenderer
 from test.factories import create_species
@@ -240,7 +240,59 @@ def test_encounter_renderer_uses_zone_context_for_background() -> None:
 
     SafariEncounterRenderer(assets=assets).render(session)
 
-    assert assets.requested_backgrounds[0] == "poison"
+    assert assets.requested_backgrounds[0] == "coast_tidal_pools.png"
+
+
+def test_zone_background_catalog_contains_only_the_initial_ten_zones() -> None:
+    assert BACKGROUND_BY_ZONE == {
+        SafariZone.FOREST_ENTRANCE: "forest_entrance.png",
+        SafariZone.DEEP_FOREST: "forest_deep_forest.png",
+        SafariZone.ROCKY_SLOPE: "mountain_rocky_slope.png",
+        SafariZone.DEEP_CAVE: "mountain_deep_cave.png",
+        SafariZone.COAST_SHORE: "coast_shore.png",
+        SafariZone.TIDAL_POOLS: "coast_tidal_pools.png",
+        SafariZone.SWAMP_EDGE: "swamp_edge.png",
+        SafariZone.DEAD_FOREST: "swamp_dead_forest.png",
+        SafariZone.OPEN_FIELD: "plains_open_field.png",
+        SafariZone.TALL_GRASS: "plains_tall_grass.png",
+    }
+
+
+def test_registered_zone_with_missing_file_falls_back_to_safari(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    import rendering.safari.assets as assets_module
+
+    Image.new("RGBA", (1020, 574), (1, 2, 3, 255)).save(tmp_path / "safari.png")
+    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+
+    image = SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
+
+    assert image.size == (1020, 574)
+
+
+def test_unregistered_zone_falls_back_to_safari(tmp_path, monkeypatch) -> None:
+    import rendering.safari.assets as assets_module
+
+    Image.new("RGBA", (1020, 574), (1, 2, 3, 255)).save(tmp_path / "safari.png")
+    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+
+    image = SafariAssets().get_background_for_zone(SafariZone.VALLEY)
+
+    assert image.size == (1020, 574)
+
+
+def test_registered_zone_loads_existing_file(tmp_path, monkeypatch) -> None:
+    import rendering.safari.assets as assets_module
+
+    image_path = tmp_path / "forest_entrance.png"
+    Image.new("RGBA", (400, 225), (20, 40, 60, 255)).save(image_path)
+    monkeypatch.setattr(assets_module, "FONDOS_ROOT", tmp_path)
+
+    image = SafariAssets().get_background_for_zone(SafariZone.FOREST_ENTRANCE)
+
+    assert image.size == (400, 225)
 
 
 def test_encounter_renderer_uses_pokeapi_id_not_internal_id() -> None:

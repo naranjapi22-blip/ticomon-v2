@@ -6,13 +6,9 @@ from PIL import Image, ImageDraw, ImageOps
 
 from application.safari import SafariFinalSummary
 from core.safari import SafariSession
-from core.safari.domain import (
-    SAFARI_ZONE_DEFINITION_BY_ZONE,
-    SafariCapturePolicy,
-    SafariMap,
-)
+from core.safari.domain import SafariCapturePolicy
 
-from .assets import SafariAssets
+from .assets import BACKGROUND_BY_ZONE, SafariAssets
 from .layout import SlotPlacement, layout_slot_cards
 from .narrative import summary_narrative
 
@@ -37,12 +33,16 @@ class SafariEncounterRenderer:
         return canvas
 
     def _background(self, session: SafariSession) -> Image.Image:
+        zone = getattr(getattr(session, "current_segment", None), "zone", None)
         background_name = self._background_name(session)
+        zone_loader = getattr(self.assets, "get_background_for_zone", None)
         background_loader = getattr(self.assets, "get_background_by_name", None)
-        if background_name is None or background_loader is None:
+        if zone_loader is not None:
+            background = zone_loader(zone).copy()
+        elif background_loader is None:
             background = self.assets.get_background(session.safari_map).copy()
         else:
-            background = background_loader(background_name).copy()
+            background = background_loader(background_name or "safari.png").copy()
         background = background.resize(CANVAS_SIZE, Image.Resampling.LANCZOS)
 
         overlay = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
@@ -56,31 +56,7 @@ class SafariEncounterRenderer:
     def _background_name(session: SafariSession) -> str | None:
         current_segment = getattr(session, "current_segment", None)
         zone = getattr(current_segment, "zone", None)
-        if zone is None:
-            return {
-                SafariMap.FOREST: "grass",
-                SafariMap.MOUNTAIN: "rock",
-                SafariMap.COAST: "water",
-                SafariMap.SWAMP: "poison",
-                SafariMap.PLAINS: "normal",
-            }.get(session.safari_map)
-
-        definition = SAFARI_ZONE_DEFINITION_BY_ZONE[zone]
-        map_background = {
-            SafariMap.FOREST: "grass",
-            SafariMap.MOUNTAIN: "rock",
-            SafariMap.COAST: "water",
-            SafariMap.SWAMP: "poison",
-            SafariMap.PLAINS: "normal",
-        }.get(session.safari_map)
-        ordered_types = sorted(
-            definition.base_type_weights.items(),
-            key=lambda item: (-item[1], item[0]),
-        )
-        for type_name, _ in ordered_types:
-            if type_name != map_background:
-                return type_name
-        return map_background
+        return BACKGROUND_BY_ZONE.get(zone)
 
     def _draw_slot_card(
         self,
