@@ -24,6 +24,7 @@ from core.safari import (
     SafariSession,
     SafariSessionStatus,
 )
+from interfaces.discord.achievement_notifications import format_unlocks
 from interfaces.discord.buttons.pokedex_button import PokedexButton
 from interfaces.discord.files import image_to_discord_file
 from interfaces.discord.safari_errors import safari_error_message
@@ -472,6 +473,7 @@ class SafariEncounterView(discord.ui.View):
             encounter_index,
         )
         results_message = self._build_encounter_results_message(result)
+        await self._notify_safari_unlocks(result)
 
         if result.next_session_status is SafariSessionStatus.ROUTE_DECISION:
             await self._show_route_vote(prefix_content=results_message)
@@ -485,6 +487,23 @@ class SafariEncounterView(discord.ui.View):
             return
 
         await self._show_summary(prefix_content=results_message)
+
+    async def _notify_safari_unlocks(self, result) -> None:
+        if self.message is None:
+            return
+        for trainer_id, unlocks in result.achievements.items():
+            if not unlocks:
+                continue
+            try:
+                await self.message.channel.send(
+                    f"<@{trainer_id}>\n{format_unlocks(unlocks)}"
+                )
+            except Exception:
+                logger.exception(
+                    "safari achievement notification failed guild_id=%s trainer_id=%s",
+                    self.guild_id,
+                    trainer_id,
+                )
 
     async def _show_route_vote(self, *, prefix_content: str | None = None) -> None:
         if self.message is not None:
