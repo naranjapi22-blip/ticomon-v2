@@ -937,7 +937,7 @@ class CaptureAnimation:
 
     # ========================================================
 
-    def save_gif(self, filename=f"captura_{time.time_ns()}.gif"):
+    def save_gif(self, filename=f"capture_{time.time_ns()}.gif"):
 
         if not self.frames:
 
