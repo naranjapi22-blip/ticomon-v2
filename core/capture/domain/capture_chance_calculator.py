@@ -1,6 +1,9 @@
+from collections.abc import Mapping
+
 from core.capture.domain.capture_ball import CaptureBall
 from core.capture.domain.capture_ball_catalog import CAPTURE_BALL_CONFIG
 from core.opportunity.opportunity import Opportunity
+from core.rarity import Rarity
 from core.rarity.rarity_catalog import RARITY_CONFIG
 
 
@@ -22,7 +25,10 @@ class CaptureChanceCalculator:
 
         capture_rate_modifier = (opportunity.species.capture_rate / 255.0) ** 0.5
 
-        chance = rarity.base_capture
+        chance = self._base_capture_overrides.get(
+            opportunity.species.spawn_rarity,
+            rarity.base_capture,
+        )
 
         chance *= capture_rate_modifier
         chance *= ball.modifier
@@ -33,3 +39,9 @@ class CaptureChanceCalculator:
             chance,
             rarity.capture_cap,
         )
+
+    def __init__(
+        self,
+        base_capture_overrides: Mapping[Rarity, float] | None = None,
+    ) -> None:
+        self._base_capture_overrides = base_capture_overrides or {}

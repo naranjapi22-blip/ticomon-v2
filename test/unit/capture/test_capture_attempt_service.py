@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
@@ -9,7 +10,8 @@ from core.capture.domain.capture_chance_calculator import CaptureChanceCalculato
 from core.capture.domain.capture_result import CaptureResult
 from core.capture.service import CaptureService
 from core.opportunity.opportunity_factory import OpportunityFactory
-from core.rarity import RARITY_CONFIG
+from core.rarity import RARITY_CONFIG, Rarity
+from core.safari.capture_config import SAFARI_BASE_CAPTURE
 from test.factories import create_species
 
 
@@ -158,6 +160,66 @@ def test_shiny_does_not_change_capture_chance():
     regular = make_opportunity(shiny=False)
     shiny = make_opportunity(shiny=True)
     calculator = CaptureChanceCalculator()
+
+    assert calculator.calculate(
+        regular,
+        CaptureBall.GREAT_BALL,
+    ) == calculator.calculate(shiny, CaptureBall.GREAT_BALL)
+
+
+@pytest.mark.parametrize("rarity", tuple(SAFARI_BASE_CAPTURE))
+def test_safari_uses_base_capture_overrides_without_changing_spawn(
+    rarity,
+):
+    opportunity = make_opportunity()
+    opportunity.species = replace(opportunity.species, spawn_rarity=rarity)
+    safari_calculator = CaptureChanceCalculator(
+        base_capture_overrides=SAFARI_BASE_CAPTURE,
+    )
+    spawn_calculator = CaptureChanceCalculator()
+    modifier = (opportunity.species.capture_rate / 255.0) ** 0.5
+    ball_modifier = CAPTURE_BALL_CONFIG[CaptureBall.GREAT_BALL].modifier
+
+    safari_chance = safari_calculator.calculate(
+        opportunity,
+        CaptureBall.GREAT_BALL,
+    )
+    spawn_chance = spawn_calculator.calculate(
+        opportunity,
+        CaptureBall.GREAT_BALL,
+    )
+
+    assert safari_chance == min(
+        SAFARI_BASE_CAPTURE[rarity] * modifier * ball_modifier,
+        RARITY_CONFIG[rarity].capture_cap,
+    )
+    assert spawn_chance == min(
+        RARITY_CONFIG[rarity].base_capture * modifier * ball_modifier,
+        RARITY_CONFIG[rarity].capture_cap,
+    )
+
+
+@pytest.mark.parametrize("rarity", (Rarity.LEGENDARY, Rarity.MYTHICAL))
+def test_safari_keeps_ordinary_unique_rarity_parameters(rarity):
+    opportunity = make_opportunity()
+    opportunity.species = replace(opportunity.species, spawn_rarity=rarity)
+
+    assert CaptureChanceCalculator(
+        base_capture_overrides=SAFARI_BASE_CAPTURE,
+    ).calculate(
+        opportunity, CaptureBall.GREAT_BALL
+    ) == CaptureChanceCalculator().calculate(
+        opportunity,
+        CaptureBall.GREAT_BALL,
+    )
+
+
+def test_safari_shiny_has_no_additional_capture_adjustment():
+    regular = make_opportunity(shiny=False)
+    shiny = make_opportunity(shiny=True)
+    calculator = CaptureChanceCalculator(
+        base_capture_overrides=SAFARI_BASE_CAPTURE,
+    )
 
     assert calculator.calculate(
         regular,

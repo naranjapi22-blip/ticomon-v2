@@ -62,6 +62,7 @@ from core.evolution.evolution_cost_policy import (
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
 from core.opportunity.opportunity_factory import OpportunityFactory
+from core.safari.capture_config import SAFARI_BASE_CAPTURE
 from core.safari.capture_resolution import SafariCaptureResolver
 from core.safari.daily_progress import SafariDailyProgressService
 from core.safari.encounter_generator import SafariEncounterGenerator
@@ -258,7 +259,11 @@ def build_core(
     safari_capture_application = SafariCaptureApplicationService(
         activity_repository=safari_activity_repository,
         capture_resolver=SafariCaptureResolver(
-            attempt_service=CaptureAttemptService(chance_calculator),
+            attempt_service=CaptureAttemptService(
+                CaptureChanceCalculator(
+                    base_capture_overrides=SAFARI_BASE_CAPTURE,
+                )
+            ),
             random_source=safari_random,
         ),
         unit_of_work=NeonCaptureUnitOfWork(),

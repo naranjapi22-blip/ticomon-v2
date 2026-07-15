@@ -22,6 +22,7 @@ from core.capture.domain.capture_chance_calculator import CaptureChanceCalculato
 from core.creature.base_stats import BaseStats
 from core.creature.creature_factory import CreatureFactory
 from core.opportunity.opportunity_factory import OpportunityFactory
+from core.safari.capture_config import SAFARI_BASE_CAPTURE
 from core.safari.capture_resolution import SafariCaptureResolver
 from core.safari.domain import (
     SAFARI_LEVEL_CONFIGS,
@@ -245,7 +246,11 @@ class SafariSimulationRunner:
         capture_unit_of_work = InMemoryCaptureUnitOfWork()
         reward_policy = RewardPolicy()
         capture_resolver = SafariCaptureResolver(
-            attempt_service=CaptureAttemptService(CaptureChanceCalculator()),
+            attempt_service=CaptureAttemptService(
+                CaptureChanceCalculator(
+                    base_capture_overrides=SAFARI_BASE_CAPTURE,
+                )
+            ),
             random_source=run_random,
         )
 
