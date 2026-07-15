@@ -288,7 +288,7 @@ async def test_solitary_has_one_regional_slot_and_is_not_a_herd():
 
 
 @pytest.mark.asyncio
-async def test_regional_herd_has_three_independent_examples_and_sets_flag():
+async def test_regional_herd_has_one_population_slot_and_sets_flag():
     factory = DistinctOpportunityFactory()
     generator, _, _, _ = make_generator(
         (make_regional(100),),
@@ -302,17 +302,15 @@ async def test_regional_herd_has_three_independent_examples_and_sets_flag():
     opportunities = [slot.opportunity for slot in result.encounter.slots]
 
     assert result.regional_form == SafariRegionalEncounterForm.HERD
-    assert len(opportunities) == 3
+    assert len(opportunities) == 1
     assert {opportunity.species.id for opportunity in opportunities} == {100}
-    assert len({id(opportunity) for opportunity in opportunities}) == 3
-    assert len({slot.id for slot in result.encounter.slots}) == 3
+    assert len({id(opportunity) for opportunity in opportunities}) == 1
+    assert len({slot.id for slot in result.encounter.slots}) == 1
     assert result.encounter.is_regional_herd
     shiny_values = [opportunity.is_shiny for opportunity in opportunities]
-    assert shiny_values == [False, True, False]
+    assert shiny_values == [False]
     assert [opportunity.initial_form.name for opportunity in opportunities] == [
         "Regional 1",
-        "Regional 2",
-        "Regional 3",
     ]
 
 

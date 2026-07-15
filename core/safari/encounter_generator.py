@@ -363,11 +363,7 @@ class SafariEncounterGenerator:
         weighted_candidates = [
             (species, self._weight_for(species, context, event))
             for species in catalog
-            if (
-                self._is_regional_candidate(species, context, event)
-                if composition == SafariComposition.SOLITARY
-                else self._is_candidate(species, context, event)
-            )
+            if self._is_candidate(species, context, event)
             and (composition != SafariComposition.BABY_NEST or species.metadata.is_baby)
         ]
         selectable_candidates = [
@@ -424,7 +420,7 @@ class SafariEncounterGenerator:
             )
             selected_species = (regional, *ordinary)
         elif regional_form == SafariRegionalEncounterForm.HERD:
-            selected_species = (regional, regional, regional)
+            selected_species = (regional,)
         else:
             selected_species = (regional,)
 
@@ -528,7 +524,7 @@ class SafariEncounterGenerator:
         if composition == SafariComposition.HERD:
             self._require_candidates(composition, candidate_count, 1)
             species = self._select_without_replacement(weighted_candidates, 1)[0]
-            return (species,) * self._random_source.choice((3, 4, 5))
+            return (species,)
         if composition == SafariComposition.SOLITARY:
             self._require_candidates(composition, candidate_count, 1)
             return self._select_without_replacement(weighted_candidates, 1)

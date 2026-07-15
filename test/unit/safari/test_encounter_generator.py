@@ -431,9 +431,7 @@ async def test_duel_fails_instead_of_degrading_with_one_candidate():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("slot_count", [3, 4, 5])
-async def test_herd_repeats_species_with_independent_slots_and_opportunities(
-    slot_count,
-):
+async def test_herd_uses_one_population_slot(slot_count):
     catalog = (make_species(1), make_species(2))
     random_source = FakeWeightedRandom(selected_ids=(2,), choice_values=(slot_count,))
     generator, _, factory, _ = make_generator(catalog, random_source)
@@ -441,16 +439,16 @@ async def test_herd_repeats_species_with_independent_slots_and_opportunities(
     encounter = await generator.generate(make_context(), SafariComposition.HERD)
 
     assert encounter.composition == SafariComposition.HERD
-    assert len(encounter.slots) == slot_count
+    assert len(encounter.slots) == 1
     assert {slot.species_id for slot in encounter.slots} == {2}
-    assert len({slot.id for slot in encounter.slots}) == slot_count
-    assert len({id(slot.opportunity) for slot in encounter.slots}) == slot_count
-    assert factory.species == [catalog[1]] * slot_count
+    assert len({slot.id for slot in encounter.slots}) == 1
+    assert len({id(slot.opportunity) for slot in encounter.slots}) == 1
+    assert factory.species == [catalog[1]]
     assert not encounter.is_regional_herd
 
 
 @pytest.mark.asyncio
-async def test_herd_preserves_independently_generated_shiny_and_variant_values():
+async def test_herd_preserves_generated_shiny_and_variant_values():
     repository = FakeSpeciesRepository((make_species(1),))
     factory = DistinctHerdOpportunityFactory()
     generator = SafariEncounterGenerator(
@@ -461,20 +459,17 @@ async def test_herd_preserves_independently_generated_shiny_and_variant_values()
 
     encounter = await generator.generate(make_context(), SafariComposition.HERD)
 
-    shiny_values = [slot.opportunity.is_shiny for slot in encounter.slots]
-    assert shiny_values == [False, True, False]
+    assert [slot.opportunity.is_shiny for slot in encounter.slots] == [False]
     assert [slot.opportunity.initial_form.name for slot in encounter.slots] == [
-        "Form 1",
-        "Form 2",
-        "Form 3",
+        "Form 1"
     ]
 
 
 @pytest.mark.asyncio
-async def test_solitary_selects_one_weighted_regional_species():
+async def test_solitary_does_not_select_regional_species():
     ordinary = make_species(1)
     regional = make_regional(2)
-    random_source = FakeWeightedRandom(selected_ids=(2,))
+    random_source = FakeWeightedRandom(selected_ids=(1,))
     generator, _, _, _ = make_generator(
         (ordinary, regional),
         random_source,
@@ -482,13 +477,9 @@ async def test_solitary_selects_one_weighted_regional_species():
 
     encounter = await generator.generate(make_context(), SafariComposition.SOLITARY)
 
-    assert encounter.slots[0].capture_policy is SafariCapturePolicy.SHARED
-
     assert encounter.composition == SafariComposition.SOLITARY
-    assert [slot.species_id for slot in encounter.slots] == [2]
-    assert all(
-        is_regional_species(slot.opportunity.species) for slot in encounter.slots
-    )
+    assert [slot.species_id for slot in encounter.slots] == [1]
+    assert encounter.slots[0].capture_policy is SafariCapturePolicy.SHARED
     assert not any(
         slot.opportunity.species.metadata.is_legendary
         or slot.opportunity.species.metadata.is_mythical
@@ -514,7 +505,7 @@ async def test_solitary_falls_back_to_another_special_when_no_regional_is_availa
         ),
     )
 
-    assert encounter.encounter.composition == SafariComposition.DUEL
+    assert encounter.encounter.composition == SafariComposition.SOLITARY
 
 
 @pytest.mark.asyncio
@@ -587,12 +578,7 @@ async def test_all_common_compositions_keep_base_exclusions(composition):
         composition,
     )
 
-    if composition is SafariComposition.SOLITARY:
-        assert all(
-            is_regional_species(slot.opportunity.species) for slot in encounter.slots
-        )
-    else:
-        assert {slot.species_id for slot in encounter.slots} <= {1, 2}
+    assert {slot.species_id for slot in encounter.slots} <= {1, 2}
 
 
 @pytest.mark.asyncio
