@@ -1,13 +1,12 @@
 from datetime import UTC, datetime
 
 from application.achievement.contracts import (
-    AchievementActivity,
     AchievementActivityRepository,
-    AchievementActivityType,
     AchievementProgress,
     AchievementUnlock,
     AchievementUnlockRepository,
 )
+from core.achievement.activity import AchievementActivity, AchievementActivityType
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 

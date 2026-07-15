@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Mapping
 from uuid import UUID
 
 from application.safari.activity_state import SafariActivityTimingSnapshot
+from core.achievement.unlock_result import AchievementUnlockResult
 from core.candy.candy_bundle import CandyBundle
 from core.creature.creature import Creature
 from core.safari.activity_repository import SafariActivity
@@ -290,3 +291,6 @@ class ResolveSafariCaptureResult:
     rewards_by_trainer: Mapping[int, CandyBundle]
     balls_committed_by_trainer: Mapping[int, int]
     next_session_status: SafariSessionStatus
+    achievements: Mapping[int, tuple[AchievementUnlockResult, ...]] = field(
+        default_factory=dict
+    )

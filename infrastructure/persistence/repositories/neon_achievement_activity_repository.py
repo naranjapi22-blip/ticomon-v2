@@ -1,9 +1,8 @@
 from application.achievement.contracts import (
-    AchievementActivity,
     AchievementActivityRepository,
-    AchievementActivityType,
     AchievementProgress,
 )
+from core.achievement.activity import AchievementActivity, AchievementActivityType
 from infrastructure.db_config import get_pool
 
 

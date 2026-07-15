@@ -22,6 +22,11 @@ from application.safari.results import (
     SafariParticipantCaptureApplicationResult,
     SelectSafariCaptureResult,
 )
+from core.achievement.activity import (
+    AchievementActivity,
+    AchievementActivityType,
+    AchievementSource,
+)
 from core.candy.candy_bundle import CandyBundle
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_unit_of_work import CaptureUnitOfWork
@@ -71,6 +76,7 @@ class SafariCaptureApplicationService:
         creature_factory: type[CreatureFactory] = CreatureFactory,
         encounter_generator: SafariEncounterGenerator | None = None,
         random_source: object | None = None,
+        achievement_award_service=None,
     ) -> None:
         self._activity_repository = activity_repository
         self._capture_resolver = capture_resolver
@@ -79,6 +85,7 @@ class SafariCaptureApplicationService:
         self._creature_factory = creature_factory
         self._encounter_generator = encounter_generator
         self._random_source = random_source
+        self._achievement_award_service = achievement_award_service
 
     async def select_capture(
         self,
@@ -276,6 +283,7 @@ class SafariCaptureApplicationService:
                 session.status.value,
             )
 
+            achievements = await self._award_captures(slot_application_results)
             return ResolveSafariCaptureResult(
                 session=session,
                 encounter_resolution=resolution,
@@ -284,6 +292,7 @@ class SafariCaptureApplicationService:
                 rewards_by_trainer=rewards_by_trainer,
                 balls_committed_by_trainer=resolution.balls_committed_by_trainer,
                 next_session_status=session.status,
+                achievements=achievements,
             )
 
     async def _persist_resolution(
@@ -377,6 +386,7 @@ class SafariCaptureApplicationService:
                         opportunity=opportunity,
                     )
                     saved_creature = await transaction.save_creature(creature)
+                    await self._record_activities(transaction, saved_creature)
                     reward = self._reward_policy.reward_for(saved_creature)
                     trainer_reward = trainer_reward.merge(reward)
                     persisted_capture = SafariPersistedCapture(
@@ -516,6 +526,72 @@ class SafariCaptureApplicationService:
             context,
             compositions,
         )
+
+    @staticmethod
+    async def _record_activities(transaction, creature) -> None:
+        key = f"creature:{creature.id}"
+        activities = [
+            AchievementActivity(
+                trainer_id=creature.trainer_id,
+                activity_type=AchievementActivityType.CAPTURE,
+                idempotency_key=key,
+                species_id=creature.species.id,
+                source=AchievementSource.SAFARI,
+            ),
+            AchievementActivity(
+                trainer_id=creature.trainer_id,
+                activity_type=AchievementActivityType.SAFARI_CAPTURE,
+                idempotency_key=key,
+                species_id=creature.species.id,
+                source=AchievementSource.SAFARI,
+            ),
+            AchievementActivity(
+                trainer_id=creature.trainer_id,
+                activity_type=AchievementActivityType.SPECIES_DISCOVERED,
+                idempotency_key=key,
+                species_id=creature.species.id,
+                source=AchievementSource.SAFARI,
+            ),
+        ]
+        if creature.is_shiny:
+            activities.append(
+                AchievementActivity(
+                    trainer_id=creature.trainer_id,
+                    activity_type=AchievementActivityType.SHINY_CAPTURE,
+                    idempotency_key=key,
+                    species_id=creature.species.id,
+                    source=AchievementSource.SAFARI,
+                )
+            )
+        for activity in activities:
+            await transaction.record_achievement_activity(activity)
+
+    async def _award_captures(self, slot_results):
+        if self._achievement_award_service is None:
+            return {}
+        awarded = {}
+        for result in slot_results:
+            for participant_result in result.participant_results:
+                creature = participant_result.creature
+                if creature is None:
+                    continue
+                try:
+                    unlocks = await self._achievement_award_service.award_for_capture(
+                        creature.trainer_id,
+                        creature.species,
+                        is_shiny=creature.is_shiny,
+                        is_safari=True,
+                    )
+                except Exception:
+                    logger.exception(
+                        "achievement award failed trainer_id=%s creature_id=%s",
+                        creature.trainer_id,
+                        creature.id,
+                    )
+                    unlocks = ()
+                if unlocks:
+                    awarded[creature.trainer_id] = unlocks
+        return MappingProxyType(awarded)
 
     @staticmethod
     def _encounter_compositions_for(

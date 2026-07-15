@@ -1,6 +1,12 @@
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from core.achievement.activity import (
+    AchievementActivity,
+    AchievementActivityType,
+    AchievementSource,
+)
 from core.candy.candy_bundle import CandyBundle
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_application_result import (
@@ -29,6 +35,7 @@ class CaptureApplicationService:
         spawn_session_repository: SpawnSessionRepository,
         daily_progress_service: SafariDailyProgressService | None = None,
         clock: Callable[[], datetime] | None = None,
+        achievement_award_service=None,
     ) -> None:
         self._capture_service = capture_service
         self._unit_of_work = unit_of_work
@@ -38,6 +45,7 @@ class CaptureApplicationService:
         )
         self._spawn_session_repository = spawn_session_repository
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._achievement_award_service = achievement_award_service
 
     async def capture(
         self,
@@ -82,6 +90,11 @@ class CaptureApplicationService:
                 inventory = await transaction.get_candy_inventory(trainer_id)
                 inventory.add(reward)
                 await transaction.save_candy_inventory(trainer_id, inventory)
+                await self._record_activities(
+                    transaction,
+                    creature,
+                    AchievementSource.NORMAL,
+                )
 
                 cycle_date = captured_at.date()
                 daily_world = await transaction.get_or_create_daily_world(
@@ -113,13 +126,66 @@ class CaptureApplicationService:
                 for unlock in progress.created_unlocks:
                     await transaction.save_unlock(unlock)
 
-            await self._spawn_session_repository.clear(
-                guild_id,
-            )
-
+            achievements = await self._award(creature, is_safari=False)
+            await self._spawn_session_repository.clear(guild_id)
             return CaptureApplicationResult(
                 attempt=result.attempt,
                 success=True,
                 creature=creature,
                 reward=reward,
+                achievements=achievements,
             )
+
+    @staticmethod
+    async def _record_activities(
+        transaction,
+        creature,
+        source: AchievementSource,
+    ) -> None:
+        key = f"creature:{creature.id}"
+        activities = [
+            AchievementActivity(
+                trainer_id=creature.trainer_id,
+                activity_type=AchievementActivityType.CAPTURE,
+                idempotency_key=key,
+                species_id=creature.species.id,
+                source=source,
+            ),
+            AchievementActivity(
+                trainer_id=creature.trainer_id,
+                activity_type=AchievementActivityType.SPECIES_DISCOVERED,
+                idempotency_key=key,
+                species_id=creature.species.id,
+                source=source,
+            ),
+        ]
+        if creature.is_shiny:
+            activities.append(
+                AchievementActivity(
+                    trainer_id=creature.trainer_id,
+                    activity_type=AchievementActivityType.SHINY_CAPTURE,
+                    idempotency_key=key,
+                    species_id=creature.species.id,
+                    source=source,
+                )
+            )
+        for activity in activities:
+            await transaction.record_achievement_activity(activity)
+
+    async def _award(self, creature, *, is_safari: bool):
+        if self._achievement_award_service is None:
+            return ()
+        try:
+            return await self._achievement_award_service.award_for_capture(
+                creature.trainer_id,
+                creature.species,
+                is_shiny=creature.is_shiny,
+                is_safari=is_safari,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "achievement award failed trainer_id=%s creature_id=%s",
+                creature.trainer_id,
+                creature.id,
+            )
+            return ()

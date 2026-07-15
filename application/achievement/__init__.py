@@ -1,11 +1,14 @@
+from application.achievement.award_service import CaptureAchievementAwardService
 from application.achievement.contracts import (
-    AchievementActivity,
     AchievementActivityRepository,
-    AchievementActivityType,
     AchievementProgress,
-    AchievementSource,
     AchievementUnlock,
     AchievementUnlockRepository,
+)
+from core.achievement.activity import (
+    AchievementActivity,
+    AchievementActivityType,
+    AchievementSource,
 )
 
 __all__ = [
@@ -16,4 +19,5 @@ __all__ = [
     "AchievementSource",
     "AchievementUnlock",
     "AchievementUnlockRepository",
+    "CaptureAchievementAwardService",
 ]

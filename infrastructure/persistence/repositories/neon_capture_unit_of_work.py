@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, date, datetime
 
+from core.achievement.activity import AchievementActivity
 from core.candy.candy_inventory import CandyInventory
 from core.capture.application.capture_unit_of_work import (
     CaptureTransaction,
@@ -127,6 +128,26 @@ class _NeonCaptureTransaction(CaptureTransaction):
                 """,
                 [(trainer_id, candy_type.value, amount) for candy_type, amount in rows],
             )
+
+    async def record_achievement_activity(self, activity: AchievementActivity) -> bool:
+        row = await self._connection.fetchrow(
+            """
+            INSERT INTO trainer_achievement_activities (
+                trainer_id, activity_type, species_id, source, occurred_at,
+                idempotency_key
+            )
+            VALUES ($1, $2, $3, $4, COALESCE($5, NOW()), $6)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """,
+            activity.trainer_id,
+            activity.activity_type.value,
+            activity.species_id,
+            activity.source.value if activity.source else None,
+            activity.occurred_at,
+            activity.idempotency_key,
+        )
+        return row is not None
 
     async def get_or_create_daily_world(
         self,

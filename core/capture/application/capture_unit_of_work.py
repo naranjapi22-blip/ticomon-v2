@@ -3,6 +3,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from core.achievement.activity import AchievementActivity
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature import Creature
 from core.safari.daily_progress import SafariDailyWorld
@@ -31,6 +32,10 @@ class CaptureTransaction(ABC):
         inventory: CandyInventory,
     ) -> None:
         """Persists the trainer candy inventory within this transaction."""
+
+    async def record_achievement_activity(self, activity: AchievementActivity) -> bool:
+        """Records a capture fact inside this transaction when supported."""
+        return True
 
     async def get_or_create_daily_world(
         self,
@@ -75,7 +80,6 @@ class CaptureTransaction(ABC):
 
         raise NotImplementedError
 
-    @abstractmethod
     @abstractmethod
     async def save_unlock(self, unlock: SafariUnlock) -> SaveUnlockResult:
         """Appends an unlock to the persistent FIFO queue."""

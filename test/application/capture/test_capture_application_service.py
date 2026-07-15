@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from core.achievement.unlock_result import AchievementUnlockResult
+from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.candy.candy_type import CandyType
 from core.candy.reward_policy import RewardPolicy
@@ -47,6 +49,18 @@ class _CaptureService:
         return self.result
 
 
+class _AwardService:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.calls = []
+
+    async def award_for_capture(self, trainer_id, species, *, is_shiny, is_safari):
+        self.calls.append((trainer_id, species, is_shiny, is_safari))
+        if self.fail:
+            raise RuntimeError("award")
+        return (AchievementUnlockResult("first_capture", CandyBundle()),)
+
+
 class _Transaction(CaptureTransaction):
     def __init__(self, *, world=None, fail_at=None, events=None) -> None:
         self.daily_world = world
@@ -58,6 +72,7 @@ class _Transaction(CaptureTransaction):
         self.saved_unlocks = []
         self.saved_unlock_results = []
         self.active_trainers: set[int] = set()
+        self.activities = []
 
     async def save_creature(self, creature):
         self._record("creature")
@@ -70,6 +85,11 @@ class _Transaction(CaptureTransaction):
 
     async def save_candy_inventory(self, trainer_id, inventory):
         self._record("candies_save")
+
+    async def record_achievement_activity(self, activity):
+        self._record("achievement_activity")
+        self.activities.append(activity)
+        return True
 
     async def get_or_create_daily_world(self, guild_id, cycle_date):
         self._record("daily_world_get")
@@ -253,6 +273,10 @@ async def test_success_persists_creature_candies_and_creates_world():
     assert "world_get" not in transaction.events
     assert "world_save" not in transaction.events
     assert transaction.events[-2:] == ["commit", "clear"]
+    assert [activity.activity_type.value for activity in transaction.activities] == [
+        "capture",
+        "species_discovered",
+    ]
     assert await spawn.get_active(GUILD_ID) is None
 
 
@@ -310,6 +334,17 @@ async def test_all_unlocks_from_progress_result_are_saved_in_order():
             ["begin", "creature", "candies_get", "candies_save", "rollback"],
         ),
         (
+            "achievement_activity",
+            [
+                "begin",
+                "creature",
+                "candies_get",
+                "candies_save",
+                "achievement_activity",
+                "rollback",
+            ],
+        ),
+        (
             "daily_world_save",
             [
                 "begin",
@@ -364,7 +399,13 @@ async def test_persistence_failure_rolls_back_and_keeps_spawn(
     with pytest.raises(RuntimeError, match=failure):
         await service.capture(TRAINER_ID, GUILD_ID)
 
-    assert transaction.events == expected_events
+    if failure == "achievement_activity":
+        assert transaction.events == expected_events
+    else:
+        actual_without_activities = [
+            event for event in transaction.events if event != "achievement_activity"
+        ]
+        assert actual_without_activities == expected_events
     assert "world_get" not in transaction.events
     assert "world_save" not in transaction.events
     assert "clear" not in transaction.events
@@ -399,6 +440,22 @@ async def test_concurrent_double_click_persists_only_one_capture():
     assert await spawn.get_active(GUILD_ID) is None
 
 
+@pytest.mark.asyncio
+async def test_capture_awards_after_commit_and_keeps_capture_when_award_fails():
+    award_service = _AwardService(fail=True)
+    service, transaction, _ = await _service(
+        success=True,
+        achievement_award_service=award_service,
+    )
+
+    result = await service.capture(TRAINER_ID, GUILD_ID)
+
+    assert result.achievements == ()
+    assert transaction.events[-2:] == ["commit", "clear"]
+    assert len(transaction.activities) == 2
+    assert len(award_service.calls) == 1
+
+
 async def _service(
     *,
     success,
@@ -406,6 +463,7 @@ async def _service(
     fail_at=None,
     fail_clear=False,
     progress_service=None,
+    achievement_award_service=None,
 ):
     species = SpeciesBuilder().with_types(["fire", "water"]).build()
     opportunity = OpportunityFactory.create(species)
@@ -437,6 +495,7 @@ async def _service(
         spawn_session_repository=spawn,
         daily_progress_service=progress_service or SafariDailyProgressService(),
         clock=lambda: NOW,
+        achievement_award_service=achievement_award_service,
     )
     return service, transaction, spawn
 

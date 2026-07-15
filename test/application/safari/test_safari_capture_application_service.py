@@ -86,6 +86,7 @@ class _Transaction(CaptureTransaction):
         self._inventories: dict[int, CandyInventory] = {}
         self.saved_creatures = []
         self.saved_inventories = []
+        self.activities = []
 
     async def save_creature(self, creature):
         self._record("creature")
@@ -107,6 +108,11 @@ class _Transaction(CaptureTransaction):
         self._record("candies_save")
         self.saved_inventories.append((trainer_id, inventory))
         self._inventories[trainer_id] = inventory
+
+    async def record_achievement_activity(self, activity):
+        self._record("achievement_activity")
+        self.activities.append(activity)
+        return True
 
     async def save_unlock(self, unlock):
         return SaveUnlockResult(unlock, created=True)
@@ -334,7 +340,10 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
 
     result = await service.resolve_capture(session.guild_id)
 
-    assert transaction.events == [
+    events_without_activities = [
+        event for event in transaction.events if event != "achievement_activity"
+    ]
+    assert events_without_activities == [
         "begin",
         "creature",
         "candies_get",
@@ -343,6 +352,14 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
         "candies_get",
         "candies_save",
         "commit",
+    ]
+    assert [activity.activity_type.value for activity in transaction.activities] == [
+        "capture",
+        "safari_capture",
+        "species_discovered",
+        "capture",
+        "safari_capture",
+        "species_discovered",
     ]
     assert result.next_session_status is SafariSessionStatus.ROUTE_DECISION
     assert result.slot_results[0].creature is not None

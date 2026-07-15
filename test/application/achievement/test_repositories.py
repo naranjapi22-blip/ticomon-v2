@@ -2,10 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from application.achievement.contracts import (
-    AchievementActivity,
-    AchievementActivityType,
-)
+from core.achievement.activity import AchievementActivity, AchievementActivityType
 from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_type import CandyType

@@ -2,6 +2,7 @@ import logging
 import random
 from dataclasses import dataclass
 
+from application.achievement.award_service import CaptureAchievementAwardService
 from application.adventure.start_adventure.start_adventure_application_service import (
     StartAdventureApplicationService,
 )
@@ -87,6 +88,12 @@ from core.spawn.weighted_selector import WeightedSelector
 from core.stats.stat_calculator import StatCalculator
 from infrastructure.evolution.neon_evolution_repository import (
     NeonEvolutionRepository,
+)
+from infrastructure.persistence.repositories import (
+    neon_achievement_activity_repository,
+)
+from infrastructure.persistence.repositories.neon_achievement_unlock_repository import (
+    NeonAchievementUnlockRepository,
 )
 from infrastructure.persistence.repositories.neon_candy_repository import (
     NeonCandyRepository,
@@ -195,6 +202,14 @@ def build_core(
         species_repository=species_repository,
     )
     candy_repository = NeonCandyRepository()
+    achievement_activity_repository = (
+        neon_achievement_activity_repository.NeonAchievementActivityRepository()
+    )
+    achievement_unlock_repository = NeonAchievementUnlockRepository()
+    capture_achievement_award_service = CaptureAchievementAwardService(
+        achievement_activity_repository,
+        achievement_unlock_repository,
+    )
     evolution_repository = NeonEvolutionRepository()
     reward_policy = RewardPolicy()
 
@@ -237,6 +252,7 @@ def build_core(
         reward_policy=reward_policy,
         spawn_session_repository=spawn_session_repository,
         daily_progress_service=SafariDailyProgressService(),
+        achievement_award_service=capture_achievement_award_service,
     )
 
     safari_random = random.Random()
@@ -270,6 +286,7 @@ def build_core(
         reward_policy=reward_policy,
         encounter_generator=safari_encounter_generator,
         random_source=safari_random,
+        achievement_award_service=capture_achievement_award_service,
     )
     safari_finish_application = FinishSafariApplicationService(
         activity_repository=safari_activity_repository,
