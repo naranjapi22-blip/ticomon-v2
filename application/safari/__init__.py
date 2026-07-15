@@ -43,6 +43,7 @@ from .results import (
     SafariEncounterSummary,
     SafariExtraordinarySummary,
     SafariFinalSummary,
+    SafariParticipantCaptureApplicationResult,
     SafariParticipantSummary,
     SafariRouteSegmentSummary,
     SafariRouteSummary,
@@ -108,4 +109,5 @@ __all__ = [
     "ResolveSafariRouteVoteResult",
     "SafariCaptureSelectionState",
     "SafariCaptureSlotApplicationResult",
+    "SafariParticipantCaptureApplicationResult",
 ]

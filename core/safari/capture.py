@@ -45,20 +45,30 @@ class SafariPersistedSlotResult:
     slot_id: UUID
     status: SafariSlotStatus
     capture: SafariPersistedCapture | None = None
+    captures: tuple[SafariPersistedCapture, ...] = ()
 
     def __post_init__(self) -> None:
         _require_non_empty_uuid(self.slot_id, "slot_id")
+        captures = tuple(self.captures)
+        if self.capture is not None:
+            if captures and self.capture not in captures:
+                raise ValueError("capture must be included in captures.")
+            if not captures:
+                captures = (self.capture,)
+
+        if any(capture.slot_id != self.slot_id for capture in captures):
+            raise ValueError("capture slot_ids must match the slot result.")
 
         if self.status == SafariSlotStatus.CAPTURED:
-            if self.capture is None:
+            if not captures:
                 raise ValueError("captured slot results require a capture.")
-            if self.capture.slot_id != self.slot_id:
-                raise ValueError("capture slot_id must match the slot result.")
+            object.__setattr__(self, "captures", captures)
             return
 
         if self.status == SafariSlotStatus.ESCAPED:
-            if self.capture is not None:
+            if captures:
                 raise ValueError("escaped slot results cannot contain a capture.")
+            object.__setattr__(self, "captures", captures)
             return
 
         raise ValueError("persisted slot result must be final.")

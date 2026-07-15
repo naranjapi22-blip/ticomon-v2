@@ -15,6 +15,7 @@ from core.safari.capture import (
 )
 from core.safari.capture_resolution import (
     SafariEncounterResolution,
+    SafariParticipantOutcome,
     SafariSlotOutcome,
 )
 from core.safari.domain import (
@@ -260,6 +261,16 @@ class CloseSafariCaptureSelectionResult:
 @dataclass(frozen=True, slots=True)
 class SafariCaptureSlotApplicationResult:
     slot_outcome: SafariSlotOutcome
+    creature: Creature | None
+    persisted_capture: SafariPersistedCapture | None
+    reward: CandyBundle
+    collection_number: int | None
+    participant_results: tuple["SafariParticipantCaptureApplicationResult", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SafariParticipantCaptureApplicationResult:
+    participant_outcome: SafariParticipantOutcome
     creature: Creature | None
     persisted_capture: SafariPersistedCapture | None
     reward: CandyBundle

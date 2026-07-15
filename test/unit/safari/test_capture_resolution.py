@@ -15,6 +15,8 @@ from core.safari import (
     SafariEncounterResolution,
     SafariEncounterSlot,
     SafariEncounterStatus,
+    SafariParticipantOutcome,
+    SafariSlotOutcome,
     SafariSlotStatus,
 )
 from core.safari.capture_resolution import SafariCaptureResolutionError
@@ -176,6 +178,42 @@ def test_first_success_stops_queue_but_all_balls_remain_committed():
     assert resolution.attempts_executed == 1
     assert resolution.balls_committed_by_trainer == {1: 3, 2: 2}
     assert len(calculator.calls) == 1
+    assert outcome.participant_outcomes == (
+        SafariParticipantOutcome(
+            trainer_id=1,
+            balls_committed=3,
+            attempts_executed=0,
+            balls_spent=0,
+            captured=False,
+        ),
+        SafariParticipantOutcome(
+            trainer_id=2,
+            balls_committed=2,
+            attempts_executed=1,
+            balls_spent=1,
+            captured=True,
+            final_opportunity=outcome.final_opportunity,
+        ),
+    )
+
+
+def test_slot_outcome_accepts_multiple_participant_outcomes():
+    slot = make_slot(1)
+    participant_outcomes = (
+        SafariParticipantOutcome(1, 2, 2, 2, False),
+        SafariParticipantOutcome(2, 1, 0, 0, False),
+    )
+    outcome = SafariSlotOutcome(
+        slot_id=slot.id,
+        status=SafariSlotStatus.ESCAPED,
+        winner_trainer_id=None,
+        attempts=(),
+        balls_committed_by_trainer={1: 2, 2: 1},
+        final_opportunity=slot.opportunity,
+        participant_outcomes=participant_outcomes,
+    )
+
+    assert outcome.participant_outcomes == participant_outcomes
 
 
 def test_multiple_balls_create_multiple_queue_positions():

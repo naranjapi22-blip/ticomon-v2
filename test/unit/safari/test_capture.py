@@ -53,6 +53,25 @@ def test_persisted_slot_result_explicitly_describes_captured_or_escaped():
 
     assert captured.capture is capture
     assert escaped.capture is None
+    assert captured.captures == (capture,)
+    assert escaped.captures == ()
+
+
+def test_persisted_slot_result_accepts_multiple_captures_for_one_slot():
+    slot_id = uuid4()
+    captures = (
+        SafariPersistedCapture(1, slot_id, 101),
+        SafariPersistedCapture(2, slot_id, 202),
+    )
+
+    result = SafariPersistedSlotResult(
+        slot_id,
+        SafariSlotStatus.CAPTURED,
+        captures=captures,
+    )
+
+    assert result.capture is None
+    assert result.captures == captures
 
 
 def test_persisted_slot_result_rejects_invalid_final_state():

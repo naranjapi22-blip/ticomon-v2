@@ -9,6 +9,7 @@ from .capture_resolution import (
     SafariCaptureAttempt,
     SafariCaptureResolver,
     SafariEncounterResolution,
+    SafariParticipantOutcome,
     SafariSlotOutcome,
 )
 from .daily_active_trainer_repository import SafariDailyActiveTrainerRepository
@@ -139,6 +140,7 @@ __all__ = [
     "SafariEncounterSlot",
     "SafariEncounterStatus",
     "SafariEncounterResolution",
+    "SafariParticipantOutcome",
     "SafariExtraordinaryFlags",
     "SafariFinishReason",
     "SafariGeneratedEncounter",

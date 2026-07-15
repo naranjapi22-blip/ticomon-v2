@@ -51,6 +51,28 @@ class SafariCaptureAttempt:
 
 
 @dataclass(frozen=True, slots=True)
+class SafariParticipantOutcome:
+    trainer_id: int
+    balls_committed: int
+    attempts_executed: int
+    balls_spent: int
+    captured: bool
+    final_opportunity: Opportunity | None = None
+
+    def __post_init__(self) -> None:
+        if self.trainer_id <= 0:
+            raise ValueError("trainer_id must be positive.")
+        if self.balls_committed <= 0:
+            raise ValueError("balls_committed must be positive.")
+        if self.attempts_executed < 0:
+            raise ValueError("attempts_executed cannot be negative.")
+        if self.balls_spent < 0 or self.balls_spent > self.balls_committed:
+            raise ValueError("balls_spent must be between zero and balls_committed.")
+        if self.attempts_executed > self.balls_committed:
+            raise ValueError("attempts_executed cannot exceed balls_committed.")
+
+
+@dataclass(frozen=True, slots=True)
 class SafariSlotOutcome:
     slot_id: UUID
     status: SafariSlotStatus
@@ -58,6 +80,7 @@ class SafariSlotOutcome:
     attempts: tuple[SafariCaptureAttempt, ...]
     balls_committed_by_trainer: Mapping[int, int]
     final_opportunity: Opportunity
+    participant_outcomes: tuple[SafariParticipantOutcome, ...] = ()
 
     def __post_init__(self) -> None:
         _require_non_empty_uuid(self.slot_id, "slot_id")
@@ -101,12 +124,35 @@ class SafariSlotOutcome:
         elif successful_attempts:
             raise ValueError("escaped outcomes cannot contain successful attempts.")
 
+        participant_outcomes = tuple(self.participant_outcomes)
+        if not participant_outcomes:
+            participant_ids = sorted(set(committed) | set(executed_by_trainer))
+            participant_outcomes = tuple(
+                SafariParticipantOutcome(
+                    trainer_id=trainer_id,
+                    balls_committed=committed[trainer_id],
+                    attempts_executed=executed_by_trainer.get(trainer_id, 0),
+                    balls_spent=executed_by_trainer.get(trainer_id, 0),
+                    captured=trainer_id == self.winner_trainer_id,
+                    final_opportunity=(
+                        self.final_opportunity
+                        if trainer_id in executed_by_trainer
+                        else None
+                    ),
+                )
+                for trainer_id in participant_ids
+            )
+        participant_ids = [item.trainer_id for item in participant_outcomes]
+        if len(participant_ids) != len(set(participant_ids)):
+            raise ValueError("participant outcome trainer IDs must be unique.")
+
         object.__setattr__(self, "attempts", attempts)
         object.__setattr__(
             self,
             "balls_committed_by_trainer",
             MappingProxyType(committed),
         )
+        object.__setattr__(self, "participant_outcomes", participant_outcomes)
 
     @property
     def balls_committed(self) -> int:
