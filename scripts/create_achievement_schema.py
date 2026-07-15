@@ -9,8 +9,7 @@ async def create_achievement_schema() -> None:
 
     async with pool.acquire() as connection:
         async with connection.transaction():
-            await connection.execute(
-                """
+            await connection.execute("""
                 CREATE TABLE IF NOT EXISTS trainer_achievement_activities (
                     id BIGSERIAL PRIMARY KEY,
                     trainer_id BIGINT NOT NULL
@@ -44,28 +43,22 @@ async def create_achievement_schema() -> None:
                         ),
                     UNIQUE (trainer_id, activity_type, idempotency_key)
                 )
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE INDEX IF NOT EXISTS trainer_achievement_activities_progress_idx
                 ON trainer_achievement_activities (
                     trainer_id,
                     activity_type,
                     occurred_at
                 )
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS
                     trainer_achievement_discovered_species_unique_idx
                 ON trainer_achievement_activities (trainer_id, species_id)
                 WHERE activity_type = 'species_discovered'
-                """
-            )
-            await connection.execute(
-                """
+                """)
+            await connection.execute("""
                 CREATE TABLE IF NOT EXISTS trainer_achievement_unlocks (
                     trainer_id BIGINT NOT NULL
                         REFERENCES trainers(trainer_id),
@@ -75,8 +68,7 @@ async def create_achievement_schema() -> None:
                         CHECK (jsonb_typeof(rewarded_candies) = 'object'),
                     PRIMARY KEY (trainer_id, achievement_id)
                 )
-                """
-            )
+                """)
 
     await close_pool()
 
