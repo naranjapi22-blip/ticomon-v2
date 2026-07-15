@@ -345,10 +345,34 @@ async def test_simulation_report_is_json_serializable_and_balanced():
     assert scenario["balls"]["balanced"] is True
     assert (
         scenario["balls"]["initial"]
-        == scenario["balls"]["committed"] + scenario["balls"]["remaining"]
+        == scenario["balls"]["spent"] + scenario["balls"]["remaining"]
     )
+    assert scenario["balls"]["spent"] == scenario["balls"]["attempts_executed"]
     assert scenario["encounters"]["completed"] <= 5
     assert scenario["finalization"]["reasons"]
+
+
+def test_balance_uses_spent_balls_not_committed_balls():
+    from simulation.safari.metrics import ScenarioMetrics
+
+    metrics = ScenarioMetrics(
+        level=1,
+        participant_count=2,
+        strategy_name="random",
+        catalog_species_count=0,
+        catalog_regional_species_count=0,
+    )
+    metrics.balls_initial_total = 10
+    metrics.balls_committed_total = 7
+    metrics.attempts_executed_total = 4
+    metrics.balls_not_executed_total = 3
+    metrics.balls_remaining_total = 6
+
+    balls = metrics.to_dict()["balls"]
+
+    assert balls["spent"] == 4
+    assert balls["committed_not_executed"] == 3
+    assert balls["balanced"] is True
 
 
 def test_balance_checks_report_anomalies_for_empty_metrics():

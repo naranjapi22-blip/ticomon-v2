@@ -346,11 +346,12 @@ class ScenarioMetrics:
             "balls": {
                 "initial": self.balls_initial_total,
                 "committed": self.balls_committed_total,
+                "spent": self.attempts_executed_total,
                 "remaining": self.balls_remaining_total,
                 "attempts_executed": self.attempts_executed_total,
                 "committed_not_executed": self.balls_not_executed_total,
                 "balanced": self.balls_initial_total
-                == self.balls_committed_total + self.balls_remaining_total,
+                == self.attempts_executed_total + self.balls_remaining_total,
             },
             "captures": {
                 "total": self.captures_total,
