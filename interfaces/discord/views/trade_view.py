@@ -19,6 +19,7 @@ from core.trade.exceptions import (
     TradeNotParticipant,
 )
 from core.trade.trade_status import TradeStatus
+from interfaces.discord.achievement_notifications import send_unlocks
 from interfaces.discord.buttons.trade_accept_button import AcceptButton
 from interfaces.discord.buttons.trade_cancel_button import CancelButton
 from interfaces.discord.buttons.trade_edit_offer_button import EditOfferButton
@@ -191,7 +192,7 @@ class TradeView(discord.ui.View):
         await interaction.response.defer()
 
         try:
-            await action(
+            result = await action(
                 trade_id=self.trade_id,
                 trainer_id=interaction.user.id,
                 at=datetime.now(UTC),
@@ -202,12 +203,19 @@ class TradeView(discord.ui.View):
                 ephemeral=True,
             )
             return
+
         except TradeApplicationError as error:
             await interaction.followup.send(
                 f"❌ {error}",
                 ephemeral=True,
             )
             return
+
+        await send_unlocks(
+            interaction.followup.send,
+            getattr(result, "achievements_by_trainer", {}).get(interaction.user.id, ()),
+            context="trade",
+        )
 
         await self._reload_trade_display()
         await self._edit_message()

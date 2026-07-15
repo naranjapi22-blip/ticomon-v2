@@ -4,6 +4,7 @@ from core.spawn.exceptions import (
     NoActiveSpawnSession,
     NoSelectedOpportunity,
 )
+from interfaces.discord.achievement_notifications import send_unlocks
 
 
 class CaptureCog(commands.Cog):
@@ -36,5 +37,6 @@ class CaptureCog(commands.Cog):
             await ctx.send(
                 f"✅ You captured {result.creature.species.name}!\n\n" f"{rewards}"
             )
+            await send_unlocks(ctx.send, result.achievements, context="capture")
         else:
             await ctx.send("❌ Capture failed!")

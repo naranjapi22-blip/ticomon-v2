@@ -3,6 +3,7 @@ import random
 from dataclasses import dataclass
 
 from application.achievement.award_service import CaptureAchievementAwardService
+from application.achievement.query_service import AchievementQueryService
 from application.adventure.start_adventure.start_adventure_application_service import (
     StartAdventureApplicationService,
 )
@@ -177,6 +178,7 @@ class CoreServices:
     trade_application: TradeApplicationService
     trade_display_service: TradeDisplayService
     safari_unlock_repository: NeonSafariUnlockRepository
+    achievement_query_service: AchievementQueryService
 
 
 def build_core(
@@ -207,6 +209,10 @@ def build_core(
     )
     achievement_unlock_repository = NeonAchievementUnlockRepository()
     capture_achievement_award_service = CaptureAchievementAwardService(
+        achievement_activity_repository,
+        achievement_unlock_repository,
+    )
+    achievement_query_service = AchievementQueryService(
         achievement_activity_repository,
         achievement_unlock_repository,
     )
@@ -428,5 +434,6 @@ def build_core(
         trade_application=trade_application,
         trade_display_service=trade_display_service,
         safari_unlock_repository=safari_unlock_repository,
+        achievement_query_service=achievement_query_service,
         safari_daily_progress_application=safari_daily_progress_application,
     )

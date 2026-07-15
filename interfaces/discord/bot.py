@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 
 from interfaces.discord.bootstrap import build_discord
+from interfaces.discord.cogs.achievements_cog import AchievementsCog
 from interfaces.discord.cogs.candy_cog import CandyCog
 from interfaces.discord.cogs.capture_cog import CaptureCog
 from interfaces.discord.cogs.commands_cog import CommandsCog
@@ -48,6 +49,7 @@ class TicoMonBot(commands.Bot):
             (EnergyCog, (self.core,)),
             (SelectCog, (self.core,)),
             (CaptureCog, (self.core,)),
+            (AchievementsCog, (self.core,)),
             (ProfileCog, (self.core,)),
             (TrainerCog, (self.core,)),
             (IVsCog, (self.core,)),

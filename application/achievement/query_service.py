@@ -1,0 +1,74 @@
+from dataclasses import dataclass
+
+from core.achievement.definition import ACHIEVEMENT_DEFINITIONS, AchievementCriterion
+from core.candy.candy_bundle import CandyBundle
+
+ACHIEVEMENT_PRESENTATION = {
+    "first_capture": ("First Capture", "Capture your first creature."),
+    "captures_10": ("Ten Captures", "Capture 10 creatures."),
+    "captures_50": ("Fifty Captures", "Capture 50 creatures."),
+    "first_shiny_capture": ("First Shiny", "Capture a shiny creature."),
+    "unique_species_10": ("Explorer", "Discover 10 unique species."),
+    "first_completed_trade": ("First Trade", "Complete a trade."),
+    "first_safari_capture": ("Safari Catch", "Capture a creature in Safari."),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class AchievementStatus:
+    achievement_id: str
+    name: str
+    description: str
+    progress: int
+    threshold: int
+    configured_reward: int
+    unlocked_at: object | None
+    rewarded_candies: CandyBundle | None
+
+    @property
+    def unlocked(self) -> bool:
+        return self.unlocked_at is not None
+
+
+class AchievementQueryService:
+    """Read-only achievement status projection."""
+
+    def __init__(self, activity_repository, unlock_repository) -> None:
+        self._activity_repository = activity_repository
+        self._unlock_repository = unlock_repository
+
+    async def get_for_trainer(self, trainer_id: int) -> tuple[AchievementStatus, ...]:
+        progress = await self._activity_repository.get_progress(trainer_id)
+        unlocks = {
+            unlock.achievement_id: unlock
+            for unlock in await self._unlock_repository.get_by_trainer(trainer_id)
+        }
+        result = []
+        for definition in ACHIEVEMENT_DEFINITIONS:
+            name, description = ACHIEVEMENT_PRESENTATION[definition.id.value]
+            unlock = unlocks.get(definition.id.value)
+            result.append(
+                AchievementStatus(
+                    definition.id.value,
+                    name,
+                    description,
+                    self._progress(progress, definition.criterion),
+                    definition.threshold,
+                    definition.reward_amount,
+                    unlock.unlocked_at if unlock else None,
+                    unlock.rewarded_candies if unlock else None,
+                )
+            )
+        return tuple(result)
+
+    @staticmethod
+    def _progress(progress, criterion: AchievementCriterion) -> int:
+        return {
+            AchievementCriterion.CAPTURE_COUNT: progress.capture_count,
+            AchievementCriterion.SHINY_CAPTURE_COUNT: progress.shiny_capture_count,
+            AchievementCriterion.UNIQUE_DISCOVERED_SPECIES: (
+                progress.unique_discovered_species
+            ),
+            AchievementCriterion.COMPLETED_TRADE_COUNT: progress.completed_trade_count,
+            AchievementCriterion.SAFARI_CAPTURE_COUNT: progress.safari_capture_count,
+        }[criterion]

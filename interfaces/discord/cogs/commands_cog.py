@@ -51,6 +51,7 @@ class CommandsCog(commands.Cog):
             name="👤 Trainer",
             value=(
                 "`!profile` — View your trainer profile.\n"
+                "`!achievements` — View your achievement progress.\n"
                 "`!trainer` — Choose your trainer.\n"
                 "`!favorite` — Select your featured Pokémon."
             ),
