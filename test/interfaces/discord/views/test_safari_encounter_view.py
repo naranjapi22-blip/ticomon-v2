@@ -219,7 +219,41 @@ def test_encounter_results_show_shared_captures_and_hide_unprocessed_unique_trai
     assert "<@2>" in message
     assert "<@3>" in message
     assert "<@4>" not in message
-    assert "balls spent" in message
+    assert "Pikachu - <@1> <@2> <@3>" in message
+    assert message.count("Pikachu -") == 1
+    assert "balls spent" not in message
+
+
+def test_encounter_results_group_each_species_once() -> None:
+    view, _ = _encounter_view()
+    pikachu = create_species(id=25, name="Pikachu")
+    eevee = create_species(id=133, name="Eevee")
+
+    def result(species, trainer_id):
+        outcome = SimpleNamespace(
+            status=SimpleNamespace(name="CAPTURED"),
+            final_opportunity=SimpleNamespace(species=species),
+        )
+        return SimpleNamespace(
+            slot_outcome=outcome,
+            creature=None,
+            participant_results=(
+                SimpleNamespace(
+                    participant_outcome=SimpleNamespace(trainer_id=trainer_id),
+                    creature=SimpleNamespace(species=species),
+                ),
+            ),
+        )
+
+    message = view._build_encounter_results_message(
+        SimpleNamespace(
+            slot_results=(result(pikachu, 1), result(pikachu, 2), result(eevee, 3))
+        )
+    )
+
+    assert message.count("Pikachu -") == 1
+    assert "Pikachu - <@1> <@2>" in message
+    assert "Eevee - <@3>" in message
 
 
 @pytest.mark.asyncio
@@ -273,7 +307,15 @@ async def test_ball_count_view_uses_player_facing_copy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_selection_flow_confirms_immediately() -> None:
+@pytest.mark.parametrize(
+    ("ball_count", "available", "ball_label"),
+    [(1, 4, "Safari Ball"), (2, 3, "Safari Balls")],
+)
+async def test_selection_flow_confirms_immediately(
+    ball_count,
+    available,
+    ball_label,
+) -> None:
     view, session = _encounter_view()
     view.core = SimpleNamespace(
         safari_capture_application=SimpleNamespace(
@@ -283,7 +325,7 @@ async def test_selection_flow_confirms_immediately() -> None:
                     encounter=session.current_encounter,
                     participant=session.participants_by_trainer[1],
                     slot=session.current_encounter.slots[0],
-                    balls_selected=1,
+                    balls_selected=ball_count,
                     balls_available=7,
                     selection=SimpleNamespace(
                         slot_id=session.current_encounter.slots[0].id,
@@ -304,7 +346,7 @@ async def test_selection_flow_confirms_immediately() -> None:
                         is_confirmed=True,
                     ),
                     balls_spent=1,
-                    balls_available=6,
+                    balls_available=available,
                     state=None,
                 )
             ),
@@ -321,20 +363,22 @@ async def test_selection_flow_confirms_immediately() -> None:
         ),
     )
 
-    await view.select_balls(interaction, session.current_encounter.slots[0].id, 1)
+    await view.select_balls(
+        interaction,
+        session.current_encounter.slots[0].id,
+        ball_count,
+    )
 
     assert interaction.response.send_message.await_count == 1
-    assert (
-        "Selection committed:"
-        in interaction.response.send_message.await_args.kwargs["content"]
+    assert f"Selected Pikachu with {ball_count} {ball_label}." in (
+        interaction.response.send_message.await_args.kwargs["content"]
     )
-    assert (
-        "1 Safari Ball"
-        in interaction.response.send_message.await_args.kwargs["content"]
+    assert f"{ball_count} {ball_label} reserved for this encounter." in (
+        interaction.response.send_message.await_args.kwargs["content"]
     )
-    assert (
-        "6 Safari Balls remaining."
-        in interaction.response.send_message.await_args.kwargs["content"]
+    available_label = "Safari Ball" if available == 1 else "Safari Balls"
+    assert f"{available} {available_label} available." in (
+        interaction.response.send_message.await_args.kwargs["content"]
     )
     assert interaction.response.edit_message.await_count == 0
 

@@ -142,7 +142,7 @@ class SafariCaptureApplicationService:
                 encounter=encounter,
                 participant=participant,
                 selection=selection,
-                balls_available=participant.remaining_balls,
+                balls_available=self._balls_available(participant, encounter),
                 state=SafariCaptureSelectionState.DECLINED,
             )
 
@@ -183,7 +183,7 @@ class SafariCaptureApplicationService:
                 participant=participant,
                 selection=confirmed,
                 balls_spent=0,
-                balls_available=participant.remaining_balls,
+                balls_available=self._balls_available(participant, encounter),
                 state=SafariCaptureSelectionState.CONFIRMED,
             )
 
@@ -559,6 +559,18 @@ class SafariCaptureApplicationService:
                 "trainer is not a Safari participant."
             )
         return participant
+
+    @staticmethod
+    def _balls_available(
+        participant: SafariParticipant,
+        encounter: SafariEncounter,
+    ) -> int:
+        reserved = sum(
+            selection.ball_count
+            for selection in encounter.selections_by_trainer.values()
+            if selection.trainer_id == participant.trainer_id and selection.is_confirmed
+        )
+        return participant.remaining_balls - reserved
 
     @staticmethod
     def _slot(

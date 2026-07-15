@@ -402,6 +402,23 @@ def test_shared_slot_stops_only_the_successful_participants_remaining_balls():
     assert outcome.attempts_executed == 4
 
 
+def test_capture_on_third_attempt_spends_all_three_balls():
+    slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
+    encounter = make_resolving_encounter((slot,), ((1, slot, 3),))
+    resolver, _ = make_resolver(
+        0.5,
+        ScriptedRandom(rolls=(0.9, 0.9, 0.1)),
+    )
+
+    participant_outcome = (
+        resolver.resolve(encounter).slot_outcomes[0].participant_outcomes[0]
+    )
+
+    assert participant_outcome.captured
+    assert participant_outcome.attempts_executed == 3
+    assert participant_outcome.balls_spent == 3
+
+
 def test_shared_slot_resolution_is_independent_of_selection_input_order():
     slot = make_slot(1, capture_policy=SafariCapturePolicy.SHARED)
     first_encounter = make_resolving_encounter(

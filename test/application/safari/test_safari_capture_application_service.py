@@ -247,19 +247,20 @@ async def test_confirm_without_selection_fails():
 async def test_confirm_capture_records_balls_without_spending_and_blocks_replacement():
     activity = _TrackingActivityRepository()
     session = _published_session(
-        (SafariParticipant(1, 3, 3), SafariParticipant(2, 3, 3))
+        (SafariParticipant(1, 5, 5), SafariParticipant(2, 5, 5))
     )
     await activity.save_session(session)
     service = _capture_service(activity=activity)
 
     await service.select_capture(
-        session.guild_id, 1, session.current_encounter.slots[0].id, 2
+        session.guild_id, 1, session.current_encounter.slots[0].id, 1
     )
     confirmed = await service.confirm_capture_selection(session.guild_id, 1)
 
     assert confirmed.state is SafariCaptureSelectionState.CONFIRMED
     assert confirmed.balls_spent == 0
-    assert session.participants_by_trainer[1].remaining_balls == 3
+    assert confirmed.balls_available == 4
+    assert session.participants_by_trainer[1].remaining_balls == 5
 
     with pytest.raises(SafariSelectionAlreadyConfirmed):
         await service.select_capture(
@@ -269,6 +270,22 @@ async def test_confirm_capture_records_balls_without_spending_and_blocks_replace
     with pytest.raises(SafariSelectionAlreadyConfirmed):
         await service.confirm_capture_selection(session.guild_id, 1)
 
+    assert session.participants_by_trainer[1].remaining_balls == 5
+
+
+@pytest.mark.asyncio
+async def test_declining_selection_releases_reserved_balls():
+    activity = _TrackingActivityRepository()
+    session = _published_session((SafariParticipant(1, 3, 3),))
+    await activity.save_session(session)
+    service = _capture_service(activity=activity)
+
+    await service.select_capture(
+        session.guild_id, 1, session.current_encounter.slots[0].id, 2
+    )
+    declined = await service.decline_capture(session.guild_id, 1)
+
+    assert declined.balls_available == 3
     assert session.participants_by_trainer[1].remaining_balls == 3
 
 

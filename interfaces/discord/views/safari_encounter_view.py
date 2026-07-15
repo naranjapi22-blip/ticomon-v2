@@ -377,12 +377,19 @@ class SafariEncounterView(discord.ui.View):
         selected_label = (
             "Safari Ball" if selection_result.balls_selected == 1 else "Safari Balls"
         )
+        reserved_label = (
+            "Safari Ball" if selection_result.balls_selected == 1 else "Safari Balls"
+        )
+        available_label = (
+            "Safari Ball" if result.balls_available == 1 else "Safari Balls"
+        )
         await interaction.response.send_message(
             content=(
-                f"Selection committed: {species_name} "
+                f"Selected {species_name} "
                 f"with {selection_result.balls_selected} {selected_label}.\n"
-                "Balls will be spent only when attempts execute.\n"
-                f"{result.balls_available} Safari Balls remaining."
+                f"{selection_result.balls_selected} {reserved_label} reserved "
+                "for this encounter.\n"
+                f"{result.balls_available} {available_label} available."
             ),
             ephemeral=True,
         )
@@ -612,9 +619,15 @@ class SafariEncounterView(discord.ui.View):
         return encounter
 
     def _build_encounter_results_message(self, result) -> str:
-        captured_lines: list[str] = []
+        captured_by_species: dict[str, list[str]] = {}
         failed_lines: list[str] = []
         escaped_lines: list[str] = []
+
+        def add_capture(species_name: str, trainer_id: int) -> None:
+            mentions = captured_by_species.setdefault(species_name, [])
+            mention = f"<@{trainer_id}>"
+            if mention not in mentions:
+                mentions.append(mention)
 
         for slot_result in result.slot_results:
             outcome = slot_result.slot_outcome
@@ -624,11 +637,9 @@ class SafariEncounterView(discord.ui.View):
                     species_name = self.format_species_name(
                         participant_result.creature.species.name
                     )
-                    captured_lines.append(
-                        "- "
-                        f"{species_name} "
-                        f"- <@{participant_outcome.trainer_id}> "
-                        f"({participant_outcome.balls_spent} balls spent)"
+                    add_capture(
+                        species_name,
+                        participant_outcome.trainer_id,
                     )
                 elif participant_outcome.attempts_executed:
                     species_name = self.format_species_name(
@@ -646,10 +657,9 @@ class SafariEncounterView(discord.ui.View):
                 and outcome.status.name == "CAPTURED"
                 and slot_result.creature is not None
             ):
-                captured_lines.append(
-                    "- "
-                    f"{self.format_species_name(slot_result.creature.species.name)} "
-                    f"— <@{outcome.winner_trainer_id}>"
+                add_capture(
+                    self.format_species_name(slot_result.creature.species.name),
+                    outcome.winner_trainer_id,
                 )
                 continue
 
@@ -659,6 +669,10 @@ class SafariEncounterView(discord.ui.View):
                     f"{self.format_species_name(outcome.final_opportunity.species.name)}"
                 )
 
+        captured_lines = [
+            f"- {species_name} - {' '.join(mentions)}"
+            for species_name, mentions in captured_by_species.items()
+        ]
         lines = ["Encounter Results", ""]
         if captured_lines:
             lines.append("Captured")
