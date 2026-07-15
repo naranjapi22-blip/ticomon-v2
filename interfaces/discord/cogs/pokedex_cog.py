@@ -2,6 +2,7 @@ from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
 from application.pokedex.filter import PokedexFilter
+from interfaces.discord.input_normalizer import normalize_text
 from interfaces.discord.views.pokedex_view import PokedexView
 
 
@@ -18,7 +19,7 @@ class PokedexCog(commands.Cog):
         ctx: commands.Context,
         *args: str,
     ):
-        args = [arg.lower() for arg in args]
+        args = [normalize_text(arg) for arg in args]
 
         filter = PokedexFilter()
 

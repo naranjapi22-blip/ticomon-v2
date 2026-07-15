@@ -6,6 +6,7 @@ from interfaces.discord.cogs.collection_display import (
     build_top_title,
     format_creature_entry,
 )
+from interfaces.discord.input_normalizer import normalize_text
 from interfaces.discord.views.creature_list_view import CreatureListView
 
 
@@ -22,16 +23,18 @@ class TopCog(commands.Cog):
         ctx: commands.Context,
         pokemon_type: str | None = None,
     ):
+        normalized_type = (
+            normalize_text(pokemon_type) if pokemon_type is not None else None
+        )
+
         try:
             creatures = await self.core.creature_collection_service.get_top_collection(
                 trainer_id=ctx.author.id,
-                pokemon_type=pokemon_type,
+                pokemon_type=normalized_type,
             )
         except ValueError as error:
             await ctx.send(str(error))
             return
-
-        normalized_type = pokemon_type.strip() if pokemon_type is not None else None
 
         if not creatures:
             await ctx.send(

@@ -35,6 +35,7 @@ class TicoMonBot(commands.Bot):
         super().__init__(
             command_prefix="!",
             intents=intents,
+            case_insensitive=True,
         )
 
         self.core = build_discord()

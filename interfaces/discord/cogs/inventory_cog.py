@@ -6,6 +6,7 @@ from interfaces.discord.cogs.collection_display import (
     build_recent_title,
     format_creature_entry,
 )
+from interfaces.discord.input_normalizer import normalize_text
 from interfaces.discord.views.creature_list_view import CreatureListView
 
 
@@ -22,8 +23,11 @@ class InventoryCog(commands.Cog):
         ctx: commands.Context,
         filter_value: str | None = None,
     ):
-        shiny_only = filter_value is not None and filter_value.lower() == "shiny"
-        pokemon_type = None if shiny_only else filter_value
+        normalized_filter = (
+            normalize_text(filter_value) if filter_value is not None else None
+        )
+        shiny_only = normalized_filter == "shiny"
+        pokemon_type = None if shiny_only else normalized_filter
 
         try:
             creatures = (
@@ -37,7 +41,7 @@ class InventoryCog(commands.Cog):
             await ctx.send(str(error))
             return
 
-        normalized_type = pokemon_type.strip() if pokemon_type is not None else None
+        normalized_type = pokemon_type
 
         if not creatures:
             await ctx.send(

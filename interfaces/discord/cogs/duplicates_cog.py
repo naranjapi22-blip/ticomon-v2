@@ -1,6 +1,7 @@
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
+from interfaces.discord.input_normalizer import normalize_text
 
 POKEMON_TYPES = {
     "normal",
@@ -43,8 +44,9 @@ class DuplicatesCog(commands.Cog):
     ):
 
         if filtro:
+            filtro = normalize_text(filtro)
 
-            if filtro.lower() in POKEMON_TYPES:
+            if filtro in POKEMON_TYPES:
 
                 duplicates = (
                     await self.core.duplicate_application.get_duplicates_by_type(
