@@ -15,6 +15,7 @@ from interfaces.discord.cogs.evolution_cog import EvolutionCog
 from interfaces.discord.cogs.info import InfoCog
 from interfaces.discord.cogs.inventory_cog import InventoryCog
 from interfaces.discord.cogs.ivs_cog import IVsCog
+from interfaces.discord.cogs.mint_cog import MintCog
 from interfaces.discord.cogs.pokedex_cog import PokedexCog
 from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.cogs.release_cog import ReleaseCog
@@ -53,6 +54,7 @@ class TicoMonBot(commands.Bot):
             (ProfileCog, (self.core,)),
             (TrainerCog, (self.core,)),
             (IVsCog, (self.core,)),
+            (MintCog, (self.core,)),
             (InfoCog, (self.core,)),
             (TopCog, (self.core,)),
             (InventoryCog, (self.core,)),

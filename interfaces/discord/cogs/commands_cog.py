@@ -39,6 +39,7 @@ class CommandsCog(commands.Cog):
                 "`!spawn` — Encounter wild Pokémon.\n"
                 "`!energy` — Check your Energy.\n"
                 "`!evolve` — Evolve your Pokémon.\n"
+                "`!mint <collection_number>` — Change a Pokémon's nature effect.\n"
                 "`!release` — Release Pokémon for rewards.\n"
                 "`!safari` — Start or join a Safari expedition.\n"
                 "`!trade @trainer <collection_number>` — "

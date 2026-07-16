@@ -85,7 +85,13 @@ class TradeDisplayService:
                 collection_number=creature.collection_number,
                 iv_percentage=creature.iv_percentage,
                 is_shiny=creature.is_shiny,
-                nature=str(creature.nature),
+                nature=(
+                    str(creature.effective_nature)
+                    if creature.minted_nature is None
+                    else (
+                        f"{creature.effective_nature} " f"(Original: {creature.nature})"
+                    )
+                ),
                 size=str(creature.size),
                 current_form_name=(
                     creature.current_form.name if creature.current_form else None

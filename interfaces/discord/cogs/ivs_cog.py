@@ -59,6 +59,7 @@ class IVsCog(commands.Cog):
             "📊 **Stats (Lvl 50 | IVs)**",
             "━━━━━━━━━━━━━━━━━━━━",
         ]
+        effective_nature = getattr(creature, "effective_nature", creature.nature)
 
         for stat in Stat:
             stat_value = self.core.stat_calculator.calculate(
@@ -69,7 +70,7 @@ class IVsCog(commands.Cog):
             iv = creature.iv_for(stat)
 
             emoji, label = STAT_LABELS[stat]
-            arrow = creature.nature.arrow_for(stat)
+            arrow = effective_nature.arrow_for(stat)
 
             lines.append(
                 f"{emoji} **{label}** " f"`{stat_value:>3}{arrow} │ {iv:>2}/31`"
@@ -83,7 +84,12 @@ class IVsCog(commands.Cog):
                 f"🆔 **Collection:** #{creature.collection_number}",
                 f"📊 **IV Total:** {creature.iv_percentage}%",
                 f"📏 **Size:** {creature.size}",
-                f"🍃 **Nature:** {creature.nature}",
+                f"🍃 **Nature:** {effective_nature}",
+                *(
+                    [f"🌱 **Original nature:** {creature.nature}"]
+                    if getattr(creature, "minted_nature", None) is not None
+                    else []
+                ),
                 f"✨ **Shiny:** {'Yes' if creature.is_shiny else 'No'}",
             ]
         )
