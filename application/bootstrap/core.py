@@ -41,6 +41,7 @@ from application.safari import (
     StartSafariApplicationService,
 )
 from application.safari.activity_state import SafariActivityTracker
+from application.shop.shop_application_service import ShopApplicationService
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
@@ -114,6 +115,9 @@ from infrastructure.persistence.repositories.neon_nature_mint_repository import 
 from infrastructure.persistence.repositories.neon_profile_repository import (
     NeonProfileRepository,
 )
+from infrastructure.persistence.repositories.neon_shop_repository import (
+    NeonShopRepository,
+)
 from infrastructure.persistence.repositories.neon_trade_repository import (
     NeonTradeRepository,
 )
@@ -186,6 +190,7 @@ class CoreServices:
     safari_unlock_repository: NeonSafariUnlockRepository
     achievement_query_service: AchievementQueryService
     nature_mint_application: NatureMintApplicationService
+    shop_application: ShopApplicationService
 
 
 def build_core(
@@ -217,7 +222,13 @@ def build_core(
         creature_repository=creature_repository,
         mint_repository=nature_mint_repository,
     )
+    shop_repository = NeonShopRepository(species_repository)
     candy_repository = NeonCandyRepository()
+    shop_application = ShopApplicationService(
+        species_repository=species_repository,
+        candy_repository=candy_repository,
+        shop_repository=shop_repository,
+    )
     achievement_activity_repository = (
         neon_achievement_activity_repository.NeonAchievementActivityRepository()
     )
@@ -452,5 +463,6 @@ def build_core(
         safari_unlock_repository=safari_unlock_repository,
         achievement_query_service=achievement_query_service,
         nature_mint_application=nature_mint_application,
+        shop_application=shop_application,
         safari_daily_progress_application=safari_daily_progress_application,
     )

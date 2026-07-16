@@ -84,6 +84,20 @@ Achievements award Candies and Nature Mints across early, mid, and advanced
 progression. Progress is integrated with captures, unique species discovered,
 Safari captures, shiny, legendary, mythical, trade, and evolution activities.
 
+## Shops
+
+Use `!shop` to spend type-specific Candies in the Technology Shop, Fossil Lab,
+or Pastry Shop. The catalogue provides special species that do not appear in
+normal Spawn or Safari. Purchases are atomic and create a normal, non-shiny
+creature with generated IVs and size, random original nature, and no Nature
+Mint effect. Pastry Shop is the only shop with an exact animated preview before
+confirmation. Its supported catalogue contains 45 Alcremie combinations: 9
+creams and 5 decorations. Rotom Frost and Rotom Fan are temporarily excluded
+until their canonical variants and graphic resources are confirmed.
+
+Shop prices are initial values and can be adjusted later using real economy
+metrics; there are no dynamic prices or universal currency.
+
 ## Safari
 
 Safari expeditions use shared maps, routes, weather, and encounters. Players
@@ -170,6 +184,7 @@ test/
 - ✅ Safari
 - ✅ Achievements
 - ✅ Nature Mints
+- ✅ Candy shops
 
 The core gameplay loop is complete.
 
