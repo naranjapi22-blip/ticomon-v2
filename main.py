@@ -16,7 +16,7 @@ def main():
     load_dotenv()
 
     bot = create_bot()
-    bot.run(os.environ["DISCORD_TOKEN"])
+    bot.run(os.environ["DISCORD_TOKEN"], log_handler=None)
 
 
 if __name__ == "__main__":
