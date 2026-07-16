@@ -6,6 +6,7 @@ import requests
 
 from core.creature.creature import Creature
 from interfaces.discord.pokemon_mapping import get_gif_id
+from rendering.variant_assets import get_variant_gif_url
 
 BASE_GIF_URL = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
@@ -34,13 +35,10 @@ def get_creature_gif(
     """
 
     if creature.current_form is not None:
-        species = creature.species.name.lower()
-        variant = creature.current_form.name.lower()
-
-        return (
-            f"{BASE_GIF_URL}/showdown_variantes/"
-            f"{species}/"
-            f"{species}-{variant}.gif"
+        return get_variant_gif_url(
+            BASE_GIF_URL,
+            creature.species.name,
+            creature.current_form.name,
         )
 
     return get_species_gif(
@@ -52,13 +50,10 @@ def get_creature_gif(
 def get_opportunity_gif(opportunity) -> str:
 
     if opportunity.initial_form is not None:
-        species = opportunity.species.name.lower()
-        variant = opportunity.initial_form.name.lower()
-
-        return (
-            f"{BASE_GIF_URL}/showdown_variantes/"
-            f"{species}/"
-            f"{species}-{variant}.gif"
+        return get_variant_gif_url(
+            BASE_GIF_URL,
+            opportunity.species.name,
+            opportunity.initial_form.name,
         )
 
     return get_species_gif(

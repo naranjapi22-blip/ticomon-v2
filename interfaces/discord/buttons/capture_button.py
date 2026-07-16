@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 from time import monotonic
 
@@ -6,8 +7,55 @@ import discord
 
 from core.spawn.exceptions import NoActiveSpawnSession
 from interfaces.discord.achievement_notifications import send_unlocks
+from interfaces.discord.images import get_creature_gif, get_species_gif
 from rendering.capture_animation import CaptureAnimation
-from rendering.sprites import get_capture_sprite
+
+logger = logging.getLogger(__name__)
+_MISSING_CAPTURE_RESOURCES: set[tuple[int, int | None]] = set()
+
+
+async def _capture_gif(creature, trainer, capture_ball: str):
+    gif_url = get_creature_gif(creature)
+    fallback_url = get_species_gif(
+        creature.species.pokeapi_id,
+        creature.is_shiny,
+    )
+
+    for index, sprite_url in enumerate(dict.fromkeys((gif_url, fallback_url))):
+        try:
+            animation = CaptureAnimation(
+                sprite_path=sprite_url,
+                pokemon_name=creature.species.name,
+                trainer=trainer.gif.removesuffix(".gif"),
+                pokeball=capture_ball,
+                captured=True,
+                type_name=creature.species.types[0],
+            )
+            return await asyncio.to_thread(animation.gif_bytes)
+        except Exception:
+            if index == 0:
+                variant_id = (
+                    creature.current_form.id
+                    if creature.current_form is not None
+                    else None
+                )
+                key = (creature.species.id, variant_id)
+                if key not in _MISSING_CAPTURE_RESOURCES:
+                    _MISSING_CAPTURE_RESOURCES.add(key)
+                    logger.warning(
+                        "capture_gif_resource_missing species_id=%s variant_id=%s "
+                        "canonical_name=%s asset_key=%s",
+                        creature.species.id,
+                        variant_id,
+                        (
+                            f"{creature.species.name}:{creature.current_form.name}"
+                            if creature.current_form is not None
+                            else creature.species.name
+                        ),
+                        gif_url,
+                    )
+
+    return None
 
 
 class CaptureButton(discord.ui.Button):
@@ -79,21 +127,10 @@ class CaptureButton(discord.ui.Button):
             interaction.user.id,
         )
 
-        sprite_path = get_capture_sprite(
+        gif = await _capture_gif(
             result.creature,
-        )
-
-        animation = CaptureAnimation(
-            sprite_path=sprite_path,
-            pokemon_name=result.creature.species.name,
-            trainer=trainer.gif.removesuffix(".gif"),
-            pokeball=result.attempt.capture_ball.name,
-            captured=True,
-            type_name=result.creature.species.types[0],
-        )
-
-        gif = await asyncio.to_thread(
-            animation.gif_bytes,
+            trainer,
+            result.attempt.capture_ball.name,
         )
 
         rewards = "\n".join(
@@ -101,19 +138,21 @@ class CaptureButton(discord.ui.Button):
             for candy_type, amount in result.reward.items()
         )
 
-        await interaction.followup.send(
-            content=(
+        message = {
+            "content": (
                 f"🎉 {interaction.user.mention} caught "
                 f"{result.creature.species.name.title()} "
                 f"(#{result.creature.collection_number}) "
                 f"using a {ball_name}!\n"
                 f"🎯 Capture Chance: {result.attempt.chance * 100:.2f}%\n\n"
                 f"{rewards}"
-            ),
-            file=discord.File(
-                gif,
-                filename="capture.gif",
-            ),
+            )
+        }
+        if gif is not None:
+            message["file"] = discord.File(gif, filename="capture.gif")
+
+        await interaction.followup.send(
+            **message,
         )
 
         await send_unlocks(
