@@ -15,6 +15,7 @@ from interfaces.discord.views.shop_view import (
     ProductView,
     ShopConfirmationViewWithButtons,
     ShopView,
+    _shop_preview_file,
 )
 from test.factories import create_species
 
@@ -112,6 +113,89 @@ async def test_confirmation_defers_and_ignores_double_click():
     await view.confirm(interaction)
     assert events[0] == "defer"
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_product_selection_edits_with_attachment(monkeypatch):
+    preview = make_preview(
+        CandyInventory({CandyType.NORMAL: 100}),
+        CandyBundle.from_amounts(CandyTypeAmount(CandyType.NORMAL, 80)),
+        species_name="porygon",
+    )
+
+    class Application:
+        def products(self, store):
+            return ()
+
+        async def preview_product(self, trainer_id, product_id):
+            return preview
+
+        async def preview_creature(self, selected):
+            return SimpleNamespace(
+                species=SimpleNamespace(pokeapi_id=869), current_form=None
+            )
+
+    class ShopCore:
+        shop_application = Application()
+
+    gif_file = object()
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.get_creature_gif",
+        lambda creature: "https://assets/porygon.gif",
+    )
+
+    async def download(url, filename):
+        return gif_file
+
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.download_gif_file", download
+    )
+    view = ProductView(ShopCore(), 7, ShopStore.TECHNOLOGY)
+    events = []
+    interaction = Interaction(events)
+    await view.select_product(interaction, "porygon")
+    assert events[0] == "defer"
+    kwargs = events[1][1]
+    assert kwargs["attachments"] == [gif_file]
+    assert "file" not in kwargs
+    assert kwargs["embed"].image.url == "attachment://shop.gif"
+
+
+@pytest.mark.asyncio
+async def test_missing_variant_gif_uses_base_fallback(monkeypatch):
+    creature = SimpleNamespace(
+        species=SimpleNamespace(pokeapi_id=869), current_form=SimpleNamespace()
+    )
+    urls = []
+
+    async def download(url, filename):
+        urls.append(url)
+        if len(urls) == 1:
+            raise RuntimeError("missing variant")
+        return "fallback-file"
+
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.download_gif_file", download
+    )
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.get_creature_gif",
+        lambda selected: "https://assets/variant.gif",
+    )
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.get_species_gif",
+        lambda species_id, shiny: "https://assets/base.gif",
+    )
+
+    class Application:
+        async def preview_creature(self, preview):
+            return creature
+
+    result = await _shop_preview_file(
+        SimpleNamespace(shop_application=Application()),
+        SimpleNamespace(product_id="alcremie:1"),
+    )
+    assert result == "fallback-file"
+    assert urls == ["https://assets/variant.gif", "https://assets/base.gif"]
 
 
 def make_preview(inventory, cost, species_name="alcremie"):

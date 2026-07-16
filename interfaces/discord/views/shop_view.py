@@ -7,7 +7,11 @@ from core.shop.catalog import (
     ALCREMIE_DECORATIONS,
     ShopStore,
 )
-from interfaces.discord.images import download_gif_file, get_creature_gif
+from interfaces.discord.images import (
+    download_gif_file,
+    get_creature_gif,
+    get_species_gif,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,23 @@ def _missing_text(inventory, bundle) -> str:
         for candy_type, amount in bundle.items()
         if inventory.get_amount(candy_type) < amount
     )
+
+
+async def _shop_preview_file(core, preview):
+    try:
+        creature = await core.shop_application.preview_creature(preview)
+        try:
+            return await download_gif_file(get_creature_gif(creature), "shop.gif")
+        except Exception:
+            logger.warning(
+                "shop_preview_resource_missing product=%s", preview.product_id
+            )
+            return await download_gif_file(
+                get_species_gif(creature.species.pokeapi_id, False), "shop.gif"
+            )
+    except Exception:
+        logger.debug("shop_preview_fallback_missing product=%s", preview.product_id)
+        return None
 
 
 class ShopView(discord.ui.View):
@@ -171,8 +192,11 @@ class ProductView(discord.ui.View):
             return
         view = ShopConfirmationViewWithButtons(self.core, self.trainer_id, preview)
         view.message = self.message
+        gif_file = await _shop_preview_file(self.core, preview)
         await interaction.edit_original_response(
-            embed=view.embed(), attachments=[], view=view
+            embed=view.embed(gif_file is not None),
+            attachments=[gif_file] if gif_file is not None else [],
+            view=view,
         )
 
     async def on_timeout(self) -> None:
@@ -258,17 +282,10 @@ class PastryView(discord.ui.View):
     async def show_preview(self, interaction, preview) -> None:
         view = ShopConfirmationViewWithButtons(self.core, self.trainer_id, preview)
         view.message = self.message
-        file = None
-        try:
-            creature = await self.core.shop_application.preview_creature(preview)
-            file = await download_gif_file(get_creature_gif(creature), "alcremie.gif")
-        except Exception:
-            logger.warning(
-                "shop_preview_resource_missing product=%s", preview.product_id
-            )
+        gif_file = await _shop_preview_file(self.core, preview)
         await interaction.edit_original_response(
-            embed=view.embed(file is not None),
-            attachments=[file] if file is not None else [],
+            embed=view.embed(gif_file is not None),
+            attachments=[gif_file] if gif_file is not None else [],
             view=view,
         )
 
@@ -428,7 +445,10 @@ class ShopConfirmationView(discord.ui.View):
             description += (
                 "\nPreview image unavailable; the purchase remains available."
             )
-        return discord.Embed(title="Confirm purchase", description=description)
+        embed = discord.Embed(title="Confirm purchase", description=description)
+        if has_image:
+            embed.set_image(url="attachment://shop.gif")
+        return embed
 
     def _remaining(self):
         remaining = type(self.preview.inventory)(dict(self.preview.inventory.items()))
