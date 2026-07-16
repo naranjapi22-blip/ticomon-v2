@@ -7,6 +7,9 @@ from application.achievement.query_service import AchievementQueryService
 from application.adventure.start_adventure.start_adventure_application_service import (
     StartAdventureApplicationService,
 )
+from application.collection.collection_application_service import (
+    CollectionApplicationService,
+)
 from application.creature.creature_collection_service import (
     CreatureCollectionService,
 )
@@ -106,6 +109,9 @@ from infrastructure.persistence.repositories.neon_candy_repository import (
 from infrastructure.persistence.repositories.neon_capture_unit_of_work import (
     NeonCaptureUnitOfWork,
 )
+from infrastructure.persistence.repositories.neon_collection_history_repository import (
+    NeonCollectionHistoryRepository,
+)
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
 )
@@ -191,6 +197,7 @@ class CoreServices:
     achievement_query_service: AchievementQueryService
     nature_mint_application: NatureMintApplicationService
     shop_application: ShopApplicationService
+    collection_application: CollectionApplicationService
 
 
 def build_core(
@@ -228,6 +235,12 @@ def build_core(
         species_repository=species_repository,
         candy_repository=candy_repository,
         shop_repository=shop_repository,
+    )
+    collection_history_repository = NeonCollectionHistoryRepository()
+    collection_application = CollectionApplicationService(
+        species_repository=species_repository,
+        history_repository=collection_history_repository,
+        creature_repository=creature_repository,
     )
     achievement_activity_repository = (
         neon_achievement_activity_repository.NeonAchievementActivityRepository()
@@ -358,6 +371,7 @@ def build_core(
         candy_repository=candy_repository,
         achievement_activity_repository=achievement_activity_repository,
         achievement_award_service=capture_achievement_award_service,
+        collection_history_repository=collection_history_repository,
     )
     release_application = ReleaseApplicationService(
         creature_repository=creature_repository,
@@ -412,6 +426,7 @@ def build_core(
         creature_repository=creature_repository,
         trainer_repository=trainer_repository,
         energy_repository=energy_repository,
+        collection_history_repository=collection_history_repository,
     )
     trade_application = TradeApplicationService(
         trade_repository=trade_repository,
@@ -464,5 +479,6 @@ def build_core(
         achievement_query_service=achievement_query_service,
         nature_mint_application=nature_mint_application,
         shop_application=shop_application,
+        collection_application=collection_application,
         safari_daily_progress_application=safari_daily_progress_application,
     )

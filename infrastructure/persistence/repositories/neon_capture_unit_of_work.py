@@ -11,6 +11,7 @@ from core.capture.application.capture_unit_of_work import (
     CaptureUnitOfWork,
     SaveUnlockResult,
 )
+from core.collection.history import CollectionEntrySource
 from core.creature.creature import Creature
 from core.creature.creature_mapper import CreatureMapper
 from core.safari.daily_progress import SafariDailyWorld
@@ -147,6 +148,27 @@ class _NeonCaptureTransaction(CaptureTransaction):
             activity.source.value if activity.source else None,
             activity.occurred_at,
             activity.idempotency_key,
+        )
+        return row is not None
+
+    async def record_collection_entry(
+        self,
+        creature: Creature,
+        source: CollectionEntrySource,
+    ) -> bool:
+        row = await self._connection.fetchrow(
+            """
+            INSERT INTO trainer_collection_entries (
+                trainer_id, species_id, variant_id, source
+            )
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+            RETURNING trainer_id
+            """,
+            creature.trainer_id,
+            creature.species.id,
+            creature.current_form.id if creature.current_form is not None else None,
+            source.value,
         )
         return row is not None
 

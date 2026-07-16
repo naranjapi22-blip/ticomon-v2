@@ -54,6 +54,11 @@ class NeonShopRepository(ShopRepository):
                 idempotency_key,
             )
             if isinstance(error, UndefinedTableError):
+                if "trainer_collection_entries" in str(error):
+                    raise ValueError(
+                        "Collections schema is not initialized. "
+                        "Run scripts/create_collection_schema.py."
+                    ) from error
                 raise ValueError(
                     "Shop schema is not initialized. Run scripts/create_shop_schema.py."
                 ) from error
@@ -137,6 +142,22 @@ class NeonShopRepository(ShopRepository):
                     params[1],
                     collection_number,
                     *params[2:],
+                )
+                await connection.execute(
+                    """
+                    INSERT INTO trainer_collection_entries (
+                        trainer_id, species_id, variant_id, source
+                    )
+                    VALUES ($1, $2, $3, 'shop')
+                    ON CONFLICT DO NOTHING
+                    """,
+                    trainer_id,
+                    creature.species.id,
+                    (
+                        creature.current_form.id
+                        if creature.current_form is not None
+                        else None
+                    ),
                 )
                 for candy_type, amount in cost.items():
                     command = await connection.execute(

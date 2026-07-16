@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from core.achievement.activity import AchievementActivity
 from core.candy.candy_inventory import CandyInventory
+from core.collection.history import CollectionEntrySource
 from core.creature.creature import Creature
 from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
@@ -35,6 +36,14 @@ class CaptureTransaction(ABC):
 
     async def record_achievement_activity(self, activity: AchievementActivity) -> bool:
         """Records a capture fact inside this transaction when supported."""
+        return True
+
+    async def record_collection_entry(
+        self,
+        creature: Creature,
+        source: CollectionEntrySource,
+    ) -> bool:
+        """Records a captured creature in the historical collection when supported."""
         return True
 
     async def get_or_create_daily_world(

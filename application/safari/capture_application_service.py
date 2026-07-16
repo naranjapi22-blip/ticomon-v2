@@ -30,6 +30,7 @@ from core.achievement.activity import (
 from core.candy.candy_bundle import CandyBundle
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_unit_of_work import CaptureUnitOfWork
+from core.collection.history import CollectionEntrySource
 from core.creature.creature_factory import CreatureFactory
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari.activity_repository import SafariActivityRepository
@@ -386,6 +387,10 @@ class SafariCaptureApplicationService:
                         opportunity=opportunity,
                     )
                     saved_creature = await transaction.save_creature(creature)
+                    await transaction.record_collection_entry(
+                        saved_creature,
+                        CollectionEntrySource.SAFARI,
+                    )
                     await self._record_activities(transaction, saved_creature)
                     reward = self._reward_policy.reward_for(saved_creature)
                     trainer_reward = trainer_reward.merge(reward)

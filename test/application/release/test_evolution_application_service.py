@@ -35,6 +35,9 @@ from test.fakes.fake_achievement_repositories import (
 from test.fakes.fake_candy_repository import (
     FakeCandyRepository,
 )
+from test.fakes.fake_collection_history_repository import (
+    FakeCollectionHistoryRepository,
+)
 from test.fakes.fake_creature_repository import (
     FakeCreatureRepository,
 )
@@ -112,6 +115,7 @@ async def test_evolution_application_service_evolves_creature():
     )
     achievement_activities = FakeAchievementActivityRepository()
     achievement_unlocks = FakeAchievementUnlockRepository()
+    collection_history = FakeCollectionHistoryRepository()
 
     service = EvolutionApplicationService(
         EvolutionService(
@@ -128,6 +132,7 @@ async def test_evolution_application_service_evolves_creature():
             achievement_activities,
             achievement_unlocks,
         ),
+        collection_history_repository=collection_history,
     )
 
     result = await service.evolve(
@@ -175,6 +180,10 @@ async def test_evolution_application_service_evolves_creature():
         for unlock in await achievement_unlocks.get_by_trainer(113100351531417600)
     ] == ["first_evolution"]
     assert achievement_unlocks.mints_by_trainer[113100351531417600] == 1
+    history = await collection_history.entries_for_trainer(113100351531417600)
+    assert [(entry.species_id, entry.source.value) for entry in history] == [
+        (2, "evolution")
+    ]
     retry = await service.evolve(113100351531417600, 1, rule)
     assert not retry.success
     assert len(achievement_activities.activities) == 1

@@ -240,6 +240,24 @@ class NeonTradeRepository(TradeRepository):
                     if len(updated_creatures) != 2:
                         raise TradeExecutionConflict()
 
+                    await connection.execute(
+                        """
+                        INSERT INTO trainer_collection_entries (
+                            trainer_id, species_id, variant_id, source
+                        )
+                        SELECT trainer_id, species_id, current_form_id, 'trade'
+                        FROM creatures
+                        WHERE id = ANY($1::bigint[])
+                        ON CONFLICT DO NOTHING
+                        """,
+                        sorted(
+                            [
+                                initiator_creature_id,
+                                counterparty_creature_id,
+                            ]
+                        ),
+                    )
+
                     completed_row = await connection.fetchrow(
                         """
                         UPDATE trades

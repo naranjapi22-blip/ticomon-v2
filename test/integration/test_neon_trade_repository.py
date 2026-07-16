@@ -14,6 +14,7 @@ from infrastructure.persistence.repositories.neon_trade_repository import (
     NeonTradeRepository,
 )
 from scripts.create_achievement_schema import create_achievement_schema
+from scripts.create_collection_schema import create_collection_schema
 from scripts.create_trade_schema import create_trade_schema
 
 NOW = datetime(2026, 7, 12, 12, 0, 0, tzinfo=UTC)
@@ -24,6 +25,7 @@ async def trade_data_factory():
     await close_pool()
     await create_trade_schema()
     await create_achievement_schema()
+    await create_collection_schema()
     pool = await get_pool()
     created_creature_ids: list[int] = []
     participant_ids: list[int] = []
@@ -82,6 +84,14 @@ async def trade_data_factory():
 
     async with pool.acquire() as connection:
         if participant_ids:
+            await connection.execute(
+                "DELETE FROM trainer_collection_claims WHERE trainer_id = ANY($1)",
+                participant_ids,
+            )
+            await connection.execute(
+                "DELETE FROM trainer_collection_entries WHERE trainer_id = ANY($1)",
+                participant_ids,
+            )
             await connection.execute(
                 "DELETE FROM trainer_achievement_activities WHERE trainer_id = ANY($1)",
                 participant_ids,
@@ -210,6 +220,24 @@ async def test_executes_atomic_trade_and_swaps_collection_numbers(
             "speed_iv",
         ):
             assert after[field] == before[field]
+
+    async with pool.acquire() as connection:
+        history_rows = await connection.fetch(
+            """
+            SELECT trainer_id, species_id, variant_id, source
+            FROM trainer_collection_entries
+            WHERE trainer_id = ANY($1::bigint[])
+            ORDER BY trainer_id
+            """,
+            [data["initiator_id"], data["counterparty_id"]],
+        )
+    entry_values = [
+        (row["species_id"], row["variant_id"], row["source"]) for row in history_rows
+    ]
+    assert entry_values == [
+        (1, None, "trade"),
+        (1, None, "trade"),
+    ]
 
 
 @pytest.mark.asyncio

@@ -281,6 +281,22 @@ async def test_success_persists_creature_candies_and_creates_world():
 
 
 @pytest.mark.asyncio
+async def test_success_records_collection_entry_inside_capture_transaction():
+    service, transaction, _ = await _service(success=True)
+    entries = []
+
+    async def record_collection_entry(creature, source):
+        entries.append((creature, source))
+        return True
+
+    transaction.record_collection_entry = record_collection_entry
+    result = await service.capture(TRAINER_ID, GUILD_ID)
+
+    assert entries[0][0] is result.creature
+    assert entries[0][1].value == "capture"
+
+
+@pytest.mark.asyncio
 async def test_success_updates_existing_world_and_persists_threshold_unlock():
     world = SafariDailyWorld(
         guild_id=GUILD_ID,

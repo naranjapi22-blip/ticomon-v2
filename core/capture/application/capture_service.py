@@ -14,6 +14,7 @@ from core.capture.application.capture_application_result import (
 )
 from core.capture.application.capture_unit_of_work import CaptureUnitOfWork
 from core.capture.service import CaptureService
+from core.collection.history import CollectionEntrySource
 from core.safari.daily_progress import SafariDailyProgressService
 from core.spawn.exceptions import (
     NoActiveSpawnSession,
@@ -87,6 +88,10 @@ class CaptureApplicationService:
 
             async with self._unit_of_work.transaction() as transaction:
                 creature = await transaction.save_creature(result.creature)
+                await transaction.record_collection_entry(
+                    creature,
+                    CollectionEntrySource.CAPTURE,
+                )
                 inventory = await transaction.get_candy_inventory(trainer_id)
                 inventory.add(reward)
                 await transaction.save_candy_inventory(trainer_id, inventory)

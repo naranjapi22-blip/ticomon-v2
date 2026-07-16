@@ -2,6 +2,7 @@ import logging
 
 from core.achievement.activity import AchievementActivity, AchievementActivityType
 from core.candy.candy_repository import CandyRepository
+from core.collection.history import CollectionEntrySource
 from core.creature.creature_repository import CreatureRepository
 from core.evolution.evolution_repository import EvolutionRepository
 from core.evolution.evolution_service import EvolutionService
@@ -25,6 +26,7 @@ class EvolutionApplicationService:
         candy_repository: CandyRepository,
         achievement_activity_repository=None,
         achievement_award_service=None,
+        collection_history_repository=None,
     ) -> None:
         self._evolution_service = evolution_service
         self._evolution_repository = evolution_repository
@@ -32,6 +34,7 @@ class EvolutionApplicationService:
         self._candy_repository = candy_repository
         self._achievement_activity_repository = achievement_activity_repository
         self._achievement_award_service = achievement_award_service
+        self._collection_history_repository = collection_history_repository
 
     async def get_options(
         self,
@@ -80,6 +83,20 @@ class EvolutionApplicationService:
                 trainer_id,
                 inventory,
             )
+
+            if self._collection_history_repository is not None:
+                try:
+                    await self._collection_history_repository.record_creature(
+                        creature,
+                        CollectionEntrySource.EVOLUTION,
+                    )
+                except Exception:
+                    logger.exception(
+                        "evolution collection entry failed trainer_id=%s "
+                        "creature_id=%s",
+                        trainer_id,
+                        creature.id,
+                    )
 
             if (
                 self._achievement_activity_repository is not None

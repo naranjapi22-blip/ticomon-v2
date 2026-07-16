@@ -382,6 +382,31 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
 
 
 @pytest.mark.asyncio
+async def test_safari_capture_records_historical_entries_inside_the_transaction():
+    activity = _TrackingActivityRepository()
+    session = _published_session((SafariParticipant(1, 3, 3),))
+    await activity.save_session(session)
+    transaction = _Transaction()
+    entries = []
+
+    async def record_collection_entry(creature, source):
+        entries.append((creature, source))
+        return True
+
+    transaction.record_collection_entry = record_collection_entry
+    service = _capture_service(activity=activity, unit_of_work=_UnitOfWork(transaction))
+    slot_id = session.current_encounter.slots[0].id
+    await service.select_capture(session.guild_id, 1, slot_id, 1)
+    await service.confirm_capture_selection(session.guild_id, 1)
+    await service.close_capture_selection(session.guild_id)
+
+    result = await service.resolve_capture(session.guild_id)
+
+    assert entries[0][0] is result.slot_results[0].creature
+    assert entries[0][1].value == "safari"
+
+
+@pytest.mark.asyncio
 async def test_shared_captures_create_independent_creatures_per_participant():
     activity = _TrackingActivityRepository()
     session = _published_session(
