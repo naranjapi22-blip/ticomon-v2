@@ -57,5 +57,46 @@ async def test_deferred_evolution_result_edits_original_response(monkeypatch):
 
     await evolution_sender.edit_evolution_result(interaction, result)
 
-    interaction.edit_original_response.assert_awaited_once()
+    interaction.edit_original_response.assert_awaited_once_with(
+        content="🎉 **Evolution successful!**\nBulbasaur ➡️ Ivysaur",
+        attachments=["gif"],
+        view=None,
+    )
     interaction.response.edit_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_deferred_evolution_result_without_file_uses_empty_attachments(
+    monkeypatch,
+):
+    result = SimpleNamespace(
+        previous_species=SimpleNamespace(id=1, name="bulbasaur"),
+        evolved_species=SimpleNamespace(id=2, name="ivysaur"),
+        achievements=(),
+    )
+    interaction = SimpleNamespace(edit_original_response=AsyncMock())
+    monkeypatch.setattr(evolution_sender, "_build_animation", lambda _result: None)
+
+    await evolution_sender.edit_evolution_result(interaction, result)
+
+    kwargs = interaction.edit_original_response.await_args.kwargs
+    assert kwargs["attachments"] == []
+    assert "file" not in kwargs
+    assert kwargs["view"] is None
+
+
+@pytest.mark.asyncio
+async def test_animation_failure_still_sends_evolution_without_file(monkeypatch):
+    result = SimpleNamespace(
+        previous_species=SimpleNamespace(id=1, name="bulbasaur"),
+        evolved_species=SimpleNamespace(id=2, name="ivysaur"),
+        achievements=(),
+    )
+    send = AsyncMock()
+    monkeypatch.setattr(evolution_sender, "_build_animation", lambda _result: None)
+
+    await evolution_sender.send_evolution_result(send, result)
+
+    send.assert_awaited_once_with(
+        content="🎉 **Evolution successful!**\nBulbasaur ➡️ Ivysaur"
+    )
