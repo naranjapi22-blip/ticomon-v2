@@ -48,7 +48,7 @@ async def test_preview_uses_canonical_rotom_variant_and_freezes_key():
     service = ShopApplicationService(SpeciesRepository([rotom]), candies, repository)
     preview = await service.preview_product(113100351531417600, "rotom_heat")
     assert preview.variant_name == "heat"
-    assert preview.cost.get(CandyType.ELECTRIC) == 70
+    assert preview.cost.get(CandyType.ELECTRIC) == 55
     assert preview.idempotency_key.startswith("shop:113100351531417600:")
 
     result = await service.purchase(113100351531417600, preview)
@@ -84,8 +84,8 @@ async def test_random_alcremie_is_one_of_45_supported_combinations():
     alcremie = create_species(id=869, name="alcremie", variants=variants)
     service = ShopApplicationService(
         SpeciesRepository([alcremie]),
-        CandyRepository(CandyInventory({CandyType.FAIRY: 80})),
-        ShopRepository(CandyInventory({CandyType.FAIRY: 80})),
+        CandyRepository(CandyInventory({CandyType.FAIRY: 60})),
+        ShopRepository(CandyInventory({CandyType.FAIRY: 60})),
     )
     preview = await service.preview_alcremie(7, "random", random_source=FixedRandom())
     assert preview.variant_name == "vanilla-cream-star"
@@ -117,7 +117,7 @@ async def test_salted_cream_love_preview_and_purchase_are_identical():
     assert result.creature.current_form.name == preview.variant_name
     assert result.creature.is_shiny is False
     assert result.creature.minted_nature is None
-    assert result.remaining.get_amount(CandyType.FAIRY) == 27
+    assert result.remaining.get_amount(CandyType.FAIRY) == 47
     assert repository.args[-1] == preview.idempotency_key
 
 

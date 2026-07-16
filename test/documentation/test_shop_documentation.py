@@ -24,3 +24,16 @@ def test_shop_documentation_matches_supported_variants_and_modes():
     assert "63 combinations" not in document
     assert "Every product shows its exact GIF before confirmation" in readme
     assert "Pastry Shop is the only shop" not in readme
+
+
+def test_shop_documentation_uses_the_reduced_price_schedule():
+    document = (ROOT / "docs" / "shops.md").read_text(encoding="utf-8")
+    assert "| Porygon | 60 Normal |" in document
+    assert "| Omanyte | 60 Rock + 60 Water |" in document
+    assert "| Random cream and decoration | 60 Fairy |" in document
+    assert "| Selected cream, random decoration | 90 Fairy |" in document
+    assert "| Selected cream and decoration | 120 Fairy |" in document
+    assert "80 Normal" not in document
+    assert "50 Electric + 50 Ghost" not in document
+    assert "70 Electric" not in document
+    assert "160 Fairy" not in document

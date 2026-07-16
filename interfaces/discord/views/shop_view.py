@@ -244,9 +244,9 @@ class PastryView(discord.ui.View):
         return discord.Embed(
             title="Pastry Shop",
             description=(
-                "Random combination: 80 Fairy\n"
-                "Choose cream: 120 Fairy\n"
-                "Choose cream and decoration: 160 Fairy"
+                "Random combination: 60 Fairy\n"
+                "Choose cream: 90 Fairy\n"
+                "Choose cream and decoration: 120 Fairy"
             ),
             color=discord.Color.pink(),
         )

@@ -23,12 +23,12 @@ or duplicate-price increases.
 
 | Product | Price |
 | --- | --- |
-| Porygon | 80 Normal |
-| Rotom | 50 Electric + 50 Ghost |
-| Rotom Heat | 70 Electric + 70 Fire |
-| Rotom Wash | 70 Electric + 70 Water |
-| Rotom Mow | 70 Electric + 70 Grass |
-| Golett | 60 Ground + 60 Ghost |
+| Porygon | 60 Normal |
+| Rotom | 40 Electric + 40 Ghost |
+| Rotom Heat | 55 Electric + 55 Fire |
+| Rotom Wash | 55 Electric + 55 Water |
+| Rotom Mow | 55 Electric + 55 Grass |
+| Golett | 45 Ground + 45 Ghost |
 
 Rotom Frost and Rotom Fan are not currently available because canonical
 variants and matching resources have not been confirmed. Historical `h`, `m`,
@@ -38,21 +38,21 @@ variants and matching resources have not been confirmed. Historical `h`, `m`,
 
 | Product | Price |
 | --- | --- |
-| Omanyte | 80 Rock + 80 Water |
-| Kabuto | 80 Rock + 80 Water |
-| Aerodactyl | 80 Rock + 80 Flying |
-| Lileep | 80 Rock + 80 Grass |
-| Anorith | 80 Rock + 80 Bug |
-| Cranidos | 160 Rock |
-| Shieldon | 80 Rock + 80 Steel |
-| Tirtouga | 80 Water + 80 Rock |
-| Archen | 80 Rock + 80 Flying |
-| Tyrunt | 100 Rock + 100 Dragon |
-| Amaura | 100 Rock + 100 Ice |
-| Dracozolt | 110 Electric + 110 Dragon |
-| Arctozolt | 110 Electric + 110 Ice |
-| Dracovish | 110 Water + 110 Dragon |
-| Arctovish | 110 Water + 110 Ice |
+| Omanyte | 60 Rock + 60 Water |
+| Kabuto | 60 Rock + 60 Water |
+| Aerodactyl | 60 Rock + 60 Flying |
+| Lileep | 60 Rock + 60 Grass |
+| Anorith | 60 Rock + 60 Bug |
+| Cranidos | 120 Rock |
+| Shieldon | 60 Rock + 60 Steel |
+| Tirtouga | 60 Water + 60 Rock |
+| Archen | 60 Rock + 60 Flying |
+| Tyrunt | 75 Rock + 75 Dragon |
+| Amaura | 75 Rock + 75 Ice |
+| Dracozolt | 90 Electric + 90 Dragon |
+| Arctozolt | 90 Electric + 90 Ice |
+| Dracovish | 90 Water + 90 Dragon |
+| Arctovish | 90 Water + 90 Ice |
 
 Later evolutions are obtained through the normal evolution system, not bought
 directly from the shop.
@@ -64,9 +64,9 @@ decorations. The three purchase modes are:
 
 | Mode | Price |
 | --- | --- |
-| Random cream and decoration | 80 Fairy |
-| Selected cream, random decoration | 120 Fairy |
-| Selected cream and decoration | 160 Fairy |
+| Random cream and decoration | 60 Fairy |
+| Selected cream, random decoration | 90 Fairy |
+| Selected cream and decoration | 120 Fairy |
 
 The combination is resolved before confirmation and is frozen for the GIF and
 the purchase. The 8 technical/base variants without decoration are not shop
