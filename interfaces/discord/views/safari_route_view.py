@@ -30,27 +30,22 @@ from rendering.safari.assets import SafariAssets
 logger = logging.getLogger(__name__)
 
 
-class SafariRouteOptionSelect(discord.ui.Select):
-    def __init__(self, view: "SafariRouteView") -> None:
-        options = []
-        for option in view.options:
-            options.append(
-                discord.SelectOption(
-                    label=view.format_option_label(option),
-                    value=option.id,
-                )
-            )
-
+class SafariRouteButton(discord.ui.Button):
+    def __init__(
+        self,
+        view: "SafariRouteView",
+        option: SafariRouteOption,
+        row: int,
+    ) -> None:
         super().__init__(
-            placeholder="Vote for the next route...",
-            min_values=1,
-            max_values=1,
-            options=options,
-            row=0,
+            label=view.format_option_label(option)[:80],
+            style=discord.ButtonStyle.secondary,
+            row=row,
         )
+        self.route_option = option
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self.view.cast_vote(interaction, self.values[0])
+        await self.view.cast_vote(interaction, self.route_option.id)
 
 
 class SafariRouteView(discord.ui.View):
@@ -77,7 +72,8 @@ class SafariRouteView(discord.ui.View):
         self._timer_processed = False
         self._phase_ended = False
 
-        self.add_item(SafariRouteOptionSelect(self))
+        for index, option in enumerate(self.options):
+            self.add_item(SafariRouteButton(self, option, index // 5))
 
     def build_content(self) -> str:
         return (

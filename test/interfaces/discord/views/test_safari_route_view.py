@@ -4,8 +4,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from application.safari.activity_state import SafariActivityTracker
+from core.safari.route import SafariRouteOption
 from interfaces.discord.views.safari_encounter_view import SafariEncounterView
-from interfaces.discord.views.safari_route_view import SafariRouteView
+from interfaces.discord.views.safari_route_view import (
+    SafariRouteButton,
+    SafariRouteView,
+)
 from test.unit.safari.test_session import make_encounter, make_session, make_vote
 
 
@@ -24,14 +28,61 @@ async def test_route_view_renders_options() -> None:
     assert view.build_content() == (
         "Safari Route Vote\n" "Vote for the next route. Resolves in 30 seconds."
     )
-    assert [option.label for option in view.children[0].options] == [
-        f"{'Stay at' if option.stays_in_same_zone else 'Advance to'} "
-        f"{option.destination_zone.value.replace('_', ' ').title()}"
-        for option in vote.options
+    assert all(isinstance(child, SafariRouteButton) for child in view.children)
+    assert [button.label for button in view.children] == [
+        view.format_option_label(option) for option in vote.options
     ]
-    assert all(":" not in option.label for option in view.children[0].options)
-    assert view.children[0].__class__.__name__ == "SafariRouteOptionSelect"
+    assert [button.route_option.id for button in view.children] == [
+        option.id for option in vote.options
+    ]
+    assert [button.row for button in view.children] == [0] * len(vote.options)
     assert view.build_file().filename == "safari.png"
+
+
+@pytest.mark.asyncio
+async def test_route_buttons_are_distributed_in_rows_of_five() -> None:
+    session = make_session()
+    vote = make_vote(session.current_segment.zone)
+    options = tuple(
+        SafariRouteOption(
+            id=f"{option.id}-{index}",
+            source_zone=option.source_zone,
+            destination_zone=option.destination_zone,
+            type_weight_modifiers=option.type_weight_modifiers,
+            allowed_events=option.allowed_events,
+            narrative_key=f"{option.narrative_key}-{index}",
+        )
+        for index in range(6)
+        for option in (vote.options[index % len(vote.options)],)
+    )
+    view = SafariRouteView(
+        core=SimpleNamespace(),
+        guild_id=session.guild_id,
+        session=session,
+        vote=vote,
+        options=options,
+    )
+
+    assert [button.row for button in view.children] == [0, 0, 0, 0, 0, 1]
+
+
+@pytest.mark.asyncio
+async def test_route_button_delegates_the_selected_option() -> None:
+    session = make_session()
+    vote = make_vote(session.current_segment.zone)
+    view = SafariRouteView(
+        core=SimpleNamespace(),
+        guild_id=session.guild_id,
+        session=session,
+        vote=vote,
+        options=vote.options,
+    )
+    view.cast_vote = AsyncMock()
+    interaction = SimpleNamespace()
+
+    await view.children[1].callback(interaction)
+
+    view.cast_vote.assert_awaited_once_with(interaction, vote.options[1].id)
 
 
 @pytest.mark.asyncio
