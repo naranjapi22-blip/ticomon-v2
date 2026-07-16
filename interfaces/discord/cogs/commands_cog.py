@@ -41,7 +41,8 @@ class CommandsCog(commands.Cog):
                 "`!release` - Release Pokemon for rewards.\n"
                 "`!safari` - Start or join a Safari expedition.\n"
                 "`!trade @trainer <collection_number>` - Trade one Pokemon.\n"
-                "`!shop` - Spend type-specific candies on special creatures."
+                "`!shop` - Opens the Candy Shops, where type candies can be "
+                "exchanged for special Pokemon and forms."
             ),
             inline=False,
         )
