@@ -1,7 +1,10 @@
 import asyncio
 
 from infrastructure.db_config import close_pool, get_pool
-from scripts.creature_schema import ensure_creature_original_trainer_id
+from scripts.creature_schema import (
+    ensure_creature_minted_nature,
+    ensure_creature_original_trainer_id,
+)
 
 
 async def create_trade_schema() -> None:
@@ -91,6 +94,7 @@ async def create_trade_schema() -> None:
                 DROP CONSTRAINT IF EXISTS uq_trainer_collection
                 """)
             await ensure_creature_original_trainer_id(connection)
+            await ensure_creature_minted_nature(connection)
             await connection.execute("""
                 DO $$
                 BEGIN

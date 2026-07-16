@@ -58,11 +58,12 @@ class NeonCreatureRepository(CreatureRepository):
                         defense_iv,
                         special_attack_iv,
                         special_defense_iv,
-                        speed_iv
+                        speed_iv,
+                        minted_nature
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7,
-                        $8, $9, $10, $11, $12, $13, $14
+                        $8, $9, $10, $11, $12, $13, $14, $15
                     )
                     RETURNING id
                     """,
@@ -438,27 +439,29 @@ class NeonCreatureRepository(CreatureRepository):
                     current_form_id = $2,
                     is_shiny = $3,
                     nature = $4,
-                    size = $5,
-                    hp_iv = $6,
-                    attack_iv = $7,
-                    defense_iv = $8,
-                    special_attack_iv = $9,
-                    special_defense_iv = $10,
-                    speed_iv = $11
-                WHERE id = $12
+                    minted_nature = $5,
+                    size = $6,
+                    hp_iv = $7,
+                    attack_iv = $8,
+                    defense_iv = $9,
+                    special_attack_iv = $10,
+                    special_defense_iv = $11,
+                    speed_iv = $12
+                WHERE id = $13
                 RETURNING id
                 """,
                 params[1],  # species_id
                 params[2],  # current_form_id
                 params[3],  # is_shiny
-                params[4],  # nature
-                params[5],  # size
-                params[6],  # hp_iv
-                params[7],  # attack_iv
-                params[8],  # defense_iv
-                params[9],  # special_attack_iv
-                params[10],  # special_defense_iv
-                params[11],  # speed_iv
+                params[5],  # nature
+                params[13],  # minted_nature
+                params[6],  # size
+                params[7],  # hp_iv
+                params[8],  # attack_iv
+                params[9],  # defense_iv
+                params[10],  # special_attack_iv
+                params[11],  # special_defense_iv
+                params[12],  # speed_iv
                 creature.id,
             )
 

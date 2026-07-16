@@ -15,3 +15,10 @@ async def ensure_creature_original_trainer_id(connection) -> None:
         ALTER TABLE creatures
         ALTER COLUMN original_trainer_id SET NOT NULL
         """)
+
+
+async def ensure_creature_minted_nature(connection) -> None:
+    await connection.execute("""
+        ALTER TABLE creatures
+        ADD COLUMN IF NOT EXISTS minted_nature VARCHAR(20) NULL
+        """)

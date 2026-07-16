@@ -29,6 +29,7 @@ class Creature:
     is_shiny: bool
 
     current_form: Variant | None
+    minted_nature: Nature | None = None
 
     id: int | None = None
     collection_number: int | None = None
@@ -45,7 +46,11 @@ class Creature:
         return self.ivs.for_stat(stat)
 
     def nature_modifier_for(self, stat: Stat) -> float:
-        return self.nature.modifier_for(stat)
+        return self.effective_nature.modifier_for(stat)
+
+    @property
+    def effective_nature(self) -> Nature:
+        return self.minted_nature or self.nature
 
     @property
     def iv_percentage(self) -> int:

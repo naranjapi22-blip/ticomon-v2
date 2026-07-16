@@ -109,6 +109,7 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
             "speed_iv": 26,
             "size": 1.5,
             "nature": "hardy",
+            "minted_nature": None,
             "is_shiny": True,
             "variant_id": 40,
             "variant_name": "Mega",
@@ -127,6 +128,7 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
             "speed_iv": 16,
             "size": 1.0,
             "nature": "modest",
+            "minted_nature": None,
             "is_shiny": False,
             "variant_id": None,
             "variant_name": None,
@@ -145,6 +147,7 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
             "speed_iv": 6,
             "size": 1.25,
             "nature": "bold",
+            "minted_nature": "jolly",
             "is_shiny": False,
             "variant_id": None,
             "variant_name": None,
@@ -189,6 +192,7 @@ async def test_get_by_trainer_loads_species_in_one_batch(monkeypatch) -> None:
     assert creatures[1].ivs.attack == 20
     assert creatures[1].is_shiny is False
     assert creatures[1].nature.name == "modest"
+    assert creatures[2].minted_nature.name == "jolly"
     assert creatures[1].size.value == 1.0
 
 
@@ -211,6 +215,7 @@ async def test_save_locks_trainer_before_allocating_collection_number(
         "speed_iv": 31,
         "size": 1.0,
         "nature": "hardy",
+        "minted_nature": None,
         "is_shiny": False,
         "variant_id": None,
         "variant_name": None,

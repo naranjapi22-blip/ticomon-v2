@@ -18,4 +18,4 @@ class StatCalculator:
 
         value = floor(((2 * base + iv) * self.LEVEL) / 100) + 5
 
-        return floor(value * creature.nature_modifier_for(stat))
+        return floor(value * creature.effective_nature.modifier_for(stat))

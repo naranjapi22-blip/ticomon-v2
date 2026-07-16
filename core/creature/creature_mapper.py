@@ -43,6 +43,11 @@ class CreatureMapper:
                 if row["variant_id"] is not None
                 else None
             ),
+            minted_nature=(
+                Nature(row["minted_nature"])
+                if row["minted_nature"] is not None
+                else None
+            ),
             original_trainer_id=original_trainer_id,
         )
 
@@ -66,4 +71,5 @@ class CreatureMapper:
             creature.ivs.special_attack,
             creature.ivs.special_defense,
             creature.ivs.speed,
+            creature.minted_nature.name if creature.minted_nature else None,
         )

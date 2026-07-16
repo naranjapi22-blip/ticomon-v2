@@ -48,6 +48,35 @@ class Nature:
             1.0,
         )
 
+    @classmethod
+    def from_effect(
+        cls,
+        increased: Stat,
+        decreased: Stat,
+    ) -> "Nature":
+        if Stat.HP in {increased, decreased}:
+            raise ValueError("HP cannot be modified by a Nature Mint.")
+        if increased is decreased:
+            raise ValueError("A nature cannot increase and decrease the same stat.")
+
+        for name, modifiers in _MODIFIERS.items():
+            if modifiers.get(increased) == 1.1 and modifiers.get(decreased) == 0.9:
+                return cls(name)
+
+        raise ValueError("The stat combination does not match an official nature.")
+
+    def effect(self) -> tuple[Stat | None, Stat | None]:
+        modifiers = _MODIFIERS[self.name]
+        increased = next(
+            (stat for stat, value in modifiers.items() if value == 1.1),
+            None,
+        )
+        decreased = next(
+            (stat for stat, value in modifiers.items() if value == 0.9),
+            None,
+        )
+        return increased, decreased
+
     def arrow_for(
         self,
         stat: Stat,
