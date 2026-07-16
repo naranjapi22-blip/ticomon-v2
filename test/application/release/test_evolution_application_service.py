@@ -9,6 +9,7 @@ from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
 from core.candy.candy_type import CandyType
+from core.creature.nature import Nature
 from core.evolution.evolution_cost_policy import (
     EvolutionCostPolicy,
 )
@@ -56,11 +57,13 @@ async def test_evolution_application_service_evolves_creature():
         CreatureBuilder()
         .with_id(7)
         .with_collection_number(1)
+        .shiny()
         .with_species(
             first_species,
         )
         .build()
     )
+    creature.minted_nature = Nature("adamant")
 
     creature_repository = FakeCreatureRepository(
         creature,
@@ -134,6 +137,11 @@ async def test_evolution_application_service_evolves_creature():
     assert result.success
 
     assert result.creature.species.id == 2
+    assert result.creature.collection_number == 1
+    assert result.creature.id == 7
+    assert result.creature.is_shiny is True
+    assert result.creature.nature == Nature("hardy")
+    assert result.creature.minted_nature == Nature("adamant")
 
     assert result.evolved_species.id == 2
 

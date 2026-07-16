@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import discord
@@ -7,11 +8,18 @@ from interfaces.discord.achievement_notifications import format_unlocks
 from rendering.evolution_animation import EvolutionAnimation
 
 ASSETS_PATH = Path("rendering/assets")
+logger = logging.getLogger(__name__)
 
 
 def _achievement_text(result) -> str:
     achievements = getattr(result, "achievements", ())
-    return f"\n\n{format_unlocks(achievements)}" if achievements else ""
+    if not achievements:
+        return ""
+    try:
+        return f"\n\n{format_unlocks(achievements)}"
+    except Exception:
+        logger.exception("evolution achievement notification failed")
+        return ""
 
 
 def _build_animation(
