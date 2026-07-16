@@ -66,8 +66,14 @@ async def create_achievement_schema() -> None:
                     unlocked_at TIMESTAMPTZ NOT NULL,
                     rewarded_candies JSONB NOT NULL
                         CHECK (jsonb_typeof(rewarded_candies) = 'object'),
+                    rewarded_mints INTEGER NOT NULL DEFAULT 0
+                        CHECK (rewarded_mints >= 0),
                     PRIMARY KEY (trainer_id, achievement_id)
                 )
+                """)
+            await connection.execute("""
+                ALTER TABLE trainer_achievement_unlocks
+                ADD COLUMN IF NOT EXISTS rewarded_mints INTEGER NOT NULL DEFAULT 0
                 """)
 
     await close_pool()

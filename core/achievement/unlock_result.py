@@ -9,3 +9,4 @@ class AchievementUnlockResult:
 
     achievement_id: str
     rewarded_candies: CandyBundle
+    rewarded_mints: int = 0

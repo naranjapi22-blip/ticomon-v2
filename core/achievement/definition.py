@@ -81,6 +81,7 @@ class AchievementDefinition:
     threshold: int
     reward_amount: int
     scope: str | None = None
+    mint_reward: int = 0
 
     def __post_init__(self) -> None:
         if self.threshold <= 0:
@@ -89,6 +90,8 @@ class AchievementDefinition:
             raise ValueError(
                 "Achievement reward amount must be a positive even number."
             )
+        if self.mint_reward < 0:
+            raise ValueError("Achievement mint reward cannot be negative.")
 
 
 _BASE_DEFINITIONS: tuple[AchievementDefinition, ...] = (
@@ -115,6 +118,7 @@ _BASE_DEFINITIONS: tuple[AchievementDefinition, ...] = (
         AchievementCriterion.SHINY_CAPTURE_COUNT,
         threshold=1,
         reward_amount=6,
+        mint_reward=1,
     ),
     AchievementDefinition(
         AchievementId.UNIQUE_SPECIES_10,
@@ -182,12 +186,14 @@ ACHIEVEMENT_DEFINITIONS = _BASE_DEFINITIONS + (
         AchievementCriterion.LEGENDARY_CAPTURE_COUNT,
         1,
         6,
+        mint_reward=1,
     ),
     AchievementDefinition(
         AchievementId.LEGENDARY_CAPTURES_5,
         AchievementCriterion.LEGENDARY_CAPTURE_COUNT,
         5,
         16,
+        mint_reward=1,
     ),
     AchievementDefinition(
         AchievementId.LEGENDARY_CAPTURES_10,
@@ -200,12 +206,14 @@ ACHIEVEMENT_DEFINITIONS = _BASE_DEFINITIONS + (
         AchievementCriterion.MYTHICAL_CAPTURE_COUNT,
         1,
         6,
+        mint_reward=1,
     ),
     AchievementDefinition(
         AchievementId.MYTHICAL_CAPTURES_3,
         AchievementCriterion.MYTHICAL_CAPTURE_COUNT,
         3,
         12,
+        mint_reward=1,
     ),
     AchievementDefinition(
         AchievementId.MYTHICAL_CAPTURES_5,

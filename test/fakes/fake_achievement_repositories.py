@@ -60,6 +60,7 @@ class FakeAchievementActivityRepository(AchievementActivityRepository):
 class FakeAchievementUnlockRepository(AchievementUnlockRepository):
     def __init__(self) -> None:
         self.inventory_by_trainer: dict[int, CandyInventory] = {}
+        self.mints_by_trainer: dict[int, int] = {}
         self._unlocks: dict[tuple[int, str], AchievementUnlock] = {}
 
     async def get_by_trainer(self, trainer_id: int) -> tuple[AchievementUnlock, ...]:
@@ -75,6 +76,7 @@ class FakeAchievementUnlockRepository(AchievementUnlockRepository):
         achievement_id: str,
         rewarded_candies: CandyBundle,
         unlocked_at: datetime,
+        rewarded_mints: int = 0,
     ) -> bool:
         key = (trainer_id, achievement_id)
         if key in self._unlocks:
@@ -84,8 +86,12 @@ class FakeAchievementUnlockRepository(AchievementUnlockRepository):
             achievement_id=achievement_id,
             unlocked_at=unlocked_at.astimezone(UTC),
             rewarded_candies=rewarded_candies,
+            rewarded_mints=rewarded_mints,
         )
         self.inventory_by_trainer.setdefault(trainer_id, CandyInventory()).add(
             rewarded_candies
+        )
+        self.mints_by_trainer[trainer_id] = (
+            self.mints_by_trainer.get(trainer_id, 0) + rewarded_mints
         )
         return True

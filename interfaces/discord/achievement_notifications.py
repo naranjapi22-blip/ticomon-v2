@@ -17,6 +17,7 @@ def format_unlocks(unlocks) -> str:
             f"{kind.value.title()} Candy +{amount}"
             for kind, amount in unlock.rewarded_candies.items()
         )
+        + (f", Nature Mint +{unlock.rewarded_mints}" if unlock.rewarded_mints else "")
         for unlock in unlocks
     )
 

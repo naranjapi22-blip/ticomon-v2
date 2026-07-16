@@ -22,7 +22,8 @@ class NeonAchievementUnlockRepository(AchievementUnlockRepository):
         async with pool.acquire() as connection:
             rows = await connection.fetch(
                 """
-                SELECT trainer_id, achievement_id, unlocked_at, rewarded_candies
+                SELECT trainer_id, achievement_id, unlocked_at, rewarded_candies,
+                       rewarded_mints
                 FROM trainer_achievement_unlocks
                 WHERE trainer_id = $1
                 ORDER BY unlocked_at, achievement_id
@@ -37,6 +38,7 @@ class NeonAchievementUnlockRepository(AchievementUnlockRepository):
         achievement_id: str,
         rewarded_candies: CandyBundle,
         unlocked_at: datetime,
+        rewarded_mints: int = 0,
     ) -> bool:
         pool = await get_pool()
 
@@ -52,9 +54,10 @@ class NeonAchievementUnlockRepository(AchievementUnlockRepository):
                         trainer_id,
                         achievement_id,
                         unlocked_at,
-                        rewarded_candies
+                        rewarded_candies,
+                        rewarded_mints
                     )
-                    VALUES ($1, $2, $3, $4::jsonb)
+                    VALUES ($1, $2, $3, $4::jsonb, $5)
                     ON CONFLICT (trainer_id, achievement_id)
                     DO NOTHING
                     RETURNING achievement_id
@@ -63,6 +66,7 @@ class NeonAchievementUnlockRepository(AchievementUnlockRepository):
                     achievement_id,
                     unlocked_at,
                     json.dumps(self._bundle_to_json(rewarded_candies)),
+                    rewarded_mints,
                 )
                 if created is None:
                     return False
@@ -92,6 +96,17 @@ class NeonAchievementUnlockRepository(AchievementUnlockRepository):
                         for candy_type, amount in self._candy_mapper.to_rows(inventory)
                     ],
                 )
+                if rewarded_mints:
+                    await connection.execute(
+                        """
+                        INSERT INTO trainer_mints (trainer_id, amount)
+                        VALUES ($1, $2)
+                        ON CONFLICT (trainer_id)
+                        DO UPDATE SET amount = trainer_mints.amount + EXCLUDED.amount
+                        """,
+                        trainer_id,
+                        rewarded_mints,
+                    )
         return True
 
     @staticmethod
@@ -114,4 +129,5 @@ class NeonAchievementUnlockRepository(AchievementUnlockRepository):
             achievement_id=row["achievement_id"],
             unlocked_at=row["unlocked_at"],
             rewarded_candies=rewarded_candies,
+            rewarded_mints=int(row.get("rewarded_mints", 0) or 0),
         )

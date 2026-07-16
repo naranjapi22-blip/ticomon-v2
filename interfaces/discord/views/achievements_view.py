@@ -73,6 +73,21 @@ class AchievementsView(discord.ui.View):
 
     @staticmethod
     def _reward(status) -> str:
+        rewards = []
+        if status.rewarded_candies is not None:
+            rewards.extend(
+                f"{kind.value.title()} +{amount}"
+                for kind, amount in status.rewarded_candies.items()
+            )
+        rewarded_mints = getattr(
+            status,
+            "rewarded_mints",
+            getattr(status, "configured_mints", 0),
+        )
+        if rewarded_mints:
+            rewards.append(f"Nature Mint +{rewarded_mints}")
+        if rewards:
+            return ", ".join(rewards)
         if status.rewarded_candies is not None:
             return ", ".join(
                 f"{kind.value.title()} +{amount}"

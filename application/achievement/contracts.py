@@ -25,6 +25,7 @@ class AchievementUnlock:
     achievement_id: str
     unlocked_at: datetime
     rewarded_candies: CandyBundle
+    rewarded_mints: int = 0
 
 
 class AchievementActivityRepository(ABC):
@@ -49,5 +50,6 @@ class AchievementUnlockRepository(ABC):
         achievement_id: str,
         rewarded_candies: CandyBundle,
         unlocked_at: datetime,
+        rewarded_mints: int = 0,
     ) -> bool:
         """Atomically records an unlock and adds its candies once."""

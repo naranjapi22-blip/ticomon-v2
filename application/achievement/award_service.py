@@ -41,8 +41,13 @@ class CaptureAchievementAwardService:
                 definition.id.value,
                 reward,
                 datetime.now(UTC),
+                definition.mint_reward,
             ):
-                awarded.append(AchievementUnlockResult(definition.id.value, reward))
+                awarded.append(
+                    AchievementUnlockResult(
+                        definition.id.value, reward, definition.mint_reward
+                    )
+                )
         return tuple(awarded)
 
     async def award_for_completed_trade(
@@ -66,9 +71,12 @@ class CaptureAchievementAwardService:
                 definition.id.value,
                 reward,
                 datetime.now(UTC),
+                definition.mint_reward,
             ):
                 awarded_results.append(
-                    AchievementUnlockResult(definition.id.value, reward)
+                    AchievementUnlockResult(
+                        definition.id.value, reward, definition.mint_reward
+                    )
                 )
         return tuple(awarded_results)
 

@@ -36,7 +36,9 @@ class AchievementStatus:
     configured_reward: int
     unlocked_at: object | None
     rewarded_candies: CandyBundle | None
+    rewarded_mints: int = 0
     family: str = "Capture"
+    configured_mints: int = 0
 
     @property
     def unlocked(self) -> bool:
@@ -70,7 +72,9 @@ class AchievementQueryService:
                     definition.reward_amount,
                     unlock.unlocked_at if unlock else None,
                     unlock.rewarded_candies if unlock else None,
+                    unlock.rewarded_mints if unlock else 0,
                     self._family(definition.criterion),
+                    definition.mint_reward,
                 )
             )
         return tuple(result)

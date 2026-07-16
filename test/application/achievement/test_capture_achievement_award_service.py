@@ -67,6 +67,39 @@ async def test_capture_milestones_and_safari_award_only_affected_definitions():
 
 
 @pytest.mark.asyncio
+async def test_first_shiny_awards_one_nature_mint_separately():
+    activities = FakeAchievementActivityRepository()
+    unlocks = FakeAchievementUnlockRepository()
+    species = SpeciesBuilder().with_types(["grass"]).build()
+    await activities.record(
+        AchievementActivity(
+            1,
+            AchievementActivityType.CAPTURE,
+            "creature:1",
+            species.id,
+        )
+    )
+    await activities.record(
+        AchievementActivity(
+            1,
+            AchievementActivityType.SHINY_CAPTURE,
+            "creature:1",
+            species.id,
+        )
+    )
+
+    awarded = await CaptureAchievementAwardService(
+        activities, unlocks
+    ).award_for_capture(1, species, is_shiny=True, is_safari=False)
+
+    shiny = next(
+        item for item in awarded if item.achievement_id == "first_shiny_capture"
+    )
+    assert shiny.rewarded_mints == 1
+    assert unlocks.mints_by_trainer[1] == 1
+
+
+@pytest.mark.asyncio
 async def test_first_completed_trade_awards_once_with_offered_species_types():
     activities = FakeAchievementActivityRepository()
     unlocks = FakeAchievementUnlockRepository()
