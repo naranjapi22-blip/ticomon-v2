@@ -8,6 +8,7 @@ from interfaces.discord.bootstrap import build_discord
 from interfaces.discord.cogs.achievements_cog import AchievementsCog
 from interfaces.discord.cogs.candy_cog import CandyCog
 from interfaces.discord.cogs.capture_cog import CaptureCog
+from interfaces.discord.cogs.collections_cog import CollectionsCog
 from interfaces.discord.cogs.commands_cog import CommandsCog
 from interfaces.discord.cogs.duplicates_cog import DuplicatesCog
 from interfaces.discord.cogs.energy_cog import EnergyCog
@@ -53,6 +54,7 @@ class TicoMonBot(commands.Bot):
             (EnergyCog, (self.core,)),
             (SelectCog, (self.core,)),
             (CaptureCog, (self.core,)),
+            (CollectionsCog, (self.core,)),
             (AchievementsCog, (self.core,)),
             (ProfileCog, (self.core,)),
             (TrainerCog, (self.core,)),

@@ -25,3 +25,8 @@ async def test_commands_help_includes_safari_command() -> None:
     assert "`!shop`" in gameplay_field.value
     assert "type candies can be exchanged" in gameplay_field.value
     assert "collectible forms" in gameplay_field.value
+    collection_field = next(
+        field for field in embed.fields if "Collection" in field.name
+    )
+    assert "`!collections`" in collection_field.value
+    assert "thematic collection progress and rewards" in collection_field.value

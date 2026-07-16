@@ -26,6 +26,7 @@ class CommandsCog(commands.Cog):
                 "`!top [type]` - View your top Pokemon.\n"
                 "`!inventory [type|shiny]` - View recent Pokemon.\n"
                 "`!duplicates [pokemon/type]` - Find duplicate Pokemon."
+                "\n`!collections` - Review thematic collection progress and rewards."
             ),
             inline=False,
         )
