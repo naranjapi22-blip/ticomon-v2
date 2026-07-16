@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -110,6 +110,96 @@ async def test_other_trainer_cannot_control_collection_view():
 
     assert await view.interaction_check(interaction) is False
     interaction.response.send_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_album_selection_and_back_reuse_the_overview_snapshot():
+    fossil = _album()
+    technology = _album()
+    technology.definition.id = CollectionId.TECHNOLOGY
+    technology.definition.name = "Technology Collection"
+    snapshot = fossil, technology
+    application = SimpleNamespace(album=AsyncMock(), albums=AsyncMock())
+    core = SimpleNamespace(collection_application=application)
+    overview = CollectionsOverviewView(core, 7, snapshot)
+    interaction = Interaction()
+
+    await overview.choose_album(interaction, "technology_collection")
+
+    application.album.assert_not_awaited()
+    application.albums.assert_not_awaited()
+    album_view = interaction.response.edit_message.await_args.kwargs["view"]
+    assert isinstance(album_view, CollectionAlbumView)
+    assert album_view.album is technology
+    assert album_view.albums is snapshot
+
+    interaction = Interaction()
+    await album_view.back(interaction)
+
+    application.albums.assert_not_awaited()
+    returned_overview = interaction.response.edit_message.await_args.kwargs["view"]
+    assert isinstance(returned_overview, CollectionsOverviewView)
+    assert returned_overview.albums is snapshot
+
+
+@pytest.mark.asyncio
+async def test_entry_navigation_reuses_the_album_snapshot():
+    entries = tuple(_entry(index) for index in range(12))
+    album = _album(entries=entries)
+    snapshot = (album,)
+    application = SimpleNamespace(album=AsyncMock(), albums=AsyncMock())
+    core = SimpleNamespace(collection_application=application)
+    album_view = CollectionAlbumView(core, 7, album, snapshot)
+    interaction = Interaction()
+
+    await album_view.show_entries(interaction)
+
+    entries_view = interaction.response.edit_message.await_args.kwargs["view"]
+    assert isinstance(entries_view, CollectionEntriesView)
+    assert entries_view.albums is snapshot
+
+    interaction = Interaction()
+    await entries_view.change_page(interaction, 1)
+    next_page = interaction.response.edit_message.await_args.kwargs["view"]
+    assert next_page.albums is snapshot
+
+    interaction = Interaction()
+    await next_page.back(interaction)
+    returned_album = interaction.response.edit_message.await_args.kwargs["view"]
+    assert returned_album.albums is snapshot
+    application.album.assert_not_awaited()
+    application.albums.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_entry_detail_and_back_keep_the_album_snapshot():
+    album = _album(entries=(_entry(0),))
+    snapshot = (album,)
+    application = SimpleNamespace(
+        album=AsyncMock(),
+        albums=AsyncMock(),
+        preview_creature=lambda entry: entry,
+    )
+    core = SimpleNamespace(collection_application=application)
+    entries_view = CollectionEntriesView(core, 7, album, albums=snapshot)
+    interaction = Interaction()
+
+    with patch(
+        "interfaces.discord.views.collections_view._entry_file",
+        new=AsyncMock(return_value=None),
+    ):
+        await entries_view.show_entry(interaction, 0)
+
+    detail = interaction.edit_original_response.await_args.kwargs["view"]
+    assert detail.albums is snapshot
+
+    interaction = Interaction()
+    await detail.back(interaction)
+
+    returned_entries = interaction.response.edit_message.await_args.kwargs["view"]
+    assert returned_entries.albums is snapshot
+    application.album.assert_not_awaited()
+    application.albums.assert_not_awaited()
 
 
 def test_mint_rewards_use_the_complete_singular_and_plural_labels():

@@ -16,6 +16,12 @@ class SpeciesRepository(ABC):
     async def find_by_name(self, name: str) -> Species | None: ...
 
     @abstractmethod
+    async def find_many_by_names(
+        self,
+        names: list[str] | tuple[str, ...],
+    ) -> dict[str, Species]: ...
+
+    @abstractmethod
     async def get_all(self) -> tuple[Species, ...]: ...
 
     @abstractmethod

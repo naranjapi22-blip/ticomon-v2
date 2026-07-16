@@ -1,5 +1,6 @@
 import pytest
 
+from core.collection.catalog import COLLECTIONS
 from infrastructure.species.neon_species_repository import (
     NeonSpeciesRepository,
 )
@@ -35,3 +36,23 @@ async def test_get_all_species():
     species = await repository.get_all()
 
     assert len(species) >= 1025
+
+
+@pytest.mark.asyncio
+async def test_find_many_by_names_loads_the_collection_catalog():
+    names = tuple(
+        dict.fromkeys(
+            entry.species_name
+            for definition in COLLECTIONS
+            for entry in definition.entries
+        )
+    )
+
+    species_by_name = await NeonSpeciesRepository().find_many_by_names(names)
+
+    assert set(species_by_name) == set(names)
+    assert {variant.name for variant in species_by_name["rotom"].variants} >= {
+        "heat",
+        "wash",
+        "mow",
+    }

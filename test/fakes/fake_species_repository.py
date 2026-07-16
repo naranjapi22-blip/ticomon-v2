@@ -29,6 +29,17 @@ class FakeSpeciesRepository(SpeciesRepository):
 
         return None
 
+    async def find_many_by_names(
+        self,
+        names: list[str] | tuple[str, ...],
+    ) -> dict[str, Species]:
+        requested = set(names)
+        return {
+            species.name: species
+            for species in self._species.values()
+            if species.name in requested
+        }
+
     async def get_all(
         self,
     ) -> list[Species]:

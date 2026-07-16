@@ -17,9 +17,16 @@ from test.fakes.fake_collection_history_repository import (
 class SpeciesRepository:
     def __init__(self, species):
         self.species = {item.name: item for item in species}
+        self.find_by_name_calls = []
+        self.find_many_by_names_calls = []
 
     async def find_by_name(self, name):
+        self.find_by_name_calls.append(name)
         return self.species.get(name)
+
+    async def find_many_by_names(self, names):
+        self.find_many_by_names_calls.append(tuple(names))
+        return {name: self.species[name] for name in names if name in self.species}
 
 
 class CreatureRepository:
@@ -231,3 +238,74 @@ async def test_shop_porygon_is_owned_and_historical_immediately():
     album = await service.album(trainer_id, CollectionId.TECHNOLOGY)
     assert album.progress.historical_count == 1
     assert album.progress.owned_count == 1
+
+
+@pytest.mark.asyncio
+async def test_albums_load_collection_species_once_without_per_entry_queries():
+    species_repository = SpeciesRepository(_all_collection_species())
+    service = CollectionApplicationService(
+        species_repository,
+        FakeCollectionHistoryRepository(),
+        CreatureRepository(),
+    )
+
+    albums = await service.albums(7)
+
+    expected_names = tuple(
+        dict.fromkeys(
+            entry.species_name
+            for definition in COLLECTIONS
+            for entry in definition.entries
+        )
+    )
+    assert species_repository.find_many_by_names_calls == [expected_names]
+    assert species_repository.find_by_name_calls == []
+    assert [album.definition.id for album in albums] == [
+        definition.id for definition in COLLECTIONS
+    ]
+    assert sum(len(album.entries) for album in albums) == 105
+    assert all(
+        entry.species.name == entry.definition.species_name
+        and (
+            entry.variant is None or entry.variant.name == entry.definition.variant_name
+        )
+        for album in albums
+        for entry in album.entries
+    )
+
+
+@pytest.mark.asyncio
+async def test_albums_report_a_missing_canonical_collection_species():
+    species = list(_all_collection_species())
+    species = [item for item in species if item.name != "porygon"]
+    service = CollectionApplicationService(
+        SpeciesRepository(species),
+        FakeCollectionHistoryRepository(),
+        CreatureRepository(),
+    )
+
+    with pytest.raises(ValueError, match="Collection species porygon is unavailable"):
+        await service.albums(7)
+
+
+@pytest.mark.asyncio
+async def test_claim_from_an_obsolete_snapshot_revalidates_current_ownership():
+    trainer_id = 113100351531417600
+    history = FakeCollectionHistoryRepository()
+    creatures = CreatureRepository()
+    service = CollectionApplicationService(
+        SpeciesRepository(_all_collection_species()), history, creatures
+    )
+    initial = await service.album(trainer_id, CollectionId.TECHNOLOGY)
+    owned = [
+        await _record(history, creatures, trainer_id, entry)
+        for entry in initial.entries[:3]
+    ]
+    snapshot = await service.album(trainer_id, CollectionId.TECHNOLOGY)
+    assert [item.threshold for item in snapshot.available_milestones] == [3]
+
+    creatures.creatures.remove(owned[-1])
+
+    with pytest.raises(ValueError, match="current collection"):
+        await service.claim(trainer_id, CollectionId.TECHNOLOGY, 3)
+    assert history.claim_calls == []

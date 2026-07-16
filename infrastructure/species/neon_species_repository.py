@@ -67,6 +67,32 @@ class NeonSpeciesRepository(SpeciesRepository):
 
         return {species_id: tuple(values) for species_id, values in variants.items()}
 
+    async def _load_variants_for_species(
+        self,
+        connection,
+        species_ids: list[int],
+    ) -> dict[int, tuple[Variant, ...]]:
+        if not species_ids:
+            return {}
+
+        rows = await connection.fetch(
+            """
+            SELECT species_id, id, name
+            FROM species_variants
+            WHERE species_id = ANY($1::bigint[])
+            ORDER BY species_id, id
+            """,
+            species_ids,
+        )
+        variants: dict[int, list[Variant]] = {}
+
+        for row in rows:
+            variants.setdefault(row["species_id"], []).append(
+                Variant(id=row["id"], name=row["name"])
+            )
+
+        return {species_id: tuple(values) for species_id, values in variants.items()}
+
     async def get(
         self,
         species_id: int,
@@ -134,6 +160,39 @@ class NeonSpeciesRepository(SpeciesRepository):
             row,
             variants,
         )
+
+    async def find_many_by_names(
+        self,
+        names: list[str] | tuple[str, ...],
+    ) -> dict[str, Species]:
+        canonical_names = list(dict.fromkeys(names))
+        if not canonical_names:
+            return {}
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+            rows = await connection.fetch(
+                """
+                SELECT *
+                FROM species
+                WHERE name = ANY($1::text[])
+                ORDER BY id
+                """,
+                canonical_names,
+            )
+            variants_by_species = await self._load_variants_for_species(
+                connection,
+                [row["id"] for row in rows],
+            )
+
+        return {
+            row["name"]: self._mapper.from_row(
+                row,
+                variants_by_species.get(row["id"], ()),
+            )
+            for row in rows
+        }
 
     async def get_all(
         self,

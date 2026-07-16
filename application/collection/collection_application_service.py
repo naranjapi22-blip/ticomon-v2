@@ -71,7 +71,7 @@ class CollectionApplicationService:
         history = await self._history_repository.entries_for_trainer(trainer_id)
         claimed = await self._history_repository.claimed_milestones(trainer_id)
         owned = await self._owned_entry_collection_numbers(trainer_id)
-        species_by_name: dict[str, object] = {}
+        species_by_name = await self._collection_species_by_name(COLLECTIONS)
         albums = []
         for definition in COLLECTIONS:
             albums.append(
@@ -89,8 +89,13 @@ class CollectionApplicationService:
         history = await self._history_repository.entries_for_trainer(trainer_id)
         claimed = await self._history_repository.claimed_milestones(trainer_id)
         owned = await self._owned_entry_collection_numbers(trainer_id)
+        definition = collection_by_id(collection_id)
         return await self._album_from_history(
-            collection_by_id(collection_id), history, owned, claimed, {}
+            definition,
+            history,
+            owned,
+            claimed,
+            await self._collection_species_by_name((definition,)),
         )
 
     async def claim(
@@ -154,7 +159,7 @@ class CollectionApplicationService:
         statuses = []
         for entry in definition.entries:
             statuses.append(
-                await self._resolve_entry(
+                self._resolve_entry(
                     entry,
                     obtained,
                     owned,
@@ -180,7 +185,7 @@ class CollectionApplicationService:
             ),
         )
 
-    async def _resolve_entry(
+    def _resolve_entry(
         self,
         definition: CollectionEntryDefinition,
         obtained,
@@ -190,14 +195,9 @@ class CollectionApplicationService:
     ) -> CollectionEntryStatus:
         species = species_by_name.get(definition.species_name)
         if species is None:
-            species = await self._species_repository.find_by_name(
-                definition.species_name
+            raise ValueError(
+                f"Collection species {definition.species_name} is unavailable."
             )
-            if species is None:
-                raise ValueError(
-                    f"Collection species {definition.species_name} is unavailable."
-                )
-            species_by_name[definition.species_name] = species
         variant = None
         if definition.variant_name is not None:
             variant = next(
@@ -222,6 +222,25 @@ class CollectionApplicationService:
             source_by_identity.get(identity),
             owned.get(identity),
         )
+
+    async def _collection_species_by_name(
+        self,
+        definitions: tuple[CollectionDefinition, ...],
+    ) -> dict[str, object]:
+        names = tuple(
+            dict.fromkeys(
+                entry.species_name
+                for definition in definitions
+                for entry in definition.entries
+            )
+        )
+        species_by_name = await self._species_repository.find_many_by_names(names)
+
+        for name in names:
+            if name not in species_by_name:
+                raise ValueError(f"Collection species {name} is unavailable.")
+
+        return species_by_name
 
     async def _owned_entry_collection_numbers(
         self,

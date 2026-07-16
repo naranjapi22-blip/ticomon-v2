@@ -90,21 +90,18 @@ class CollectionsOverviewView(_OwnedCollectionView):
         )
 
     async def choose_album(self, interaction: discord.Interaction, collection_id: str):
-        await interaction.response.defer()
         try:
-            album = await self.core.collection_application.album(
-                self.trainer_id, collection_id
+            album = next(
+                item for item in self.albums if str(item.definition.id) == collection_id
             )
-        except ValueError as error:
-            await interaction.edit_original_response(
-                content=str(error), embed=None, attachments=[], view=None
+        except StopIteration:
+            await interaction.response.edit_message(
+                content="Unknown collection.", embed=None, view=None
             )
             return
-        view = CollectionAlbumView(self.core, self.trainer_id, album)
+        view = CollectionAlbumView(self.core, self.trainer_id, album, self.albums)
         view.message = self.message
-        await interaction.edit_original_response(
-            embed=view.embed(), attachments=[], view=view
-        )
+        await interaction.response.edit_message(embed=view.embed(), view=view)
 
 
 class CollectionAlbumSelect(discord.ui.Select):
@@ -142,9 +139,10 @@ class CollectionCloseButton(discord.ui.Button):
 
 
 class CollectionAlbumView(_OwnedCollectionView):
-    def __init__(self, core, trainer_id: int, album) -> None:
+    def __init__(self, core, trainer_id: int, album, albums=None) -> None:
         super().__init__(core, trainer_id)
         self.album = album
+        self.albums = albums or (album,)
         self.add_item(CollectionEntriesButton())
         for milestone in album.available_milestones:
             self.add_item(CollectionClaimButton(milestone.threshold))
@@ -184,7 +182,12 @@ class CollectionAlbumView(_OwnedCollectionView):
         )
 
     async def show_entries(self, interaction: discord.Interaction) -> None:
-        view = CollectionEntriesView(self.core, self.trainer_id, self.album)
+        view = CollectionEntriesView(
+            self.core,
+            self.trainer_id,
+            self.album,
+            albums=self.albums,
+        )
         view.message = self.message
         await interaction.response.edit_message(embed=view.embed(), view=view)
 
@@ -203,7 +206,11 @@ class CollectionAlbumView(_OwnedCollectionView):
                 content=str(error), embed=None, attachments=[], view=None
             )
             return
-        view = CollectionAlbumView(self.core, self.trainer_id, result.album)
+        albums = tuple(
+            result.album if item.definition.id == result.album.definition.id else item
+            for item in self.albums
+        )
+        view = CollectionAlbumView(self.core, self.trainer_id, result.album, albums)
         view.message = self.message
         content = (
             f"Claimed {_reward_text(result.milestone)}."
@@ -215,19 +222,9 @@ class CollectionAlbumView(_OwnedCollectionView):
         )
 
     async def back(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
-        try:
-            albums = await self.core.collection_application.albums(self.trainer_id)
-        except ValueError as error:
-            await interaction.edit_original_response(
-                content=str(error), embed=None, attachments=[], view=None
-            )
-            return
-        view = CollectionsOverviewView(self.core, self.trainer_id, albums)
+        view = CollectionsOverviewView(self.core, self.trainer_id, self.albums)
         view.message = self.message
-        await interaction.edit_original_response(
-            embed=view.embed(), attachments=[], view=view
-        )
+        await interaction.response.edit_message(embed=view.embed(), view=view)
 
 
 class CollectionEntriesButton(discord.ui.Button):
@@ -261,10 +258,13 @@ class CollectionsBackButton(discord.ui.Button):
 class CollectionEntriesView(_OwnedCollectionView):
     PAGE_SIZE = 10
 
-    def __init__(self, core, trainer_id: int, album, page: int = 0) -> None:
+    def __init__(
+        self, core, trainer_id: int, album, page: int = 0, albums=None
+    ) -> None:
         super().__init__(core, trainer_id)
         self.album = album
         self.page = page
+        self.albums = albums or (album,)
         self.add_item(CollectionEntrySelect(self.entries_on_page))
         self.add_item(CollectionEntriesPreviousButton())
         self.add_item(CollectionEntriesNextButton())
@@ -326,6 +326,7 @@ class CollectionEntriesView(_OwnedCollectionView):
             self.trainer_id,
             self.album,
             self.page,
+            self.albums,
         )
         view.message = self.message
         description = (
@@ -361,12 +362,18 @@ class CollectionEntriesView(_OwnedCollectionView):
             self.trainer_id,
             self.album,
             self.page + direction,
+            self.albums,
         )
         view.message = self.message
         await interaction.response.edit_message(embed=view.embed(), view=view)
 
     async def back(self, interaction: discord.Interaction) -> None:
-        view = CollectionAlbumView(self.core, self.trainer_id, self.album)
+        view = CollectionAlbumView(
+            self.core,
+            self.trainer_id,
+            self.album,
+            self.albums,
+        )
         view.message = self.message
         await interaction.response.edit_message(embed=view.embed(), view=view)
 
@@ -414,14 +421,21 @@ class CollectionEntriesBackButton(discord.ui.Button):
 
 
 class CollectionEntryDetailView(_OwnedCollectionView):
-    def __init__(self, core, trainer_id: int, album, page: int) -> None:
+    def __init__(self, core, trainer_id: int, album, page: int, albums=None) -> None:
         super().__init__(core, trainer_id)
         self.album = album
         self.page = page
+        self.albums = albums or (album,)
         self.add_item(CollectionEntryDetailBackButton())
 
     async def back(self, interaction: discord.Interaction) -> None:
-        view = CollectionEntriesView(self.core, self.trainer_id, self.album, self.page)
+        view = CollectionEntriesView(
+            self.core,
+            self.trainer_id,
+            self.album,
+            self.page,
+            self.albums,
+        )
         view.message = self.message
         await interaction.response.edit_message(
             embed=view.embed(), attachments=[], view=view
