@@ -93,6 +93,39 @@ async def test_random_alcremie_is_one_of_45_supported_combinations():
     assert preview.decoration == "star"
 
 
+@pytest.mark.asyncio
+async def test_salted_cream_love_preview_and_purchase_are_identical():
+    alcremie = create_species(
+        id=869,
+        name="alcremie",
+        variants=[Variant(80, "salted-cream-love")],
+    )
+    inventory = CandyInventory({CandyType.FAIRY: 107})
+    repository = ShopRepository(inventory)
+    service = ShopApplicationService(
+        SpeciesRepository([alcremie]), CandyRepository(inventory), repository
+    )
+    preview = await service.preview_alcremie(
+        113100351531417600,
+        "random",
+        random_source=SaltedLoveRandom(),
+    )
+    result = await service.purchase(113100351531417600, preview)
+    assert preview.variant_id == 80
+    assert preview.variant_name == "salted-cream-love"
+    assert result.creature.current_form.id == preview.variant_id
+    assert result.creature.current_form.name == preview.variant_name
+    assert result.creature.is_shiny is False
+    assert result.creature.minted_nature is None
+    assert result.remaining.get_amount(CandyType.FAIRY) == 27
+    assert repository.args[-1] == preview.idempotency_key
+
+
+class SaltedLoveRandom:
+    def choice(self, values):
+        return "salted-cream" if len(values) == 9 else "love"
+
+
 class FixedRandom:
     def choice(self, values):
         return values[-1]

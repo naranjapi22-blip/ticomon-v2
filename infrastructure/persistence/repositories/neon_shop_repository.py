@@ -1,5 +1,7 @@
 import logging
 
+from asyncpg.exceptions import UndefinedTableError
+
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature_mapper import CreatureMapper
 from core.shop.repository import ShopRepository
@@ -27,13 +29,34 @@ class NeonShopRepository(ShopRepository):
             result = await self._purchase(
                 trainer_id, creature, cost, product_id, idempotency_key
             )
-        except Exception:
+        except Exception as error:
+            variant = creature.current_form
+            variant_name = variant.name if variant is not None else None
+            cream = decoration = None
+            if (
+                variant_name
+                and "-" in variant_name
+                and creature.species.name.lower() == "alcremie"
+            ):
+                cream, decoration = variant_name.rsplit("-", 1)
             logger.exception(
-                "shop_purchase trainer_id=%s product=%s costs=%s success=false",
+                "shop_purchase_failed stage=persistence trainer_id=%s shop=%s "
+                "product=%s species_id=%s variant_id=%s cream=%s decoration=%s "
+                "costs=%s idempotency_key=%s success=false",
                 trainer_id,
+                creature.species.name,
                 product_id,
+                creature.species.id,
+                variant.id if variant is not None else None,
+                cream,
+                decoration,
                 {candy_type.value: amount for candy_type, amount in cost.items()},
+                idempotency_key,
             )
+            if isinstance(error, UndefinedTableError):
+                raise ValueError(
+                    "Shop schema is not initialized. Run scripts/create_shop_schema.py."
+                ) from error
             raise
         logger.info(
             "shop_purchase trainer_id=%s product=%s creature_id=%s "

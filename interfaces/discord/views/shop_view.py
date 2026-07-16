@@ -487,9 +487,12 @@ class ShopConfirmationView(discord.ui.View):
                 content=str(error), embed=None, attachments=[], view=None
             )
             return
-        except Exception:
-            logger.exception(
-                "shop_purchase_presentation_failed trainer_id=%s", self.trainer_id
+        except Exception as error:
+            logger.error(
+                "shop_purchase_failed_without_traceback stage=application "
+                "trainer_id=%s error_type=%s",
+                self.trainer_id,
+                type(error).__name__,
             )
             await interaction.edit_original_response(
                 content="The purchase could not be completed.",
