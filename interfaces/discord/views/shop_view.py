@@ -29,6 +29,28 @@ def _inventory_text(inventory) -> str:
     )
 
 
+def _bundle_inventory_text(inventory, bundle) -> str:
+    return "\n".join(
+        f"{candy_type.value.title()}: {inventory.get_amount(candy_type)}"
+        for candy_type, _ in bundle.items()
+    )
+
+
+def _bundle_cost_text(bundle) -> str:
+    return "\n".join(
+        f"{candy_type.value.title()}: {amount}" for candy_type, amount in bundle.items()
+    )
+
+
+def _missing_text(inventory, bundle) -> str:
+    return "\n".join(
+        f"Missing: {amount - inventory.get_amount(candy_type)} "
+        f"{candy_type.value.title()}"
+        for candy_type, amount in bundle.items()
+        if inventory.get_amount(candy_type) < amount
+    )
+
+
 class ShopView(discord.ui.View):
     def __init__(self, core, trainer_id: int) -> None:
         super().__init__(timeout=180)
@@ -379,12 +401,24 @@ class ShopConfirmationView(discord.ui.View):
         self._processing = False
 
     def embed(self, has_image: bool = False) -> discord.Embed:
-        description = (
-            f"Product: **{self.preview.species_name.title()}**\n"
-            f"Cost: **{_cost_text(self.preview.cost)}**\n"
-            f"Current balance: **{_inventory_text(self.preview.inventory)}**\n"
-            f"Balance after purchase: **{_inventory_text(self._remaining())}**"
-        )
+        affordable = self.preview.inventory.has(self.preview.cost)
+        self._set_confirm_enabled(affordable)
+        description = f"Product: **{self.preview.species_name.title()}**\n"
+        if affordable:
+            current = _bundle_inventory_text(self.preview.inventory, self.preview.cost)
+            remaining = _bundle_inventory_text(self._remaining(), self.preview.cost)
+            description += (
+                f"Current balance:\n{current}\n"
+                f"Price:\n{_bundle_cost_text(self.preview.cost)}\n"
+                f"Balance after purchase:\n{remaining}"
+            )
+        else:
+            description += (
+                "**Insufficient candies**\n"
+                f"{_bundle_inventory_text(self.preview.inventory, self.preview.cost)}\n"
+                f"Price:\n{_bundle_cost_text(self.preview.cost)}\n"
+                f"{_missing_text(self.preview.inventory, self.preview.cost)}"
+            )
         if self.preview.cream:
             description += (
                 f"\nCream: **{self.preview.cream}**"
@@ -403,6 +437,11 @@ class ShopConfirmationView(discord.ui.View):
         except ValueError:
             pass
         return remaining
+
+    def _set_confirm_enabled(self, enabled: bool) -> None:
+        for item in self.children:
+            if isinstance(item, ConfirmPurchaseButton):
+                item.disabled = not enabled
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.trainer_id:

@@ -114,6 +114,75 @@ async def test_confirmation_defers_and_ignores_double_click():
     assert len(calls) == 1
 
 
+def make_preview(inventory, cost, species_name="alcremie"):
+    return SimpleNamespace(
+        species_name=species_name,
+        cost=cost,
+        inventory=inventory,
+        store=ShopStore.PASTRY,
+        cream="vanilla-cream",
+        decoration="berry",
+    )
+
+
+def test_alcremie_confirmation_shows_only_fairy_and_subtracts_balance():
+    preview = make_preview(
+        CandyInventory({CandyType.FAIRY: 107, CandyType.NORMAL: 47}),
+        CandyBundle.from_amounts(CandyTypeAmount(CandyType.FAIRY, 80)),
+    )
+    view = ShopConfirmationViewWithButtons(Core(), 7, preview)
+    description = view.embed().description
+    assert "Fairy: 107" in description
+    assert "Fairy: 80" in description
+    assert "Fairy: 27" in description
+    assert "Normal" not in description
+
+
+def test_two_type_confirmation_shows_only_required_types():
+    preview = make_preview(
+        CandyInventory(
+            {CandyType.ELECTRIC: 133, CandyType.FIRE: 113, CandyType.NORMAL: 47}
+        ),
+        CandyBundle.from_amounts(
+            CandyTypeAmount(CandyType.ELECTRIC, 70),
+            CandyTypeAmount(CandyType.FIRE, 70),
+        ),
+        species_name="rotom",
+    )
+    view = ShopConfirmationViewWithButtons(Core(), 7, preview)
+    description = view.embed().description
+    assert "Electric: 63" in description
+    assert "Fire: 43" in description
+    assert "Normal" not in description
+
+
+def test_insufficient_balance_disables_confirm_and_shows_missing_amount():
+    preview = make_preview(
+        CandyInventory({CandyType.NORMAL: 47}),
+        CandyBundle.from_amounts(CandyTypeAmount(CandyType.NORMAL, 80)),
+        species_name="porygon",
+    )
+    view = ShopConfirmationViewWithButtons(Core(), 7, preview)
+    description = view.embed().description
+    confirm = next(item for item in view.children if item.label == "Confirm")
+    assert confirm.disabled
+    assert "Insufficient candies" in description
+    assert "Normal: 47" in description
+    assert "Missing: 33 Normal" in description
+    assert "Balance after purchase" not in description
+
+
+def test_confirmation_does_not_mutate_preview_inventory():
+    inventory = CandyInventory({CandyType.FAIRY: 107})
+    preview = make_preview(
+        inventory,
+        CandyBundle.from_amounts(CandyTypeAmount(CandyType.FAIRY, 80)),
+    )
+    ShopConfirmationViewWithButtons(Core(), 7, preview).embed()
+    assert inventory.get_amount(CandyType.FAIRY) == 107
+
+
 class CandyTypeAmount:
-    type = CandyType.NORMAL
-    amount = 80
+    def __init__(self, candy_type=CandyType.NORMAL, amount=80):
+        self.type = candy_type
+        self.amount = amount
