@@ -7,9 +7,11 @@ from core.candy.candy_type import CandyType
 from core.evolution.evolution_cost_policy import EvolutionCostPolicy
 from core.evolution.evolution_policy import EvolutionPolicy
 from core.evolution.evolution_service import EvolutionService
+from core.species.variant import Variant
 from test.builders.creature_builder import CreatureBuilder
 from test.builders.evolution_rule_builder import EvolutionRuleBuilder
 from test.builders.species_builder import SpeciesBuilder
+from test.factories import create_species
 from test.fakes.fake_species_repository import (
     FakeSpeciesRepository,
 )
@@ -191,3 +193,64 @@ async def test_evolve_returns_new_species():
 
     assert result.previous_species.id == 1
     assert result.evolved_species.id == 2
+
+
+@pytest.mark.asyncio
+async def test_evolve_preserves_a_matching_canonical_variant():
+    source_variant = Variant(105, "blue")
+    middle_variant = Variant(109, "blue")
+    target_variant = Variant(114, "blue")
+    first = create_species(
+        id=669,
+        name="flabebe",
+        types=["fairy"],
+        variants=[source_variant],
+    )
+    second = create_species(
+        id=670,
+        name="floette",
+        types=["fairy"],
+        variants=[middle_variant],
+    )
+    third = create_species(
+        id=671,
+        name="florges",
+        types=["fairy"],
+        variants=[target_variant],
+    )
+    first_rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(669)
+        .with_to_species(670)
+        .with_candy_type(CandyType.FAIRY)
+        .with_tier("basic")
+        .build()
+    )
+    second_rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(670)
+        .with_to_species(671)
+        .with_candy_type(CandyType.FAIRY)
+        .with_tier("standard")
+        .build()
+    )
+    service = EvolutionService(
+        policy=EvolutionPolicy(cost_policy=EvolutionCostPolicy()),
+        species_repository=FakeSpeciesRepository(first, second, third),
+    )
+    creature = CreatureBuilder().with_species(first).build()
+    creature.current_form = source_variant
+    inventory = CandyInventory()
+    inventory.add(CandyBundle.from_amounts(CandyAmount(CandyType.FAIRY, 30)))
+
+    result = await service.evolve(creature, inventory, first_rule)
+
+    assert result.success
+    assert creature.species is second
+    assert creature.current_form == middle_variant
+
+    result = await service.evolve(creature, inventory, second_rule)
+
+    assert result.success
+    assert creature.species is third
+    assert creature.current_form == target_variant

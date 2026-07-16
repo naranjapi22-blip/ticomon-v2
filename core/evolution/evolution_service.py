@@ -46,6 +46,7 @@ class EvolutionService:
         previous_species = creature.species
 
         creature.species = evolved_species
+        self._preserve_matching_variant(creature, evolved_species)
 
         return EvolutionResult.succeeded(
             previous_species=previous_species,
@@ -66,3 +67,19 @@ class EvolutionService:
         species_id: int,
     ):
         return await self._species_repository.get(species_id)
+
+    @staticmethod
+    def _preserve_matching_variant(creature: Creature, evolved_species) -> None:
+        if creature.current_form is None:
+            return
+
+        matching_variant = next(
+            (
+                variant
+                for variant in evolved_species.variants or ()
+                if variant.name == creature.current_form.name
+            ),
+            None,
+        )
+        if matching_variant is not None:
+            creature.current_form = matching_variant
