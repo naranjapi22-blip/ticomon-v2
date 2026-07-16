@@ -10,6 +10,8 @@ class ShopStore(StrEnum):
     TECHNOLOGY = "technology"
     FOSSIL = "fossil"
     PASTRY = "pastry"
+    GARDEN = "garden"
+    GROOMER = "groomer"
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +21,8 @@ class ShopProduct:
     species_name: str
     cost: CandyBundle
     variant_name: str | None = None
+    random_variant_names: tuple[str, ...] = ()
+    display_name: str | None = None
 
 
 def _cost(*items: tuple[CandyType, int]) -> CandyBundle:
@@ -33,8 +37,51 @@ def _product(
     species_name: str,
     *items: tuple[CandyType, int],
     variant_name: str | None = None,
+    random_variant_names: tuple[str, ...] = (),
+    display_name: str | None = None,
 ) -> ShopProduct:
-    return ShopProduct(product_id, store, species_name, _cost(*items), variant_name)
+    return ShopProduct(
+        product_id,
+        store,
+        species_name,
+        _cost(*items),
+        variant_name,
+        random_variant_names,
+        display_name,
+    )
+
+
+FLABEBE_COLORS: tuple[str, ...] = ("blue", "orange", "white", "yellow")
+VIVILLON_PATTERNS: tuple[str, ...] = (
+    "archipelago",
+    "continental",
+    "elegant",
+    "garden",
+    "highplains",
+    "icysnow",
+    "jungle",
+    "marine",
+    "modern",
+    "monsoon",
+    "ocean",
+    "polar",
+    "river",
+    "sandstorm",
+    "savanna",
+    "sun",
+    "tundra",
+)
+FURFROU_TRIMS: tuple[str, ...] = (
+    "dandy",
+    "debutante",
+    "diamond",
+    "heart",
+    "kabuki",
+    "lareine",
+    "matron",
+    "pharaoh",
+    "star",
+)
 
 
 SHOP_PRODUCTS: tuple[ShopProduct, ...] = (
@@ -175,6 +222,53 @@ SHOP_PRODUCTS: tuple[ShopProduct, ...] = (
         "arctovish",
         (CandyType.WATER, 90),
         (CandyType.ICE, 90),
+    ),
+    *(
+        _product(
+            f"flabebe_{color}",
+            ShopStore.GARDEN,
+            "flabebe",
+            (CandyType.FAIRY, 45),
+            variant_name=color,
+        )
+        for color in FLABEBE_COLORS
+    ),
+    _product(
+        "vivillon_random",
+        ShopStore.GARDEN,
+        "vivillon",
+        (CandyType.BUG, 35),
+        (CandyType.FLYING, 35),
+        random_variant_names=VIVILLON_PATTERNS,
+        display_name="Vivillon (Random Pattern)",
+    ),
+    *(
+        _product(
+            f"vivillon_{pattern}",
+            ShopStore.GARDEN,
+            "vivillon",
+            (CandyType.BUG, 50),
+            (CandyType.FLYING, 50),
+            variant_name=pattern,
+        )
+        for pattern in VIVILLON_PATTERNS
+    ),
+    _product(
+        "furfrou_natural",
+        ShopStore.GROOMER,
+        "furfrou",
+        (CandyType.NORMAL, 45),
+        display_name="Furfrou (Natural)",
+    ),
+    *(
+        _product(
+            f"furfrou_{trim}",
+            ShopStore.GROOMER,
+            "furfrou",
+            (CandyType.NORMAL, 65),
+            variant_name=trim,
+        )
+        for trim in FURFROU_TRIMS
     ),
 )
 

@@ -16,6 +16,28 @@ from interfaces.discord.images import (
 logger = logging.getLogger(__name__)
 
 
+_VARIANT_LABELS = {
+    "highplains": "High Plains",
+    "icysnow": "Icy Snow",
+    "lareine": "La Reine",
+}
+_MISSING_PREVIEW_PRODUCTS: set[str] = set()
+
+
+def _variant_label(name: str) -> str:
+    return _VARIANT_LABELS.get(name, name.replace("-", " ").title())
+
+
+def _product_label(product) -> str:
+    if product.display_name is not None:
+        return product.display_name
+    if product.variant_name is not None:
+        return (
+            f"{product.species_name.title()} ({_variant_label(product.variant_name)})"
+        )
+    return product.species_name.title()
+
+
 def _cost_text(bundle) -> str:
     return " + ".join(
         f"{amount} {candy_type.value.title()}" for candy_type, amount in bundle.items()
@@ -61,15 +83,30 @@ async def _shop_preview_file(core, preview):
         try:
             return await download_gif_file(get_creature_gif(creature), "shop.gif")
         except Exception:
-            logger.warning(
-                "shop_preview_resource_missing product=%s", preview.product_id
-            )
+            if preview.product_id not in _MISSING_PREVIEW_PRODUCTS:
+                _MISSING_PREVIEW_PRODUCTS.add(preview.product_id)
+                logger.warning(
+                    "shop_preview_resource_missing product=%s", preview.product_id
+                )
             return await download_gif_file(
                 get_species_gif(creature.species.pokeapi_id, False), "shop.gif"
             )
     except Exception:
         logger.debug("shop_preview_fallback_missing product=%s", preview.product_id)
         return None
+
+
+async def _show_purchase_preview(
+    core, trainer_id, interaction, preview, message
+) -> None:
+    view = ShopConfirmationViewWithButtons(core, trainer_id, preview)
+    view.message = message
+    gif_file = await _shop_preview_file(core, preview)
+    await interaction.edit_original_response(
+        embed=view.embed(gif_file is not None),
+        attachments=[gif_file] if gif_file is not None else [],
+        view=view,
+    )
 
 
 class ShopView(discord.ui.View):
@@ -86,9 +123,11 @@ class ShopView(discord.ui.View):
             (ShopStore.TECHNOLOGY, "Technology"),
             (ShopStore.FOSSIL, "Fossil Lab"),
             (ShopStore.PASTRY, "Pastry Shop"),
+            (ShopStore.GARDEN, "Garden"),
+            (ShopStore.GROOMER, "Pokémon Groomer"),
         ):
             self.add_item(StoreButton(self, store, label))
-        self.add_item(CloseShopButton())
+        self.add_item(CloseShopButton(row=1))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.trainer_id:
@@ -101,6 +140,9 @@ class ShopView(discord.ui.View):
     async def show_store(self, interaction: discord.Interaction, store: ShopStore):
         if store is ShopStore.PASTRY:
             view = PastryView(self.core, self.trainer_id)
+            embed = view.menu_embed()
+        elif store is ShopStore.GARDEN:
+            view = GardenView(self.core, self.trainer_id)
             embed = view.menu_embed()
         else:
             view = ProductView(self.core, self.trainer_id, store)
@@ -120,7 +162,7 @@ class ShopView(discord.ui.View):
 
 class StoreButton(discord.ui.Button):
     def __init__(self, view: ShopView, store: ShopStore, label: str) -> None:
-        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        super().__init__(label=label, style=discord.ButtonStyle.primary, row=0)
         self.store = store
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -128,8 +170,8 @@ class StoreButton(discord.ui.Button):
 
 
 class CloseShopButton(discord.ui.Button):
-    def __init__(self) -> None:
-        super().__init__(label="Close", style=discord.ButtonStyle.secondary)
+    def __init__(self, row: int | None = None) -> None:
+        super().__init__(label="Close", style=discord.ButtonStyle.secondary, row=row)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         for item in self.view.children:
@@ -138,19 +180,19 @@ class CloseShopButton(discord.ui.Button):
 
 
 class ProductView(discord.ui.View):
-    def __init__(self, core, trainer_id: int, store: ShopStore) -> None:
+    def __init__(
+        self, core, trainer_id: int, store: ShopStore, products=None, title=None
+    ) -> None:
         super().__init__(timeout=180)
         self.core = core
         self.trainer_id = trainer_id
         self.store = store
         self.message = None
-        products = core.shop_application.products(store)
+        self._title = title or self._default_title()
+        products = products or core.shop_application.products(store)
         options = [
             discord.SelectOption(
-                label=product.species_name.title()
-                + (
-                    f" ({product.variant_name.title()})" if product.variant_name else ""
-                ),
+                label=_product_label(product),
                 value=product.id,
                 description=_cost_text(product.cost),
             )
@@ -160,14 +202,19 @@ class ProductView(discord.ui.View):
         self.add_item(BackToStoresButton())
 
     def menu_embed(self) -> discord.Embed:
-        title = (
-            "Technology Shop" if self.store is ShopStore.TECHNOLOGY else "Fossil Lab"
-        )
         return discord.Embed(
-            title=title,
+            title=self._title,
             description="Choose a creature. Prices use type-specific candies.",
             color=discord.Color.blue(),
         )
+
+    def _default_title(self) -> str:
+        return {
+            ShopStore.TECHNOLOGY: "Technology Shop",
+            ShopStore.FOSSIL: "Fossil Lab",
+            ShopStore.GARDEN: "Garden",
+            ShopStore.GROOMER: "Pokémon Groomer",
+        }[self.store]
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.trainer_id:
@@ -190,13 +237,8 @@ class ProductView(discord.ui.View):
                 content=str(error), embed=None, attachments=[], view=None
             )
             return
-        view = ShopConfirmationViewWithButtons(self.core, self.trainer_id, preview)
-        view.message = self.message
-        gif_file = await _shop_preview_file(self.core, preview)
-        await interaction.edit_original_response(
-            embed=view.embed(gif_file is not None),
-            attachments=[gif_file] if gif_file is not None else [],
-            view=view,
+        await _show_purchase_preview(
+            self.core, self.trainer_id, interaction, preview, self.message
         )
 
     async def on_timeout(self) -> None:
@@ -280,13 +322,8 @@ class PastryView(discord.ui.View):
         await interaction.response.edit_message(embed=view.embed(), view=view)
 
     async def show_preview(self, interaction, preview) -> None:
-        view = ShopConfirmationViewWithButtons(self.core, self.trainer_id, preview)
-        view.message = self.message
-        gif_file = await _shop_preview_file(self.core, preview)
-        await interaction.edit_original_response(
-            embed=view.embed(gif_file is not None),
-            attachments=[gif_file] if gif_file is not None else [],
-            view=view,
+        await _show_purchase_preview(
+            self.core, self.trainer_id, interaction, preview, self.message
         )
 
 
@@ -408,6 +445,79 @@ class BackToPastryButton(discord.ui.Button):
         await interaction.response.edit_message(embed=view.menu_embed(), view=view)
 
 
+class GardenView(discord.ui.View):
+    def __init__(self, core, trainer_id: int) -> None:
+        super().__init__(timeout=180)
+        self.core = core
+        self.trainer_id = trainer_id
+        self.message = None
+        self.add_item(GardenButton("Flabébé colors", "flabebe"))
+        self.add_item(GardenButton("Vivillon random", "vivillon_random"))
+        self.add_item(GardenButton("Choose Vivillon pattern", "vivillon"))
+        self.add_item(BackToStoresButton())
+
+    def menu_embed(self) -> discord.Embed:
+        return discord.Embed(
+            title="Garden",
+            description="Choose a floral variant or a Vivillon pattern.",
+            color=discord.Color.green(),
+        )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.trainer_id:
+            await interaction.response.send_message(
+                "This shop belongs to another trainer.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def choose(self, interaction: discord.Interaction, choice: str) -> None:
+        products = self.core.shop_application.products(ShopStore.GARDEN)
+        if choice == "vivillon_random":
+            for item in self.children:
+                item.disabled = True
+            await interaction.response.defer()
+            try:
+                preview = await self.core.shop_application.preview_product(
+                    self.trainer_id, "vivillon_random"
+                )
+            except ValueError as error:
+                await interaction.edit_original_response(
+                    content=str(error), embed=None, attachments=[], view=None
+                )
+                return
+            await _show_purchase_preview(
+                self.core, self.trainer_id, interaction, preview, self.message
+            )
+            return
+
+        species_name = "flabebe" if choice == "flabebe" else "vivillon"
+        selected = tuple(
+            product
+            for product in products
+            if product.species_name == species_name and product.id != "vivillon_random"
+        )
+        title = "Flabébé Colors" if choice == "flabebe" else "Vivillon Patterns"
+        view = ProductView(
+            self.core,
+            self.trainer_id,
+            ShopStore.GARDEN,
+            products=selected,
+            title=title,
+        )
+        view.message = self.message
+        await interaction.response.edit_message(embed=view.menu_embed(), view=view)
+
+
+class GardenButton(discord.ui.Button):
+    def __init__(self, label: str, choice: str) -> None:
+        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        self.choice = choice
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.view.choose(interaction, self.choice)
+
+
 class ShopConfirmationView(discord.ui.View):
     def __init__(self, core, trainer_id: int, preview) -> None:
         super().__init__(timeout=180)
@@ -420,7 +530,10 @@ class ShopConfirmationView(discord.ui.View):
     def embed(self, has_image: bool = False) -> discord.Embed:
         affordable = self.preview.inventory.has(self.preview.cost)
         self._set_confirm_enabled(affordable)
-        description = f"Product: **{self.preview.species_name.title()}**\n"
+        product_name = self.preview.species_name.title()
+        if self.preview.variant_name is not None:
+            product_name += f" ({_variant_label(self.preview.variant_name)})"
+        description = f"Product: **{product_name}**\n"
         if affordable:
             current = _bundle_inventory_text(self.preview.inventory, self.preview.cost)
             remaining = _bundle_inventory_text(self._remaining(), self.preview.cost)
@@ -441,7 +554,7 @@ class ShopConfirmationView(discord.ui.View):
                 f"\nCream: **{self.preview.cream}**"
                 f"\nDecoration: **{self.preview.decoration}**"
             )
-        if not has_image and self.preview.store is ShopStore.PASTRY:
+        if not has_image:
             description += (
                 "\nPreview image unavailable; the purchase remains available."
             )
@@ -503,7 +616,7 @@ class ShopConfirmationView(discord.ui.View):
             return
         await interaction.edit_original_response(
             content=(
-                f"Purchased **{result.creature.species.name.title()}** "
+                f"Purchased **{self._product_name(result)}** "
                 f"(#{result.creature.collection_number}).\n"
                 f"Remaining candies: {_inventory_text(result.remaining)}"
             ),
@@ -511,6 +624,13 @@ class ShopConfirmationView(discord.ui.View):
             attachments=[],
             view=None,
         )
+
+    @staticmethod
+    def _product_name(result) -> str:
+        name = result.creature.species.name.title()
+        if result.creature.current_form is not None:
+            name += f" ({_variant_label(result.creature.current_form.name)})"
+        return name
 
 
 class ConfirmPurchaseButton(discord.ui.Button):

@@ -11,6 +11,7 @@ from core.creature.nature import Nature
 from core.creature.size import Size
 from core.shop.catalog import ShopStore
 from interfaces.discord.views.shop_view import (
+    GardenView,
     PastrySelectionView,
     ProductView,
     ShopConfirmationViewWithButtons,
@@ -31,13 +32,18 @@ class Core:
     shop_application = Application()
 
 
-def test_shop_starts_with_three_store_buttons():
+def test_shop_starts_with_all_store_buttons():
     view = ShopView(Core(), 113100351531417600)
-    assert [item.label for item in view.children[:3]] == [
+    assert [item.label for item in view.children[:5]] == [
         "Technology",
         "Fossil Lab",
         "Pastry Shop",
+        "Garden",
+        "Pokémon Groomer",
     ]
+    assert all(item.row == 0 for item in view.children[:5])
+    assert view.children[5].label == "Close"
+    assert view.children[5].row == 1
 
 
 def test_product_view_exposes_all_fossils_in_catalog_order():
@@ -55,6 +61,38 @@ def test_pastry_selection_exposes_nine_canonical_creams():
     assert all(
         "cream" in option.value or "swirl" in option.value for option in select.options
     )
+
+
+def test_garden_uses_a_step_for_flabebe_and_vivillon_choices():
+    view = GardenView(Core(), 7)
+    assert [item.label for item in view.children] == [
+        "Flabébé colors",
+        "Vivillon random",
+        "Choose Vivillon pattern",
+        "Back",
+    ]
+
+
+def test_garden_pattern_select_excludes_special_vivillon_forms():
+    products = tuple(
+        product
+        for product in Core().shop_application.products(ShopStore.GARDEN)
+        if product.species_name == "vivillon" and product.id != "vivillon_random"
+    )
+    view = ProductView(
+        Core(), 7, ShopStore.GARDEN, products=products, title="Vivillon Patterns"
+    )
+    select = view.children[0]
+    assert len(select.options) == 17
+    assert all(option.value != "vivillon_pokeball" for option in select.options)
+
+
+def test_groomer_exposes_natural_furfrou_and_all_confirmed_trims():
+    view = ProductView(Core(), 7, ShopStore.GROOMER)
+    select = view.children[0]
+    assert len(select.options) == 10
+    assert select.options[0].label == "Furfrou (Natural)"
+    assert select.options[-1].value == "furfrou_star"
 
 
 class Response:
@@ -92,6 +130,7 @@ async def test_confirmation_defers_and_ignores_double_click():
         cost=CandyBundle.from_amounts(CandyTypeAmount()),
         inventory=CandyInventory({CandyType.NORMAL: 60}),
         store=ShopStore.TECHNOLOGY,
+        variant_name=None,
         cream=None,
         decoration=None,
     )
@@ -162,6 +201,55 @@ async def test_product_selection_edits_with_attachment(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_random_vivillon_defers_before_resolving_the_preview(monkeypatch):
+    preview = make_preview(
+        CandyInventory({CandyType.BUG: 35, CandyType.FLYING: 35}),
+        CandyBundle.from_amounts(
+            CandyTypeAmount(CandyType.BUG, 35),
+            CandyTypeAmount(CandyType.FLYING, 35),
+        ),
+        species_name="vivillon",
+    )
+    preview.store = ShopStore.GARDEN
+    preview.variant_name = "tundra"
+
+    class Application:
+        def products(self, store):
+            return ()
+
+        async def preview_product(self, trainer_id, product_id):
+            assert product_id == "vivillon_random"
+            return preview
+
+        async def preview_creature(self, selected):
+            return SimpleNamespace(
+                species=SimpleNamespace(pokeapi_id=666), current_form=SimpleNamespace()
+            )
+
+    class ShopCore:
+        shop_application = Application()
+
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.get_creature_gif",
+        lambda creature: "https://assets/vivillon-tundra.gif",
+    )
+
+    async def download(url, filename):
+        return object()
+
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.download_gif_file", download
+    )
+    view = GardenView(ShopCore(), 7)
+    events = []
+    interaction = Interaction(events)
+    await view.choose(interaction, "vivillon_random")
+
+    assert events[0] == "defer"
+    assert events[1][0] == "edit"
+
+
+@pytest.mark.asyncio
 async def test_missing_variant_gif_uses_base_fallback(monkeypatch):
     creature = SimpleNamespace(
         species=SimpleNamespace(pokeapi_id=869), current_form=SimpleNamespace()
@@ -198,12 +286,54 @@ async def test_missing_variant_gif_uses_base_fallback(monkeypatch):
     assert urls == ["https://assets/variant.gif", "https://assets/base.gif"]
 
 
+@pytest.mark.asyncio
+async def test_missing_preview_resource_is_logged_once_per_product(monkeypatch, caplog):
+    creature = SimpleNamespace(
+        species=SimpleNamespace(pokeapi_id=869), current_form=SimpleNamespace()
+    )
+
+    async def download(url, filename):
+        if url == "https://assets/variant.gif":
+            raise RuntimeError("missing variant")
+        return "fallback-file"
+
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.download_gif_file", download
+    )
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.get_creature_gif",
+        lambda selected: "https://assets/variant.gif",
+    )
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view.get_species_gif",
+        lambda species_id, shiny: "https://assets/base.gif",
+    )
+    monkeypatch.setattr(
+        "interfaces.discord.views.shop_view._MISSING_PREVIEW_PRODUCTS", set()
+    )
+
+    class Application:
+        async def preview_creature(self, preview):
+            return creature
+
+    core = SimpleNamespace(shop_application=Application())
+    preview = SimpleNamespace(product_id="furfrou_dandy")
+    await _shop_preview_file(core, preview)
+    await _shop_preview_file(core, preview)
+
+    assert (
+        caplog.messages.count("shop_preview_resource_missing product=furfrou_dandy")
+        == 1
+    )
+
+
 def make_preview(inventory, cost, species_name="alcremie"):
     return SimpleNamespace(
         species_name=species_name,
         cost=cost,
         inventory=inventory,
         store=ShopStore.PASTRY,
+        variant_name=None,
         cream="vanilla-cream",
         decoration="berry",
     )

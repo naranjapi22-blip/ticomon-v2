@@ -54,6 +54,7 @@ class ShopApplicationService:
         product_id: str,
         *,
         variant_id: int | None = None,
+        random_source=None,
     ) -> ShopPreview:
         product = self._product(product_id)
         species = await self._species_repository.find_by_name(product.species_name)
@@ -63,6 +64,11 @@ class ShopApplicationService:
         variant = None
         if product.variant_name is not None:
             variant = self._variant_by_name(species, product.variant_name)
+        elif product.random_variant_names:
+            variant_name = self._choose_variant_name(
+                product.random_variant_names, random_source
+            )
+            variant = self._variant_by_name(species, variant_name)
         elif variant_id is not None:
             variant = next(
                 (item for item in species.variants or () if item.id == variant_id),
@@ -204,6 +210,12 @@ class ShopApplicationService:
         import random
 
         return (random_source or random).choice(ALCREMIE_DECORATIONS)
+
+    @staticmethod
+    def _choose_variant_name(variant_names, random_source):
+        import random
+
+        return (random_source or random).choice(variant_names)
 
     @classmethod
     def _choose_alcremie_parts(cls, random_source):

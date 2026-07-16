@@ -2,7 +2,10 @@ from core.candy.candy_type import CandyType
 from core.shop.catalog import (
     ALCREMIE_CREAMS,
     ALCREMIE_DECORATIONS,
+    FLABEBE_COLORS,
+    FURFROU_TRIMS,
     SHOP_PRODUCTS,
+    VIVILLON_PATTERNS,
     ShopStore,
     alcremie_cost,
     alcremie_variant_name,
@@ -28,7 +31,11 @@ def test_fossil_prices_are_fixed_by_category() -> None:
 
 
 def test_all_shop_prices_match_the_current_schedule() -> None:
-    prices = {product.id: dict(product.cost.items()) for product in SHOP_PRODUCTS}
+    prices = {
+        product.id: dict(product.cost.items())
+        for product in SHOP_PRODUCTS
+        if product.store in (ShopStore.TECHNOLOGY, ShopStore.FOSSIL)
+    }
     assert prices == {
         "porygon": {CandyType.NORMAL: 60},
         "rotom": {CandyType.ELECTRIC: 40, CandyType.GHOST: 40},
@@ -68,6 +75,44 @@ def test_alcremie_catalog_has_45_canonical_combinations() -> None:
     assert alcremie_cost("custom").get(CandyType.FAIRY) == 120
 
 
+def test_garden_products_use_only_confirmed_normal_variants() -> None:
+    products = {product.id: product for product in SHOP_PRODUCTS}
+    flabebe = [
+        product for product in SHOP_PRODUCTS if product.species_name == "flabebe"
+    ]
+
+    assert [product.variant_name for product in flabebe] == list(FLABEBE_COLORS)
+    assert all(product.cost.get(CandyType.FAIRY) == 45 for product in flabebe)
+    assert products["vivillon_random"].random_variant_names == VIVILLON_PATTERNS
+    assert products["vivillon_random"].cost.get(CandyType.BUG) == 35
+    assert products["vivillon_random"].cost.get(CandyType.FLYING) == 35
+    assert all(
+        products[f"vivillon_{pattern}"].cost.get(CandyType.BUG) == 50
+        and products[f"vivillon_{pattern}"].cost.get(CandyType.FLYING) == 50
+        for pattern in VIVILLON_PATTERNS
+    )
+    assert "vivillon_pokeball" not in products
+    assert not any(product.variant_name == "eternal" for product in SHOP_PRODUCTS)
+    assert not any(
+        product.species_name in {"floette", "florges"} for product in SHOP_PRODUCTS
+    )
+
+
+def test_groomer_products_include_the_natural_form_and_confirmed_trims() -> None:
+    products = {product.id: product for product in SHOP_PRODUCTS}
+    assert products["furfrou_natural"].variant_name is None
+    assert products["furfrou_natural"].cost.get(CandyType.NORMAL) == 45
+    assert [products[f"furfrou_{trim}"].variant_name for trim in FURFROU_TRIMS] == list(
+        FURFROU_TRIMS
+    )
+    assert all(
+        products[f"furfrou_{trim}"].cost.get(CandyType.NORMAL) == 65
+        for trim in FURFROU_TRIMS
+    )
+
+
 def test_catalog_has_expected_store_sizes() -> None:
     assert sum(product.store is ShopStore.TECHNOLOGY for product in SHOP_PRODUCTS) == 6
     assert sum(product.store is ShopStore.FOSSIL for product in SHOP_PRODUCTS) == 15
+    assert sum(product.store is ShopStore.GARDEN for product in SHOP_PRODUCTS) == 22
+    assert sum(product.store is ShopStore.GROOMER for product in SHOP_PRODUCTS) == 10
