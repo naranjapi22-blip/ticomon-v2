@@ -49,6 +49,7 @@ For validation before pushing changes:
 - 🤝 Trading
 - 🦁 Safari
 - 🌿 Nature Mints
+- 🏆 Thematic Collections
 
 ---
 
@@ -83,6 +84,16 @@ not consume a mint. Nature Mints are currently awarded through achievements.
 Achievements award Candies and Nature Mints across early, mid, and advanced
 progression. Progress is integrated with captures, unique species discovered,
 Safari captures, shiny, legendary, mythical, trade, and evolution activities.
+
+## Thematic Collections
+
+Use `!collections` to review six themed albums: Fossil Restoration, Technology,
+Alcremie, Vivillon Patterns, Furfrou Styles, and Flabébé Garden. Collection
+progress is historical: an entry remains collected after a creature is released
+or traded. Claiming a milestone also requires currently owning enough distinct
+entries for that threshold. Completed milestones can be claimed once for type
+Candies and Nature Mints. See [Collections](docs/collections.md) for the album
+entries, rewards, backfill, and historical limitations.
 
 ## Shops
 
@@ -188,6 +199,7 @@ test/
 - ✅ Achievements
 - ✅ Nature Mints
 - ✅ Candy shops
+- ✅ Thematic collections
 
 The core gameplay loop is complete.
 

@@ -144,5 +144,8 @@ Shop schema is not initialized. Run scripts/create_shop_schema.py.
 Purchased creatures enter the normal collection with a normal collection
 number, generated IVs and size, a random original nature, no shiny status, and
 `minted_nature = None`. Their later evolution uses the normal system.
+Purchases also record the exact canonical species and variant in `!collections`,
+so releasing or trading the creature later does not remove its themed-album
+progress.
 
 Prices are initial and may be adjusted using real economy data.

@@ -2,6 +2,9 @@
 
 Candies are specific to a type; they are not a universal currency. Captures
 and achievements provide candies, while evolution and Candy Shops spend them.
+Thematic Collection milestones also grant type-specific Candies and, at select
+completion milestones, Nature Mints. Collections never convert type Candies
+into a universal balance.
 Two-type creatures use the candies of both types according to the listed shop
 price. A balance is checked and updated atomically when a shop purchase is
 confirmed.
