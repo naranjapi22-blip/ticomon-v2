@@ -19,3 +19,6 @@ async def test_commands_help_includes_safari_command() -> None:
 
     assert "`!safari`" in gameplay_field.value
     assert "Start or join a Safari expedition." in gameplay_field.value
+    assert "`!mint <collection_number>`" in gameplay_field.value
+    assert "original nature stays intact" in gameplay_field.value
+    assert "consumed only after confirming a valid change" in gameplay_field.value

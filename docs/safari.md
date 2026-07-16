@@ -7,7 +7,8 @@
 - Join, then start the expedition once at least two trainers are registered.
 - During encounters, select a slot, choose 1-3 Balls, then confirm or decline.
 - Resolve the encounter when selection closes.
-- Vote on route options when the session enters route decision.
+- Vote on route options with visible route buttons when the session enters
+  route decision. A trainer can replace their vote before the vote closes.
 - Finish the expedition to view the final summary.
 - Use the Pokédex button in Safari encounters to inspect caught or missing species.
 

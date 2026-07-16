@@ -48,6 +48,7 @@ For validation before pushing changes:
 - 🖼️ Animated capture sequences
 - 🤝 Trading
 - 🦁 Safari
+- 🌿 Nature Mints
 
 ---
 
@@ -68,6 +69,29 @@ Evolve your team
         ↓
 Complete your Pokédex
 ```
+
+## Nature Mints
+
+TicoMon has one universal Nature Mint. Use `!mint <collection_number>` to
+choose a valid statistical nature effect for a creature. The creature's
+original nature remains intact; replacing its current effect or restoring the
+original effect consumes one mint. Selecting the effect already in use does
+not consume a mint. Nature Mints are currently awarded through achievements.
+
+## Achievements
+
+Achievements award Candies and Nature Mints across early, mid, and advanced
+progression. Progress is integrated with captures, unique species discovered,
+Safari captures, shiny, legendary, mythical, trade, and evolution activities.
+
+## Safari
+
+Safari expeditions use shared maps, routes, weather, and encounters. Players
+choose routes with visible buttons and vote on the available routes; a vote can
+be replaced before the route vote closes. Captures are personal while the
+encounter populations are shared. Shiny, legendary, and mythical encounters
+are unique specimens. Players select Safari Balls during encounters and can
+view the final expedition summary.
 
 ---
 
@@ -144,6 +168,8 @@ test/
 
 - ✅ Trading
 - ✅ Safari
+- ✅ Achievements
+- ✅ Nature Mints
 
 The core gameplay loop is complete.
 
@@ -154,7 +180,6 @@ The core gameplay loop is complete.
 
 ### Planned
 
-- 🤝 Achievements
 - 📅 Daily Quests
 - 🎉 Seasonal Events
 - 🥇 Competitive Rankings
