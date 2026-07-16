@@ -5,6 +5,7 @@ from enum import StrEnum
 class AchievementId(StrEnum):
     FIRST_CAPTURE = "first_capture"
     CAPTURES_10 = "captures_10"
+    CAPTURES_25 = "captures_25"
     CAPTURES_50 = "captures_50"
     FIRST_SHINY_CAPTURE = "first_shiny_capture"
     UNIQUE_SPECIES_10 = "unique_species_10"
@@ -27,7 +28,9 @@ class AchievementId(StrEnum):
     SHINY_CAPTURES_100 = "shiny_captures_100"
     SAFARI_CAPTURES_10 = "safari_captures_10"
     SAFARI_CAPTURES_25 = "safari_captures_25"
+    SAFARI_CAPTURES_250 = "safari_captures_250"
     SAFARI_CAPTURES_50 = "safari_captures_50"
+    SAFARI_CAPTURES_50_MILESTONE = "safari_captures_50_milestone"
     SAFARI_CAPTURES_100 = "safari_captures_100"
     COMPLETED_TRADES_10 = "completed_trades_10"
     COMPLETED_TRADES_25 = "completed_trades_25"
@@ -39,6 +42,7 @@ class AchievementId(StrEnum):
     FIRST_MYTHICAL_CAPTURE = "first_mythical_capture"
     MYTHICAL_CAPTURES_3 = "mythical_captures_3"
     MYTHICAL_CAPTURES_5 = "mythical_captures_5"
+    FIRST_EVOLUTION = "first_evolution"
     FIRST_BABY_CAPTURE = "first_baby_capture"
     BABY_CAPTURES_5 = "baby_captures_5"
     BABY_CAPTURES_10 = "baby_captures_10"
@@ -72,6 +76,7 @@ class AchievementCriterion(StrEnum):
     MYTHICAL_CAPTURE_COUNT = "mythical_capture_count"
     BABY_CAPTURE_COUNT = "baby_capture_count"
     TYPE_CAPTURE_COUNT = "type_capture_count"
+    EVOLUTION_COUNT = "evolution_count"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +113,13 @@ _BASE_DEFINITIONS: tuple[AchievementDefinition, ...] = (
         reward_amount=4,
     ),
     AchievementDefinition(
+        AchievementId.CAPTURES_25,
+        AchievementCriterion.CAPTURE_COUNT,
+        threshold=25,
+        reward_amount=2,
+        mint_reward=1,
+    ),
+    AchievementDefinition(
         AchievementId.CAPTURES_50,
         AchievementCriterion.CAPTURE_COUNT,
         threshold=50,
@@ -138,11 +150,20 @@ _BASE_DEFINITIONS: tuple[AchievementDefinition, ...] = (
         threshold=1,
         reward_amount=4,
     ),
+    AchievementDefinition(
+        AchievementId.FIRST_EVOLUTION,
+        AchievementCriterion.EVOLUTION_COUNT,
+        threshold=1,
+        reward_amount=2,
+        mint_reward=1,
+    ),
 )
 
 
 def _milestones(
-    prefix: str, criterion: AchievementCriterion, values: tuple[tuple[int, int], ...]
+    prefix: str,
+    criterion: AchievementCriterion,
+    values: tuple[tuple[int, int, int | None], ...],
 ):
     return tuple(
         AchievementDefinition(
@@ -150,8 +171,10 @@ def _milestones(
             criterion,
             threshold,
             reward,
+            mint_reward=mint_reward,
         )
-        for threshold, reward in values
+        for threshold, reward, *mint in values
+        for mint_reward in (mint[0] if mint else 0,)
     )
 
 
@@ -159,22 +182,38 @@ ACHIEVEMENT_DEFINITIONS = _BASE_DEFINITIONS + (
     *_milestones(
         "CAPTURES",
         AchievementCriterion.CAPTURE_COUNT,
-        ((100, 20), (250, 30), (500, 50), (1000, 100)),
+        ((100, 20, 1), (250, 30), (500, 50, 2), (1000, 100, 3)),
     ),
     *_milestones(
         "UNIQUE_SPECIES",
         AchievementCriterion.UNIQUE_DISCOVERED_SPECIES,
-        ((25, 10), (50, 16), (100, 24), (250, 40), (500, 70)),
+        ((25, 10), (50, 16, 1), (100, 24, 1), (250, 40, 2), (500, 70, 3)),
     ),
     *_milestones(
         "SHINY_CAPTURES",
         AchievementCriterion.SHINY_CAPTURE_COUNT,
-        ((5, 10), (10, 16), (25, 30), (50, 50), (100, 90)),
+        ((5, 10, 2), (10, 16), (25, 30), (50, 50), (100, 90)),
     ),
     *_milestones(
         "SAFARI_CAPTURES",
         AchievementCriterion.SAFARI_CAPTURE_COUNT,
-        ((10, 8), (25, 16), (50, 30), (100, 60)),
+        ((10, 8, 1), (25, 16), (100, 60), (250, 30, 2)),
+    ),
+    AchievementDefinition(
+        AchievementId.SAFARI_CAPTURES_50_MILESTONE,
+        AchievementCriterion.SAFARI_CAPTURE_COUNT,
+        50,
+        20,
+        mint_reward=1,
+    ),
+    AchievementDefinition(
+        # Historical ID retained for persisted unlock compatibility; its real
+        # threshold is 500 Safari captures.
+        AchievementId.SAFARI_CAPTURES_50,
+        AchievementCriterion.SAFARI_CAPTURE_COUNT,
+        500,
+        60,
+        mint_reward=3,
     ),
     *_milestones(
         "COMPLETED_TRADES",
@@ -193,13 +232,14 @@ ACHIEVEMENT_DEFINITIONS = _BASE_DEFINITIONS + (
         AchievementCriterion.LEGENDARY_CAPTURE_COUNT,
         5,
         16,
-        mint_reward=1,
+        mint_reward=2,
     ),
     AchievementDefinition(
         AchievementId.LEGENDARY_CAPTURES_10,
         AchievementCriterion.LEGENDARY_CAPTURE_COUNT,
         10,
         30,
+        mint_reward=2,
     ),
     AchievementDefinition(
         AchievementId.FIRST_MYTHICAL_CAPTURE,
@@ -213,13 +253,14 @@ ACHIEVEMENT_DEFINITIONS = _BASE_DEFINITIONS + (
         AchievementCriterion.MYTHICAL_CAPTURE_COUNT,
         3,
         12,
-        mint_reward=1,
+        mint_reward=2,
     ),
     AchievementDefinition(
         AchievementId.MYTHICAL_CAPTURES_5,
         AchievementCriterion.MYTHICAL_CAPTURE_COUNT,
         5,
         24,
+        mint_reward=2,
     ),
     AchievementDefinition(
         AchievementId.FIRST_BABY_CAPTURE, AchievementCriterion.BABY_CAPTURE_COUNT, 1, 4

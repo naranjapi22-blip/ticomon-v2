@@ -16,6 +16,7 @@ class AchievementProgress:
     legendary_capture_count: int = 0
     mythical_capture_count: int = 0
     baby_capture_count: int = 0
+    evolution_count: int = 0
     capture_counts_by_type: dict[str, int] = field(default_factory=dict)
 
 

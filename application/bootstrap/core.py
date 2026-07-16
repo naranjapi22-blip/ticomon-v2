@@ -345,6 +345,8 @@ def build_core(
         evolution_repository=evolution_repository,
         creature_repository=creature_repository,
         candy_repository=candy_repository,
+        achievement_activity_repository=achievement_activity_repository,
+        achievement_award_service=capture_achievement_award_service,
     )
     release_application = ReleaseApplicationService(
         creature_repository=creature_repository,

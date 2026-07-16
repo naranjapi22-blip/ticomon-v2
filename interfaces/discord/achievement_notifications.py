@@ -5,6 +5,11 @@ from application.achievement.query_service import ACHIEVEMENT_PRESENTATION
 logger = logging.getLogger(__name__)
 
 
+def format_mint_reward(amount: int) -> str:
+    label = "Nature Mint" if amount == 1 else "Nature Mints"
+    return f"{label} +{amount}"
+
+
 def _display_name(achievement_id: str) -> str:
     return ACHIEVEMENT_PRESENTATION.get(achievement_id, (achievement_id,))[0]
 
@@ -17,7 +22,11 @@ def format_unlocks(unlocks) -> str:
             f"{kind.value.title()} Candy +{amount}"
             for kind, amount in unlock.rewarded_candies.items()
         )
-        + (f", Nature Mint +{unlock.rewarded_mints}" if unlock.rewarded_mints else "")
+        + (
+            f", {format_mint_reward(unlock.rewarded_mints)}"
+            if unlock.rewarded_mints
+            else ""
+        )
         for unlock in unlocks
     )
 

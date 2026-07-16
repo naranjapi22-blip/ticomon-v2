@@ -11,6 +11,10 @@ ACHIEVEMENT_PRESENTATION = {
     "unique_species_10": ("Explorer", "Discover 10 unique species."),
     "first_completed_trade": ("First Trade", "Complete a trade."),
     "first_safari_capture": ("Safari Catch", "Capture a creature in Safari."),
+    "safari_captures_50_milestone": (
+        "Safari Captures 50",
+        "Capture 50 creatures in Safari.",
+    ),
 }
 ACHIEVEMENT_PRESENTATION.update(
     {
@@ -23,6 +27,10 @@ ACHIEVEMENT_PRESENTATION.update(
         for definition in ACHIEVEMENT_DEFINITIONS
         if definition.id.value not in ACHIEVEMENT_PRESENTATION
     }
+)
+ACHIEVEMENT_PRESENTATION["safari_captures_50"] = (
+    "Safari Captures 500",
+    "Capture 500 creatures in Safari.",
 )
 
 
@@ -97,6 +105,7 @@ class AchievementQueryService:
             AchievementCriterion.MYTHICAL_CAPTURE_COUNT: (
                 progress.mythical_capture_count
             ),
+            AchievementCriterion.EVOLUTION_COUNT: progress.evolution_count,
             AchievementCriterion.BABY_CAPTURE_COUNT: progress.baby_capture_count,
         }[criterion]
 
@@ -109,4 +118,5 @@ class AchievementQueryService:
             AchievementCriterion.SAFARI_CAPTURE_COUNT: "Safari",
             AchievementCriterion.COMPLETED_TRADE_COUNT: "Trade",
             AchievementCriterion.TYPE_CAPTURE_COUNT: "Types",
+            AchievementCriterion.EVOLUTION_COUNT: "Special",
         }.get(criterion, "Special")

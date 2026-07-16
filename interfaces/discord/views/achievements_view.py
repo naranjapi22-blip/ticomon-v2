@@ -2,6 +2,7 @@ import math
 
 import discord
 
+from interfaces.discord.achievement_notifications import format_mint_reward
 from interfaces.discord.views.next_button import NextButton
 from interfaces.discord.views.previous_button import PreviousButton
 
@@ -85,7 +86,7 @@ class AchievementsView(discord.ui.View):
             getattr(status, "configured_mints", 0),
         )
         if rewarded_mints:
-            rewards.append(f"Nature Mint +{rewarded_mints}")
+            rewards.append(format_mint_reward(rewarded_mints))
         if rewards:
             return ", ".join(rewards)
         if status.rewarded_candies is not None:

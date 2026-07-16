@@ -1,8 +1,10 @@
 import pytest
 
+from application.achievement.award_service import CaptureAchievementAwardService
 from application.evolution.evolution_application_service import (
     EvolutionApplicationService,
 )
+from core.achievement.activity import AchievementActivityType
 from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
@@ -24,6 +26,10 @@ from test.builders.evolution_rule_builder import (
 )
 from test.builders.species_builder import (
     SpeciesBuilder,
+)
+from test.fakes.fake_achievement_repositories import (
+    FakeAchievementActivityRepository,
+    FakeAchievementUnlockRepository,
 )
 from test.fakes.fake_candy_repository import (
     FakeCandyRepository,
@@ -48,6 +54,8 @@ async def test_evolution_application_service_evolves_creature():
 
     creature = (
         CreatureBuilder()
+        .with_id(7)
+        .with_collection_number(1)
         .with_species(
             first_species,
         )
@@ -98,6 +106,8 @@ async def test_evolution_application_service_evolves_creature():
     evolution_repository = FakeEvolutionRepository(
         rule,
     )
+    achievement_activities = FakeAchievementActivityRepository()
+    achievement_unlocks = FakeAchievementUnlockRepository()
 
     service = EvolutionApplicationService(
         EvolutionService(
@@ -109,6 +119,11 @@ async def test_evolution_application_service_evolves_creature():
         evolution_repository=evolution_repository,
         creature_repository=creature_repository,
         candy_repository=candy_repository,
+        achievement_activity_repository=achievement_activities,
+        achievement_award_service=CaptureAchievementAwardService(
+            achievement_activities,
+            achievement_unlocks,
+        ),
     )
 
     result = await service.evolve(
@@ -142,3 +157,103 @@ async def test_evolution_application_service_evolves_creature():
         )
         == 1
     )
+    assert [
+        activity.activity_type for activity in achievement_activities.activities
+    ] == [AchievementActivityType.EVOLUTION]
+    assert achievement_activities.activities[0].idempotency_key == "evolution:7:2"
+    assert [
+        unlock.achievement_id for unlock in await achievement_unlocks.get_by_trainer(1)
+    ] == ["first_evolution"]
+    assert achievement_unlocks.mints_by_trainer[1] == 1
+    retry = await service.evolve(1, 1, rule)
+    assert not retry.success
+    assert len(achievement_activities.activities) == 1
+    assert achievement_unlocks.mints_by_trainer[1] == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_evolution_does_not_record_achievement_activity():
+    first_species = SpeciesBuilder().with_id(1).build()
+    second_species = SpeciesBuilder().with_id(2).build()
+    creature = (
+        CreatureBuilder()
+        .with_id(7)
+        .with_collection_number(1)
+        .with_species(first_species)
+        .build()
+    )
+    creature_repository = FakeCreatureRepository(creature)
+    candy_repository = FakeCandyRepository()
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(1)
+        .with_to_species(2)
+        .with_candy_type(CandyType.FIRE)
+        .build()
+    )
+    activities = FakeAchievementActivityRepository()
+    unlocks = FakeAchievementUnlockRepository()
+    service = EvolutionApplicationService(
+        EvolutionService(
+            policy=EvolutionPolicy(cost_policy=EvolutionCostPolicy()),
+            species_repository=FakeSpeciesRepository(first_species, second_species),
+        ),
+        evolution_repository=FakeEvolutionRepository(rule),
+        creature_repository=creature_repository,
+        candy_repository=candy_repository,
+        achievement_activity_repository=activities,
+        achievement_award_service=CaptureAchievementAwardService(activities, unlocks),
+    )
+
+    result = await service.evolve(1, 1, rule)
+
+    assert not result.success
+    assert activities.activities == []
+    assert creature_repository.updated == []
+
+
+@pytest.mark.asyncio
+async def test_achievement_failure_does_not_revert_persisted_evolution():
+    first_species = SpeciesBuilder().with_id(1).build()
+    second_species = SpeciesBuilder().with_id(2).build()
+    creature = (
+        CreatureBuilder()
+        .with_id(7)
+        .with_collection_number(1)
+        .with_species(first_species)
+        .build()
+    )
+    creature_repository = FakeCreatureRepository(creature)
+    inventory = CandyInventory()
+    inventory.add(CandyBundle.from_amounts(CandyAmount(CandyType.FIRE, 10)))
+    candy_repository = FakeCandyRepository(inventory)
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(1)
+        .with_to_species(2)
+        .with_candy_type(CandyType.FIRE)
+        .build()
+    )
+    activities = FakeAchievementActivityRepository()
+
+    class FailingAwardService:
+        async def award_for_evolution(self, trainer_id, species):
+            raise RuntimeError("achievement storage unavailable")
+
+    service = EvolutionApplicationService(
+        EvolutionService(
+            policy=EvolutionPolicy(cost_policy=EvolutionCostPolicy()),
+            species_repository=FakeSpeciesRepository(first_species, second_species),
+        ),
+        evolution_repository=FakeEvolutionRepository(rule),
+        creature_repository=creature_repository,
+        candy_repository=candy_repository,
+        achievement_activity_repository=activities,
+        achievement_award_service=FailingAwardService(),
+    )
+
+    result = await service.evolve(1, 1, rule)
+
+    assert result.success
+    assert creature_repository.updated
+    assert len(activities.activities) == 1

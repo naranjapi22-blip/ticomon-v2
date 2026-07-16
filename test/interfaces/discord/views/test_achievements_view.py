@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from core.achievement.definition import ACHIEVEMENT_DEFINITIONS
 from interfaces.discord.views.achievements_view import AchievementsView
 
 
@@ -71,12 +72,12 @@ async def test_other_user_is_rejected_and_timeout_disables_buttons() -> None:
 
 
 def test_view_supports_full_catalog_without_writes() -> None:
-    statuses = tuple(
-        _status(index, family)
-        for index, family in enumerate(
-            ("Capture", "Pokédex", "Shiny", "Safari", "Trade", "Special")
-        )
-    ) + tuple(_status(index + 6, "Types") for index in range(50))
+    families = ("Capture", "Pokédex", "Shiny", "Safari", "Trade", "Special")
+    statuses = tuple(_status(index, family) for index, family in enumerate(families))
+    statuses += tuple(
+        _status(index + len(families), "Types")
+        for index in range(len(ACHIEVEMENT_DEFINITIONS) - len(families))
+    )
     view = AchievementsView(7, statuses)
-    assert len(view.statuses) == 56
+    assert len(view.statuses) == len(ACHIEVEMENT_DEFINITIONS)
     assert view.family is None

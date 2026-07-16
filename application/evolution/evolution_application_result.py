@@ -23,3 +23,4 @@ class EvolutionApplicationResult:
     consumed_candies: CandyBundle
 
     failure_reason: EvolutionFailureReason | None
+    achievements: tuple = ()

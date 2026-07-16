@@ -54,6 +54,10 @@ class FakeAchievementActivityRepository(AchievementActivityRepository):
                 item.activity_type is AchievementActivityType.SAFARI_CAPTURE
                 for item in activities
             ),
+            evolution_count=sum(
+                item.activity_type is AchievementActivityType.EVOLUTION
+                for item in activities
+            ),
         )
 
 

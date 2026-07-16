@@ -50,6 +50,7 @@ class NeonAchievementActivityRepository(AchievementActivityRepository):
             )
         type_counts: dict[str, int] = {}
         capture_count = shiny_count = discovered = trade_count = safari_count = 0
+        evolution_count = 0
         legendary = mythical = baby = 0
         for row in rows:
             activity_type = row["activity_type"]
@@ -69,6 +70,8 @@ class NeonAchievementActivityRepository(AchievementActivityRepository):
                 trade_count += 1
             elif activity_type == AchievementActivityType.SAFARI_CAPTURE.value:
                 safari_count += 1
+            elif activity_type == AchievementActivityType.EVOLUTION.value:
+                evolution_count += 1
         return AchievementProgress(
             capture_count=capture_count,
             shiny_capture_count=shiny_count,
@@ -78,5 +81,6 @@ class NeonAchievementActivityRepository(AchievementActivityRepository):
             legendary_capture_count=legendary,
             mythical_capture_count=mythical,
             baby_capture_count=baby,
+            evolution_count=evolution_count,
             capture_counts_by_type=type_counts,
         )

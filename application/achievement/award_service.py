@@ -80,6 +80,33 @@ class CaptureAchievementAwardService:
                 )
         return tuple(awarded_results)
 
+    async def award_for_evolution(
+        self,
+        trainer_id: int,
+        species: Species,
+    ) -> tuple[AchievementUnlockResult, ...]:
+        progress = await self._activity_repository.get_progress(trainer_id)
+        awarded_results: list[AchievementUnlockResult] = []
+        for definition in ACHIEVEMENT_DEFINITIONS:
+            if definition.criterion is not AchievementCriterion.EVOLUTION_COUNT:
+                continue
+            if progress.evolution_count < definition.threshold:
+                continue
+            reward = self._reward_policy.reward_for(species, definition.reward_amount)
+            if await self._unlock_repository.award(
+                trainer_id,
+                definition.id.value,
+                reward,
+                datetime.now(UTC),
+                definition.mint_reward,
+            ):
+                awarded_results.append(
+                    AchievementUnlockResult(
+                        definition.id.value, reward, definition.mint_reward
+                    )
+                )
+        return tuple(awarded_results)
+
     @staticmethod
     def _affected_definitions(
         is_shiny: bool,
@@ -120,6 +147,7 @@ class CaptureAchievementAwardService:
                 progress.mythical_capture_count
             ),
             AchievementCriterion.BABY_CAPTURE_COUNT: progress.baby_capture_count,
+            AchievementCriterion.EVOLUTION_COUNT: progress.evolution_count,
         }
         if criterion is AchievementCriterion.TYPE_CAPTURE_COUNT:
             return progress.capture_counts_by_type.get(scope or "", 0)

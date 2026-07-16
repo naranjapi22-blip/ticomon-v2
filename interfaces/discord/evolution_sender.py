@@ -3,9 +3,15 @@ from pathlib import Path
 import discord
 
 from core.evolution.evolution_result import EvolutionResult
+from interfaces.discord.achievement_notifications import format_unlocks
 from rendering.evolution_animation import EvolutionAnimation
 
 ASSETS_PATH = Path("rendering/assets")
+
+
+def _achievement_text(result) -> str:
+    achievements = getattr(result, "achievements", ())
+    return f"\n\n{format_unlocks(achievements)}" if achievements else ""
 
 
 def _build_animation(
@@ -38,6 +44,7 @@ async def send_evolution_result(
             f"{result.previous_species.name.title()} "
             "➡️ "
             f"{result.evolved_species.name.title()}"
+            f"{_achievement_text(result)}"
         ),
         file=_build_animation(result),
     )
@@ -58,5 +65,6 @@ async def edit_evolution_result(
             f"{result.previous_species.name.title()} "
             "➡️ "
             f"{result.evolved_species.name.title()}"
+            f"{_achievement_text(result)}"
         ),
     )
