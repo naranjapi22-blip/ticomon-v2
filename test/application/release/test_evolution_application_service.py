@@ -56,6 +56,7 @@ async def test_evolution_application_service_evolves_creature():
     creature = (
         CreatureBuilder()
         .with_id(7)
+        .with_trainer_id(113100351531417600)
         .with_collection_number(1)
         .shiny()
         .with_species(
@@ -130,7 +131,7 @@ async def test_evolution_application_service_evolves_creature():
     )
 
     result = await service.evolve(
-        trainer_id=1,
+        trainer_id=113100351531417600,
         collection_number=1,
         rule=rule,
     )
@@ -170,13 +171,14 @@ async def test_evolution_application_service_evolves_creature():
     ] == [AchievementActivityType.EVOLUTION]
     assert achievement_activities.activities[0].idempotency_key == "evolution:7:2"
     assert [
-        unlock.achievement_id for unlock in await achievement_unlocks.get_by_trainer(1)
+        unlock.achievement_id
+        for unlock in await achievement_unlocks.get_by_trainer(113100351531417600)
     ] == ["first_evolution"]
-    assert achievement_unlocks.mints_by_trainer[1] == 1
-    retry = await service.evolve(1, 1, rule)
+    assert achievement_unlocks.mints_by_trainer[113100351531417600] == 1
+    retry = await service.evolve(113100351531417600, 1, rule)
     assert not retry.success
     assert len(achievement_activities.activities) == 1
-    assert achievement_unlocks.mints_by_trainer[1] == 1
+    assert achievement_unlocks.mints_by_trainer[113100351531417600] == 1
 
 
 @pytest.mark.asyncio

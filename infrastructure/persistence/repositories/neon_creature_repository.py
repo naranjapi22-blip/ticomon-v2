@@ -450,9 +450,9 @@ class NeonCreatureRepository(CreatureRepository):
                 WHERE id = $13
                 RETURNING id
                 """,
-                params[1],  # species_id
-                params[2],  # current_form_id
-                params[3],  # is_shiny
+                params[2],  # species_id
+                params[3],  # current_form_id
+                params[4],  # is_shiny
                 params[5],  # nature
                 params[13],  # minted_nature
                 params[6],  # size

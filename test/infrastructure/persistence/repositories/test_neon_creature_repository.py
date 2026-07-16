@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from core.creature.nature import Nature
 from core.species.species_repository import SpeciesRepository
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
@@ -75,6 +76,22 @@ class _SaveFakeConnection(_FakeConnection):
             self.events.append("insert")
             return {"id": self.row["id"]}
         self.events.append("reload")
+        return self.row
+
+
+class _UpdateFakeConnection(_FakeConnection):
+    def __init__(self, row: dict) -> None:
+        super().__init__([])
+        self.row = row
+        self.update_args: tuple = ()
+        self.update_query = ""
+
+    async def fetchrow(self, query: str, *args):
+        if "UPDATE creatures" in query:
+            self.update_query = query
+            self.update_args = args
+            assert args[0] <= 2_147_483_647
+            return {"id": self.row["id"]}
         return self.row
 
 
@@ -247,3 +264,62 @@ async def test_save_locks_trainer_before_allocating_collection_number(
         "reload",
         "transaction_exit",
     ]
+
+
+@pytest.mark.asyncio
+async def test_update_binds_species_before_discord_trainer_id(monkeypatch) -> None:
+    trainer_id = 113100351531417600
+    species = SpeciesBuilder().with_id(2).with_name("Ivysaur").build()
+    row = {
+        "id": 7,
+        "collection_number": 1,
+        "species_id": 2,
+        "trainer_id": trainer_id,
+        "original_trainer_id": trainer_id,
+        "hp_iv": 31,
+        "attack_iv": 30,
+        "defense_iv": 29,
+        "special_attack_iv": 28,
+        "special_defense_iv": 27,
+        "speed_iv": 26,
+        "size": 1.5,
+        "nature": "modest",
+        "minted_nature": "adamant",
+        "is_shiny": True,
+        "variant_id": None,
+        "variant_name": None,
+    }
+    connection = _UpdateFakeConnection(row)
+
+    async def fake_get_pool():
+        return _FakePool(connection)
+
+    monkeypatch.setattr(
+        "infrastructure.persistence.repositories.neon_creature_repository.get_pool",
+        fake_get_pool,
+    )
+    species_repository = AsyncMock(spec=SpeciesRepository)
+    species_repository.get = AsyncMock(return_value=species)
+    repository = NeonCreatureRepository(species_repository=species_repository)
+
+    creature = CreatureBuilder().with_id(7).with_collection_number(1).build()
+    creature.trainer_id = trainer_id
+    creature.original_trainer_id = trainer_id
+    creature.species = species
+    creature.is_shiny = True
+    creature.minted_nature = Nature("adamant")
+
+    updated = await repository.update(creature)
+
+    assert "WHERE id = $13" in connection.update_query
+    assert connection.update_args[0] == species.id
+    assert connection.update_args[3] == "hardy"
+    assert connection.update_args[4] == "adamant"
+    assert connection.update_args[12] == creature.id
+    assert updated.id == creature.id
+    assert updated.collection_number == creature.collection_number
+    assert updated.trainer_id == trainer_id
+    assert updated.original_trainer_id == trainer_id
+    assert updated.nature.name == "modest"
+    assert updated.minted_nature.name == "adamant"
+    assert updated.is_shiny is True
