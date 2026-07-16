@@ -47,4 +47,4 @@ async def close_pool() -> None:
     if _pool is not None:
         await _pool.close()
         _pool = None
-        logger.info("PostgreSQL pool closed")
+        logger.debug("PostgreSQL pool closed")

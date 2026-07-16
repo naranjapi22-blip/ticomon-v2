@@ -27,6 +27,7 @@ from interfaces.discord.cogs.trade_cog import TradeCog
 from interfaces.discord.cogs.trainer_cog import TrainerCog
 
 logger = logging.getLogger(__name__)
+startup_logger = logging.getLogger("ticomon.startup")
 
 
 class TicoMonBot(commands.Bot):
@@ -41,6 +42,7 @@ class TicoMonBot(commands.Bot):
         )
 
         self.core = build_discord()
+        self._ready_announced = False
 
     async def setup_hook(self):
         loaded_count = 0
@@ -75,7 +77,13 @@ class TicoMonBot(commands.Bot):
             logger.debug("Loaded Discord cog %s", cog_class.__name__)
             loaded_count += 1
 
-        logger.info("Discord cogs loaded: %s", loaded_count)
+        logger.debug("Discord cogs loaded: %s", loaded_count)
+
+    async def on_ready(self) -> None:
+        if self._ready_announced:
+            return
+        self._ready_announced = True
+        startup_logger.info("TicoMon is ready to use.")
 
     async def on_command_error(
         self,

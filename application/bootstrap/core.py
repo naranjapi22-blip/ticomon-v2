@@ -412,7 +412,7 @@ def build_core(
         trade_repository=trade_repository,
         creature_repository=creature_repository,
     )
-    logger.info("Application services initialized")
+    logger.debug("Application services initialized")
     logger.warning(
         "Safari sessions are currently in-memory and do not survive bot restarts."
     )

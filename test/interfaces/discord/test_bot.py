@@ -31,6 +31,22 @@ async def test_setup_hook_registers_trade_cog() -> None:
     )
 
 
+@pytest.mark.asyncio
+async def test_on_ready_logs_availability_once(caplog) -> None:
+    caplog.set_level(logging.INFO)
+    bot = TicoMonBot()
+
+    await bot.on_ready()
+    await bot.on_ready()
+
+    ready_records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "TicoMon is ready to use."
+    ]
+    assert len(ready_records) == 1
+
+
 def _build_context(
     *,
     command=None,
