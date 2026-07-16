@@ -19,6 +19,9 @@ from application.duplicates.duplicate_application_service import (
 from application.evolution.evolution_application_service import (
     EvolutionApplicationService,
 )
+from application.mint.nature_mint_application_service import (
+    NatureMintApplicationService,
+)
 from application.pokedex.pokedex_service import PokedexService
 from application.profile.profile_service import ProfileService
 from application.release.preview_release_application_service import (
@@ -105,6 +108,9 @@ from infrastructure.persistence.repositories.neon_capture_unit_of_work import (
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
 )
+from infrastructure.persistence.repositories.neon_nature_mint_repository import (
+    NeonNatureMintRepository,
+)
 from infrastructure.persistence.repositories.neon_profile_repository import (
     NeonProfileRepository,
 )
@@ -179,6 +185,7 @@ class CoreServices:
     trade_display_service: TradeDisplayService
     safari_unlock_repository: NeonSafariUnlockRepository
     achievement_query_service: AchievementQueryService
+    nature_mint_application: NatureMintApplicationService
 
 
 def build_core(
@@ -202,6 +209,13 @@ def build_core(
 
     creature_repository = NeonCreatureRepository(
         species_repository=species_repository,
+    )
+    nature_mint_repository = NeonNatureMintRepository(
+        species_repository=species_repository,
+    )
+    nature_mint_application = NatureMintApplicationService(
+        creature_repository=creature_repository,
+        mint_repository=nature_mint_repository,
     )
     candy_repository = NeonCandyRepository()
     achievement_activity_repository = (
@@ -435,5 +449,6 @@ def build_core(
         trade_display_service=trade_display_service,
         safari_unlock_repository=safari_unlock_repository,
         achievement_query_service=achievement_query_service,
+        nature_mint_application=nature_mint_application,
         safari_daily_progress_application=safari_daily_progress_application,
     )
