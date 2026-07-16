@@ -23,6 +23,15 @@ class EvolutionView(discord.ui.View):
         self._trainer_id = trainer_id
         self._collection_number = collection_number
         self._options = options
+        self._processing = False
+
+    def begin_processing(self) -> bool:
+        if self._processing:
+            return False
+        self._processing = True
+        for child in self.children:
+            child.disabled = True
+        return True
 
     async def build(self):
 

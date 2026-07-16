@@ -21,6 +21,7 @@ class EvolutionConfirmView(discord.ui.View):
         super().__init__(
             timeout=60,
         )
+        self._processing = False
 
         self.add_item(
             EvolutionConfirmButton(
@@ -32,3 +33,11 @@ class EvolutionConfirmView(discord.ui.View):
         )
 
         self.add_item(EvolutionCancelButton())
+
+    def begin_processing(self) -> bool:
+        if self._processing:
+            return False
+        self._processing = True
+        for child in self.children:
+            child.disabled = True
+        return True

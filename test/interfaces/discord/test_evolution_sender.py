@@ -40,3 +40,22 @@ async def test_evolution_result_survives_achievement_presentation_failure(monkey
 
     send.assert_awaited_once()
     assert "Evolution successful!" in send.await_args.kwargs["content"]
+
+
+@pytest.mark.asyncio
+async def test_deferred_evolution_result_edits_original_response(monkeypatch):
+    result = SimpleNamespace(
+        previous_species=SimpleNamespace(id=1, name="bulbasaur"),
+        evolved_species=SimpleNamespace(id=2, name="ivysaur"),
+        achievements=(),
+    )
+    interaction = SimpleNamespace(
+        response=SimpleNamespace(edit_message=AsyncMock()),
+        edit_original_response=AsyncMock(),
+    )
+    monkeypatch.setattr(evolution_sender, "_build_animation", lambda _result: "gif")
+
+    await evolution_sender.edit_evolution_result(interaction, result)
+
+    interaction.edit_original_response.assert_awaited_once()
+    interaction.response.edit_message.assert_not_awaited()
