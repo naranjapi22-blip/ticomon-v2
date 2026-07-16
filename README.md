@@ -87,13 +87,16 @@ Safari captures, shiny, legendary, mythical, trade, and evolution activities.
 ## Shops
 
 Use `!shop` to spend type-specific Candies in the Technology Shop, Fossil Lab,
-or Pastry Shop. The catalogue provides special species that do not appear in
-normal Spawn or Safari. Every product shows its exact GIF before confirmation;
-the preview does not spend candies. Purchases are atomic and create a normal,
-non-shiny creature with generated IVs and size, random original nature, and no
-Nature Mint effect. The supported Alcremie catalogue contains 45 combinations:
-9 creams and 5 decorations. Rotom Frost and Rotom Fan are temporarily excluded
-until their canonical variants and graphic resources are confirmed.
+Pastry Shop, Garden, or Pokémon Groomer. The catalogue provides special species
+and verified cosmetic variants that do not appear in normal Spawn or Safari.
+Every product shows its exact GIF before confirmation; the preview does not
+spend candies. Purchases are atomic and create a normal, non-shiny creature
+with generated IVs and size, random original nature, and no Nature Mint effect.
+Garden offers verified Flabébé colors and normal Vivillon patterns, while
+Pokémon Groomer offers Furfrou and its confirmed trims. The supported Alcremie
+catalogue contains 45 combinations: 9 creams and 5 decorations. Rotom Frost
+and Rotom Fan are temporarily excluded until their canonical variants and
+graphic resources are confirmed.
 
 Shop prices are initial values and can be adjusted later using real economy
 metrics; there are no dynamic prices or universal currency.

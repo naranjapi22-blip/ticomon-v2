@@ -1,11 +1,11 @@
 # Candy Shops
 
-Use `!shop` to open the Technology Shop, Fossil Lab, or Pastry Shop. Choose a
-product, review its GIF, price, relevant candy balances, and projected balance,
-then confirm or cancel. Candy is not spent while previewing. Confirmation
-performs the candy deduction and creature creation atomically; cancellation or
-expiration changes nothing. Insufficient balances disable confirmation, and a
-double click cannot create two purchases.
+Use `!shop` to open the Technology Shop, Fossil Lab, Pastry Shop, Garden, or
+Pokémon Groomer. Choose a product, review its GIF, price, relevant candy
+balances, and projected balance, then confirm or cancel. Candy is not spent
+while previewing. Confirmation performs the candy deduction and creature
+creation atomically; cancellation or expiration changes nothing. Insufficient
+balances disable confirmation, and a double click cannot create two purchases.
 
 All products show the exact creature GIF before confirmation. A missing asset
 uses the existing fallback and does not block a purchase. The displayed
@@ -69,8 +69,60 @@ decorations. The three purchase modes are:
 | Selected cream and decoration | 120 Fairy |
 
 The combination is resolved before confirmation and is frozen for the GIF and
-the purchase. The 8 technical/base variants without decoration are not shop
-products.
+the purchase. The data also contains aliases without cream-name hyphens and
+eight undecorated technical/base forms; none are shop products. No additional
+decorations are supported by the verified canonical catalogue.
+
+## Garden
+
+Garden sells verified floral variants and collectible Vivillon patterns. Its
+menu first separates Flabébé colors from Vivillon choices, so the pattern list
+remains manageable.
+
+### Flabébé
+
+| Product | Price |
+| --- | --- |
+| Flabébé Blue | 45 Fairy |
+| Flabébé Orange | 45 Fairy |
+| Flabébé White | 45 Fairy |
+| Flabébé Yellow | 45 Fairy |
+
+Floette and Florges are not sold directly. A purchased color is retained by
+the normal evolution flow when the destination species has the matching
+canonical color. Eternal Floette is excluded.
+
+### Vivillon
+
+| Choice | Price |
+| --- | --- |
+| Random verified pattern | 35 Bug + 35 Flying |
+| Selected verified pattern | 50 Bug + 50 Flying |
+
+The selectable normal patterns are Archipelago, Continental, Elegant, Garden,
+High Plains, Icy Snow, Jungle, Marine, Modern, Monsoon, Ocean, Polar, River,
+Sandstorm, Savanna, Sun, and Tundra. Poké Ball is a special pattern and is not
+sold. Fancy and other patterns without a canonical persisted variant and
+confirmed resource are not offered.
+
+## Pokémon Groomer
+
+| Product | Price |
+| --- | --- |
+| Furfrou Natural | 45 Normal |
+| Furfrou Dandy | 65 Normal |
+| Furfrou Debutante | 65 Normal |
+| Furfrou Diamond | 65 Normal |
+| Furfrou Heart | 65 Normal |
+| Furfrou Kabuki | 65 Normal |
+| Furfrou La Reine | 65 Normal |
+| Furfrou Matron | 65 Normal |
+| Furfrou Pharaoh | 65 Normal |
+| Furfrou Star | 65 Normal |
+
+Each trim is delivered as the selected canonical variant. Groomer does not
+change an existing Furfrou, apply a temporary trim, or perform automatic
+reversions.
 
 ## Persistence and deployment
 

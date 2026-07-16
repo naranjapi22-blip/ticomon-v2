@@ -24,3 +24,4 @@ async def test_commands_help_includes_safari_command() -> None:
     assert "consumed only after confirming a valid change" in gameplay_field.value
     assert "`!shop`" in gameplay_field.value
     assert "type candies can be exchanged" in gameplay_field.value
+    assert "collectible forms" in gameplay_field.value

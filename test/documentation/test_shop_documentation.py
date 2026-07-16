@@ -5,10 +5,14 @@ from core.shop.catalog import SHOP_PRODUCTS
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _display_species_name(name: str) -> str:
+    return "Flabébé" if name == "flabebe" else name.title()
+
+
 def test_shop_documentation_mentions_all_catalog_products_and_prices():
     document = (ROOT / "docs" / "shops.md").read_text(encoding="utf-8")
     for product in SHOP_PRODUCTS:
-        assert product.species_name.title() in document
+        assert _display_species_name(product.species_name) in document
         for candy_type, amount in product.cost.items():
             assert f"{amount} {candy_type.value.title()}" in document
 
@@ -24,6 +28,12 @@ def test_shop_documentation_matches_supported_variants_and_modes():
     assert "63 combinations" not in document
     assert "Every product shows its exact GIF before confirmation" in readme
     assert "Pastry Shop is the only shop" not in readme
+    assert "Garden" in document
+    assert "Pokémon Groomer" in document
+    assert "Eternal Floette is excluded." in document
+    assert "Poké Ball is a special pattern" in document
+    assert "sold. Fancy and other patterns" in document
+    assert "Furfrou Natural" in document
 
 
 def test_shop_documentation_uses_the_reduced_price_schedule():
