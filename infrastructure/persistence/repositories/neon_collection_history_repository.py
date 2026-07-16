@@ -5,6 +5,7 @@ from asyncpg.exceptions import UndefinedTableError
 
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_inventory import CandyInventory
+from core.collection.catalog import is_recordable_collection_identity
 from core.collection.history import CollectionEntrySource, TrainerCollectionEntry
 from core.collection.repository import CollectionHistoryRepository
 from infrastructure.db_config import get_pool
@@ -26,6 +27,11 @@ class NeonCollectionHistoryRepository(CollectionHistoryRepository):
             raise ValueError(
                 "Collection entries require a persisted creature and trainer."
             )
+        variant_name = (
+            creature.current_form.name if creature.current_form is not None else None
+        )
+        if not is_recordable_collection_identity(creature.species.name, variant_name):
+            return False
         try:
             pool = await get_pool()
             async with pool.acquire() as connection:
@@ -241,18 +247,50 @@ class NeonCollectionHistoryRepository(CollectionHistoryRepository):
         try:
             pool = await get_pool()
             async with pool.acquire() as connection:
-                result = await connection.execute("""
-                    INSERT INTO trainer_collection_entries (
-                        trainer_id, species_id, variant_id, source
+                async with connection.transaction():
+                    rows = await connection.fetch("""
+                        SELECT c.trainer_id, c.species_id, c.current_form_id,
+                               s.name AS species_name, v.name AS variant_name
+                        FROM creatures c
+                        JOIN trainers t ON t.trainer_id = c.trainer_id
+                        JOIN species s ON s.id = c.species_id
+                        LEFT JOIN species_variants v ON v.id = c.current_form_id
+                        """)
+                    entries = [
+                        row
+                        for row in rows
+                        if is_recordable_collection_identity(
+                            row["species_name"], row["variant_name"]
+                        )
+                    ]
+                    if not entries:
+                        return 0
+                    values = []
+                    parameters = []
+                    for index, row in enumerate(entries, start=1):
+                        offset = (index - 1) * 3
+                        values.append(
+                            f"(${offset + 1}, ${offset + 2}, ${offset + 3}, 'backfill')"
+                        )
+                        parameters.extend(
+                            (
+                                row["trainer_id"],
+                                row["species_id"],
+                                row["current_form_id"],
+                            )
+                        )
+                    result = await connection.execute(
+                        """
+                        INSERT INTO trainer_collection_entries (
+                            trainer_id, species_id, variant_id, source
+                        )
+                        VALUES """ + ", ".join(values) + " ON CONFLICT DO NOTHING",
+                        *parameters,
                     )
-                    SELECT trainer_id, species_id, current_form_id, 'backfill'
-                    FROM creatures
-                    WHERE trainer_id IS NOT NULL
-                    ON CONFLICT DO NOTHING
-                    """)
+                    inserted = int(result.rsplit(" ", 1)[-1])
         except UndefinedTableError as error:
             raise ValueError(_SCHEMA_ERROR) from error
-        return int(result.rsplit(" ", 1)[-1])
+        return inserted
 
     async def _save_inventory(
         self, connection, trainer_id: int, inventory: CandyInventory

@@ -46,7 +46,7 @@ async def test_missing_shop_schema_has_explicit_error_and_single_traceback(
 
 @pytest.mark.asyncio
 @pytest.mark.neon_db
-async def test_shop_purchase_records_the_canonical_collection_entry():
+async def test_shop_porygon_purchase_records_the_canonical_collection_entry():
     await close_pool()
     await create_shop_schema()
     await create_collection_schema()
@@ -84,13 +84,14 @@ async def test_shop_purchase_records_the_canonical_collection_entry():
             await connection.execute(
                 """
                 INSERT INTO trainer_candies (trainer_id, candy_type, amount)
-                VALUES ($1, 'grass', 10)
+                VALUES ($1, 'normal', 10)
                 """,
                 trainer_id,
             )
 
         species_repository = NeonSpeciesRepository()
-        species = await species_repository.get(1)
+        species = await species_repository.find_by_name("porygon")
+        assert species is not None
         creature = (
             CreatureBuilder().with_species(species).with_trainer_id(trainer_id).build()
         )
@@ -98,14 +99,14 @@ async def test_shop_purchase_records_the_canonical_collection_entry():
         stored, remaining, created = await repository.purchase(
             trainer_id,
             creature,
-            CandyBundle.from_amounts(CandyAmount(CandyType.GRASS, 2)),
-            "collection-test",
+            CandyBundle.from_amounts(CandyAmount(CandyType.NORMAL, 2)),
+            "porygon",
             receipt_key,
         )
         created_ids.append(stored.id)
 
         assert created is True
-        assert remaining.get_amount(CandyType.GRASS) == 8
+        assert remaining.get_amount(CandyType.NORMAL) == 8
         async with pool.acquire() as connection:
             entry = await connection.fetchrow(
                 """

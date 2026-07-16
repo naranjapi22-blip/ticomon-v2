@@ -8,6 +8,7 @@ from interfaces.discord.views.collections_view import (
     CollectionAlbumView,
     CollectionEntriesView,
     CollectionsOverviewView,
+    _reward_text,
 )
 
 
@@ -109,3 +110,13 @@ async def test_other_trainer_cannot_control_collection_view():
 
     assert await view.interaction_check(interaction) is False
     interaction.response.send_message.assert_awaited_once()
+
+
+def test_mint_rewards_use_the_complete_singular_and_plural_labels():
+    no_candies = SimpleNamespace(items=lambda: ())
+
+    singular = _reward_text(SimpleNamespace(candies=no_candies, mints=1))
+    plural = _reward_text(SimpleNamespace(candies=no_candies, mints=2))
+
+    assert singular == "1 Nature Mint"
+    assert plural == "2 Nature Mints"

@@ -7,6 +7,7 @@ from core.collection.catalog import (
     TECHNOLOGY_ENTRIES,
     VIVILLON_ENTRIES,
     CollectionId,
+    is_recordable_collection_identity,
 )
 from core.shop.catalog import ALCREMIE_CREAMS, ALCREMIE_DECORATIONS
 
@@ -38,6 +39,13 @@ def test_alcremie_collection_is_the_canonical_9_by_5_catalogue():
     }
     assert {entry.variant_name for entry in ALCREMIE_ENTRIES} == expected
     assert len({entry.variant_name for entry in ALCREMIE_ENTRIES}) == 45
+
+
+def test_aliases_and_excluded_forms_are_not_recordable_for_active_albums():
+    assert is_recordable_collection_identity("rotom", "wash")
+    assert not is_recordable_collection_identity("rotom", "w")
+    assert not is_recordable_collection_identity("floette", "eternal")
+    assert not is_recordable_collection_identity("vivillon", "pokeball")
 
 
 def test_collection_mint_rewards_match_the_defined_completion_rewards():

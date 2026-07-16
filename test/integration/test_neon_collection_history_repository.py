@@ -91,7 +91,7 @@ def _creature(trainer_id: int, creature_id: int):
     return SimpleNamespace(
         trainer_id=trainer_id,
         id=creature_id,
-        species=SimpleNamespace(id=1),
+        species=SimpleNamespace(id=1, name="bulbasaur"),
         current_form=None,
     )
 

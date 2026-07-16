@@ -191,3 +191,43 @@ async def test_duplicate_current_creatures_do_not_increase_owned_collection_prog
     album = await service.album(trainer_id, CollectionId.TECHNOLOGY)
     assert album.progress.historical_count == 1
     assert album.progress.owned_count == 1
+
+
+@pytest.mark.asyncio
+async def test_backfilled_owned_technology_entry_is_also_historical():
+    trainer_id = 113100351531417600
+    history = FakeCollectionHistoryRepository()
+    creatures = CreatureRepository()
+    service = CollectionApplicationService(
+        SpeciesRepository(_all_collection_species()), history, creatures
+    )
+    porygon = (await service.album(trainer_id, CollectionId.TECHNOLOGY)).entries[0]
+
+    await _record(
+        history,
+        creatures,
+        trainer_id,
+        porygon,
+        CollectionEntrySource.BACKFILL,
+    )
+
+    album = await service.album(trainer_id, CollectionId.TECHNOLOGY)
+    assert album.progress.historical_count == 1
+    assert album.progress.owned_count == 1
+
+
+@pytest.mark.asyncio
+async def test_shop_porygon_is_owned_and_historical_immediately():
+    trainer_id = 113100351531417600
+    history = FakeCollectionHistoryRepository()
+    creatures = CreatureRepository()
+    service = CollectionApplicationService(
+        SpeciesRepository(_all_collection_species()), history, creatures
+    )
+    porygon = (await service.album(trainer_id, CollectionId.TECHNOLOGY)).entries[0]
+
+    await _record(history, creatures, trainer_id, porygon, CollectionEntrySource.SHOP)
+
+    album = await service.album(trainer_id, CollectionId.TECHNOLOGY)
+    assert album.progress.historical_count == 1
+    assert album.progress.owned_count == 1

@@ -146,6 +146,32 @@ FLABEBE_ENTRIES = tuple(
     for species_name in ("flabebe", "floette", "florges")
 )
 
+_COLLECTION_ENTRY_IDENTITIES = frozenset(
+    (entry.species_name, entry.variant_name)
+    for entries in (
+        FOSSIL_ENTRIES,
+        TECHNOLOGY_ENTRIES,
+        ALCREMIE_ENTRIES,
+        VIVILLON_ENTRIES,
+        FURFROU_ENTRIES,
+        FLABEBE_ENTRIES,
+    )
+    for entry in entries
+)
+_COLLECTION_SPECIES_NAMES = frozenset(
+    species_name for species_name, _ in _COLLECTION_ENTRY_IDENTITIES
+)
+
+
+def is_recordable_collection_identity(
+    species_name: str,
+    variant_name: str | None,
+) -> bool:
+    """Reject technical or alias forms of species covered by active albums."""
+    if species_name not in _COLLECTION_SPECIES_NAMES:
+        return True
+    return (species_name, variant_name) in _COLLECTION_ENTRY_IDENTITIES
+
 
 COLLECTIONS: tuple[CollectionDefinition, ...] = (
     CollectionDefinition(
