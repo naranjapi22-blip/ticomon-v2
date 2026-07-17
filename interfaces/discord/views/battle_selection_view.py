@@ -59,8 +59,9 @@ class BattleSelectionView(discord.ui.View):
 
         await interaction.response.defer(ephemeral=True)
 
+        service = self.core.battle_application_service
         try:
-            battle = await self.core.battle_application_service.set_party_from_collection_numbers(
+            battle = await service.set_party_from_collection_numbers(
                 self.battle_id,
                 self.trainer_id,
                 selected,
