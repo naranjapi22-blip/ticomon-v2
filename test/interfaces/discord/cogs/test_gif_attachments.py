@@ -299,22 +299,10 @@ async def test_download_gif_file_evicts_oldest_when_cache_reaches_limit(
     ("cog_factory", "module", "core_factory", "filename"),
     [
         (
-            IVsCog,
-            ivs_module,
-            _core_for_ivs,
-            "ivs.gif",
-        ),
-        (
             ProfileCog,
             profile_module,
             _core_for_profile,
             "profile.gif",
-        ),
-        (
-            InfoCog,
-            info_module,
-            _core_for_info,
-            "species.gif",
         ),
     ],
 )
@@ -358,61 +346,62 @@ async def test_gif_commands_attach_remote_image(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("cog_factory", "module", "core_factory", "warning"),
-    [
-        (
-            IVsCog,
-            ivs_module,
-            _core_for_ivs,
-            "Unable to attach creature GIF command=ivs species=Pikachu",
-        ),
-        (
-            ProfileCog,
-            profile_module,
-            _core_for_profile,
-            "Unable to attach creature GIF command=profile species=Pikachu",
-        ),
-        (
-            InfoCog,
-            info_module,
-            _core_for_info,
-            "Unable to attach species GIF command=info species=Pikachu",
-        ),
-    ],
-)
-async def test_gif_commands_fall_back_without_attachment(
-    monkeypatch,
-    caplog,
-    cog_factory,
-    module,
-    core_factory,
-    warning,
-) -> None:
-    async def failing_helper(url, attachment_name):
-        raise RuntimeError("download failed")
-
-    monkeypatch.setattr(module, "download_gif_file", failing_helper)
-
-    creature = _DummyCreature()
-    species = _DummySpecies()
-    core = core_factory(creature if module is not info_module else species)
+async def test_info_uses_direct_remote_url_without_attachment(monkeypatch) -> None:
+    species = _DummySpecies(name="Pikachu", pokeapi_id=25)
+    core = _core_for_info(species)
     ctx = _ctx()
-    cog = cog_factory(core)
+    cog = InfoCog(core)
+    helper = AsyncMock()
 
-    caplog.clear()
+    monkeypatch.setattr(images_module, "download_gif_file", helper)
 
-    if module is ivs_module:
-        await IVsCog.ivs.callback(cog, ctx, 7)
-    elif module is profile_module:
-        await ProfileCog.profile.callback(cog, ctx)
-    else:
-        await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
+    await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
 
     ctx.send.assert_awaited_once()
     kwargs = ctx.send.await_args.kwargs
-
+    assert (
+        kwargs["embed"].image.url
+        == "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/gifs_pokeapi/regular/25.gif"
+    )
     assert "file" not in kwargs
+    assert "attachment://" not in kwargs["embed"].image.url
+    helper.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ivs_uses_direct_remote_url_without_attachment(monkeypatch) -> None:
+    creature = _DummyCreature()
+    core = _core_for_ivs(creature)
+    ctx = _ctx()
+    cog = IVsCog(core)
+    helper = AsyncMock()
+
+    monkeypatch.setattr(images_module, "download_gif_file", helper)
+
+    await IVsCog.ivs.callback(cog, ctx, 7)
+
+    ctx.send.assert_awaited_once()
+    kwargs = ctx.send.await_args.kwargs
+    assert (
+        kwargs["embed"].image.url
+        == "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/gifs_pokeapi/regular/25.gif"
+    )
+    assert "file" not in kwargs
+    assert "attachment://" not in kwargs["embed"].image.url
+    helper.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_profile_still_uses_attachment(monkeypatch) -> None:
+    creature = _DummyCreature()
+    core = _core_for_profile(creature)
+    ctx = _ctx()
+    cog = ProfileCog(core)
+
+    await ProfileCog.profile.callback(cog, ctx)
+
+    ctx.send.assert_awaited()
+    kwargs = ctx.send.await_args.kwargs
     assert kwargs["embed"] is not None
-    assert warning in caplog.text
-    assert "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev" not in caplog.text
+    assert kwargs["file"].filename == "profile.gif"
+    assert kwargs["embed"].image.url == "attachment://profile.gif"
