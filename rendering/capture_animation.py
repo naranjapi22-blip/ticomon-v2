@@ -118,6 +118,42 @@ def load_sprite(path):
     return Image.open(path).convert("RGBA")
 
 
+def _normalize_sprite_frames(frames, size):
+    """Crop, scale, and pad frames to one stable sprite box."""
+    cropped = []
+    max_width = 1
+    max_height = 1
+
+    for frame in frames:
+        bbox = frame.getchannel("A").getbbox()
+        if bbox:
+            frame = frame.crop(bbox)
+            cropped.append(frame)
+            max_width = max(max_width, frame.width)
+            max_height = max(max_height, frame.height)
+        else:
+            cropped.append(None)
+
+    scale = min(1, size / max_width, size / max_height)
+    box_width = max(1, round(max_width * scale))
+    box_height = max(1, round(max_height * scale))
+    normalized = []
+
+    for frame in cropped:
+        canvas = Image.new("RGBA", (box_width, box_height), (0, 0, 0, 0))
+        if frame is not None:
+            width = max(1, round(frame.width * scale))
+            height = max(1, round(frame.height * scale))
+            frame = frame.resize((width, height), Image.LANCZOS)
+            canvas.alpha_composite(
+                frame,
+                ((box_width - width) // 2, box_height - height),
+            )
+        normalized.append(canvas)
+
+    return normalized
+
+
 def load_gif_frames(path, size=SPRITE_SIZE):
 
     if str(path).startswith("http"):
@@ -164,10 +200,10 @@ def load_gif_frames(path, size=SPRITE_SIZE):
 
         img = frame.convert("RGBA")
 
-        bbox = img.getbbox()
-
-        if bbox:
-            img = img.crop(bbox)
+        if size is None:
+            bbox = img.getchannel("A").getbbox()
+            if bbox:
+                img = img.crop(bbox)
 
         frames.append(img)
 
@@ -177,6 +213,9 @@ def load_gif_frames(path, size=SPRITE_SIZE):
             duration = 80
 
         durations.append(duration)
+
+    if size is not None:
+        frames = _normalize_sprite_frames(frames, size)
 
     return frames, durations
 
@@ -192,7 +231,7 @@ TRAINERS_DIR = ASSETS_DIR / "trainers"
 
 def load_trainer(name: str):
 
-    frames, _ = load_gif_frames(TRAINERS_DIR / f"{name}.gif")
+    frames, _ = load_gif_frames(TRAINERS_DIR / f"{name}.gif", size=None)
 
     return frames
 
@@ -712,7 +751,10 @@ class CaptureAnimation:
         type_name=None,
     ):
 
-        self.sprite_frames, self.sprite_durations = load_gif_frames(sprite_path)
+        self.sprite_frames, self.sprite_durations = load_gif_frames(
+            sprite_path,
+            size=SPRITE_SIZE,
+        )
 
         self.sprite_white_frames = [white_sprite(frame) for frame in self.sprite_frames]
 
@@ -820,6 +862,23 @@ class CaptureAnimation:
 
         return int(x), int(y)
 
+    def advance_sprite_frame(self, elapsed):
+        """Advance by elapsed milliseconds without consuming the next frame twice."""
+        self.sprite_timer += elapsed
+        contador = 0
+
+        while self.sprite_timer >= self.sprite_durations[self.sprite_index]:
+            contador += 1
+            if contador > 100:
+                raise RuntimeError(
+                    f"Infinite loop. "
+                    f"Frame={self.sprite_index} "
+                    f"Duration={self.sprite_durations[self.sprite_index]}"
+                )
+
+            self.sprite_timer -= self.sprite_durations[self.sprite_index]
+            self.sprite_index = (self.sprite_index + 1) % len(self.sprite_frames)
+
     # --------------------------------------------------------
 
     # --------------------------------------------------------
@@ -855,31 +914,11 @@ class CaptureAnimation:
 
             SPARKS.draw(img, frame)
 
-        self.sprite_timer += FRAME_DURATION
-
-        contador = 0
-
-        while self.sprite_timer >= self.sprite_durations[self.sprite_index]:
-            contador += 1
-
-            if contador > 100:
-                raise RuntimeError(
-                    f"Infinite loop. "
-                    f"Frame={self.sprite_index} "
-                    f"Duration={self.sprite_durations[self.sprite_index]}"
-                )
-
-            self.sprite_timer -= self.sprite_durations[self.sprite_index]
-
-            self.sprite_index = (self.sprite_index + 1) % len(self.sprite_frames)
-            self.sprite_timer -= self.sprite_durations[self.sprite_index]
-
-            self.sprite_index = (self.sprite_index + 1) % len(self.sprite_frames)
+        self.advance_sprite_frame(FRAME_DURATION)
 
         gif_frame = self.sprite_index
 
         sprite = self.get_sprite(frame, gif_frame)
-        # Preserve the original GIF size.
         sprite = sprite.copy()
 
         alpha = self.sprite_alpha(frame)
