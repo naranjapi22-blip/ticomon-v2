@@ -13,6 +13,38 @@ BASE_GIF_URL = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 _GIF_CACHE: dict[str, bytes] = {}
 _GIF_CACHE_MAX_SIZE = 100
 
+_SPAWN_HISTORICAL_MISSING_REGULAR = frozenset({1015})
+_SPAWN_HISTORICAL_MISSING_SHINY = frozenset(
+    {
+        29,
+        32,
+        785,
+        786,
+        787,
+        788,
+        990,
+        991,
+        992,
+        993,
+        994,
+        995,
+        1001,
+        1002,
+        1003,
+        1004,
+        1006,
+        1008,
+        1010,
+        1014,
+        1015,
+        1016,
+        1017,
+        1022,
+        1023,
+        1024,
+    }
+)
+
 
 def get_species_gif(
     species_id: int,
@@ -25,6 +57,26 @@ def get_species_gif(
 
     gif_id = get_gif_id(species_id)
     return f"{BASE_GIF_URL}/gifs_calidad/{folder}/{gif_id}.gif"
+
+
+def get_spawn_species_gif(
+    species_id: int,
+    shiny: bool,
+) -> str:
+    """
+    Returns the historical GIF used by Spawn, with a static fallback for
+    species missing from the historical collection.
+    """
+
+    folder = "shiny" if shiny else "regular"
+    missing = (
+        _SPAWN_HISTORICAL_MISSING_SHINY if shiny else _SPAWN_HISTORICAL_MISSING_REGULAR
+    )
+
+    if species_id in missing:
+        return get_species_gif(species_id, shiny)
+
+    return f"{BASE_GIF_URL}/{folder}/{species_id}.gif"
 
 
 def get_creature_gif(

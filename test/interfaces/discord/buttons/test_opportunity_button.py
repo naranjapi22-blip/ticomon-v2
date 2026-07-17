@@ -4,7 +4,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 from interfaces.discord.buttons.opportunity_button import OpportunityButton
-from interfaces.discord.images import get_opportunity_gif, get_species_gif
+from interfaces.discord.images import (
+    get_opportunity_gif,
+    get_spawn_species_gif,
+    get_species_gif,
+)
 
 
 @pytest.mark.asyncio
@@ -30,9 +34,7 @@ async def test_opportunity_button_reports_english_owner_error():
 
 
 @pytest.mark.asyncio
-async def test_opportunity_button_uses_direct_url_for_base_spawn(
-    monkeypatch,
-) -> None:
+async def test_opportunity_button_uses_direct_url_for_base_spawn(monkeypatch) -> None:
     selected = SimpleNamespace(
         species=SimpleNamespace(
             id=37,
@@ -67,8 +69,6 @@ async def test_opportunity_button_uses_direct_url_for_base_spawn(
         original_response=AsyncMock(return_value=SimpleNamespace()),
     )
 
-    download = AsyncMock()
-    monkeypatch.setattr("interfaces.discord.images.download_gif_file", download)
     monkeypatch.setattr(
         "interfaces.discord.buttons.opportunity_button._spawn_gif_url",
         AsyncMock(return_value=expected_url),
@@ -78,7 +78,6 @@ async def test_opportunity_button_uses_direct_url_for_base_spawn(
 
     interaction.response.defer.assert_awaited_once()
     assert steps == ["defer", "select"]
-    download.assert_not_awaited()
     kwargs = interaction.edit_original_response.await_args.kwargs
     assert kwargs["attachments"] == []
     assert kwargs["embed"].image.url == expected_url
@@ -176,7 +175,7 @@ async def test_opportunity_button_uses_variant_url_when_available(
 
 
 @pytest.mark.asyncio
-async def test_opportunity_gif_url_falls_back_to_the_species_asset(
+async def test_spawn_gif_url_falls_back_to_the_historical_species_asset(
     monkeypatch, caplog
 ) -> None:
     from interfaces.discord.buttons import opportunity_button
@@ -187,7 +186,7 @@ async def test_opportunity_gif_url_falls_back_to_the_species_asset(
         initial_form=SimpleNamespace(id=336, name="pau"),
         is_shiny=False,
     )
-    species_url = get_species_gif(741, False)
+    species_url = get_spawn_species_gif(741, False)
 
     def resource_exists(url: str) -> bool:
         return url == species_url
@@ -243,3 +242,18 @@ async def test_opportunity_button_sends_spawn_without_image_when_unavailable(
     kwargs = interaction.edit_original_response.await_args.kwargs
     assert kwargs["attachments"] == []
     assert "image" not in kwargs["embed"].to_dict()
+
+
+def test_spawn_species_gif_uses_the_historical_collection() -> None:
+    assert get_spawn_species_gif(37, False).endswith("/regular/37.gif")
+    assert get_spawn_species_gif(37, True).endswith("/shiny/37.gif")
+    assert get_spawn_species_gif(25, False).endswith("/regular/25.gif")
+    assert get_spawn_species_gif(906, False).endswith("/regular/906.gif")
+    assert get_spawn_species_gif(959, False).endswith("/regular/959.gif")
+    assert get_spawn_species_gif(1007, False).endswith("/regular/1007.gif")
+    assert "gifs_calidad" not in get_spawn_species_gif(906, False)
+
+
+def test_spawn_species_gif_falls_back_for_missing_historical_assets() -> None:
+    assert get_spawn_species_gif(1015, False) == get_species_gif(1015, False)
+    assert get_spawn_species_gif(1015, True) == get_species_gif(1015, True)

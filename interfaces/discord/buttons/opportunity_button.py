@@ -4,7 +4,10 @@ import logging
 import discord
 import requests
 
-from interfaces.discord.images import get_opportunity_gif, get_species_gif
+from interfaces.discord.images import (
+    get_opportunity_gif,
+    get_spawn_species_gif,
+)
 from interfaces.discord.views.capture_view import CaptureView
 
 logger = logging.getLogger(__name__)
@@ -21,16 +24,10 @@ def _resource_exists(url: str) -> bool:
 
 
 async def _spawn_gif_url(opportunity):
-    species_url = get_species_gif(
-        opportunity.species.pokeapi_id,
-        opportunity.is_shiny,
-    )
-
     if opportunity.initial_form is None:
-        return (
-            species_url
-            if await asyncio.to_thread(_resource_exists, species_url)
-            else None
+        return get_spawn_species_gif(
+            opportunity.species.pokeapi_id,
+            opportunity.is_shiny,
         )
 
     variant_url = get_opportunity_gif(opportunity)
@@ -51,8 +48,9 @@ async def _spawn_gif_url(opportunity):
             variant_url,
         )
 
-    return (
-        species_url if await asyncio.to_thread(_resource_exists, species_url) else None
+    return get_spawn_species_gif(
+        opportunity.species.pokeapi_id,
+        opportunity.is_shiny,
     )
 
 
