@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from interfaces.discord.images import get_creature_gif, get_opportunity_gif
+from rendering.gif_urls import GIF_ASSET_VERSION
 from rendering.sprites import get_capture_sprite
 from rendering.variant_assets import get_variant_asset_key
 
@@ -40,7 +41,7 @@ def test_oricorio_variant_gifs_use_the_canonical_oricorio_asset_key(
         initial_form=creature.current_form,
         is_shiny=False,
     )
-    expected_suffix = f"/oricorio/oricorio-{variant_name}.gif"
+    expected_suffix = f"/oricorio/oricorio-{variant_name}.gif?v={GIF_ASSET_VERSION}"
 
     assert get_creature_gif(creature).endswith(expected_suffix)
     assert get_opportunity_gif(opportunity).endswith(expected_suffix)
@@ -67,6 +68,6 @@ def test_oricorio_baile_base_form_uses_the_species_gif() -> None:
         is_shiny=False,
     )
 
-    assert get_creature_gif(creature).endswith("/regular/741.gif")
-    assert get_opportunity_gif(opportunity).endswith("/regular/741.gif")
-    assert get_capture_sprite(creature).endswith("/regular/741.gif")
+    assert get_creature_gif(creature).endswith("/regular/741.gif?v=20260717-1")
+    assert get_opportunity_gif(opportunity).endswith("/regular/741.gif?v=20260717-1")
+    assert get_capture_sprite(creature).endswith("/regular/741.gif?v=20260717-1")

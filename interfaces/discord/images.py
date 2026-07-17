@@ -6,9 +6,8 @@ import requests
 
 from core.creature.creature import Creature
 from interfaces.discord.pokemon_mapping import get_gif_id
+from rendering.gif_urls import BASE_GIF_URL, version_gif_url
 from rendering.variant_assets import get_variant_gif_url
-
-BASE_GIF_URL = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
 _GIF_CACHE: dict[str, bytes] = {}
 _GIF_CACHE_MAX_SIZE = 100
@@ -21,10 +20,10 @@ def get_species_gif(
     folder = "shiny" if shiny else "regular"
 
     if species_id <= 898:
-        return f"{BASE_GIF_URL}/gifs_pokeapi/{folder}/{species_id}.gif"
+        return version_gif_url(f"{BASE_GIF_URL}/gifs_pokeapi/{folder}/{species_id}.gif")
 
     gif_id = get_gif_id(species_id)
-    return f"{BASE_GIF_URL}/gifs_calidad/{folder}/{gif_id}.gif"
+    return version_gif_url(f"{BASE_GIF_URL}/gifs_calidad/{folder}/{gif_id}.gif")
 
 
 def get_spawn_species_gif(
@@ -32,7 +31,7 @@ def get_spawn_species_gif(
     shiny: bool,
 ) -> str:
     folder = "shiny" if shiny else "regular"
-    return f"{BASE_GIF_URL}/gifs_pokeapi/{folder}/{species_id}.gif"
+    return version_gif_url(f"{BASE_GIF_URL}/gifs_pokeapi/{folder}/{species_id}.gif")
 
 
 def get_creature_gif(
