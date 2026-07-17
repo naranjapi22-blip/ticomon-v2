@@ -1,7 +1,6 @@
 from core.creature.creature import Creature
+from rendering.gif_urls import BASE_GIF_URL, version_gif_url
 from rendering.variant_assets import get_variant_gif_url
-
-BASE_GIF_URL = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
 
 def get_capture_species_gif(
@@ -10,7 +9,7 @@ def get_capture_species_gif(
 ) -> str:
     """Return the historical GIF collection used by CaptureAnimation."""
     folder = "shiny" if is_shiny else "regular"
-    return f"{BASE_GIF_URL}/{folder}/{species_id}.gif"
+    return version_gif_url(f"{BASE_GIF_URL}/{folder}/{species_id}.gif")
 
 
 def get_capture_creature_gif(

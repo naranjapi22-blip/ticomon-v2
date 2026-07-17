@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from interfaces.discord import images as images_module
 from interfaces.discord.bot import TicoMonBot
 from interfaces.discord.cogs.duplicates_cog import DuplicatesCog
 from interfaces.discord.cogs.info import InfoCog
@@ -84,8 +85,9 @@ async def test_info_passes_canonical_pokemon_name_to_core():
     )
     ctx = _ctx()
 
-    with patch(
-        "interfaces.discord.cogs.info.download_gif_file",
+    with patch.object(
+        images_module,
+        "download_gif_file",
         new=AsyncMock(side_effect=RuntimeError("offline")),
     ):
         await InfoCog.info.callback(InfoCog(core), ctx, pokemon=" PIKACHU ")
