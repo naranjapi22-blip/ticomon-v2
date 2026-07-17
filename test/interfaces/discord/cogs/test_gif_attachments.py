@@ -421,9 +421,11 @@ async def test_info_refetches_message_and_logs_proxy_metadata_when_debug_enabled
     await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
 
     sent_message.channel.fetch_message.assert_awaited_once_with(sent_message.id)
+    assert "info_gif_proxy_debug enabled" in caplog.text
+    assert "info_gif_proxy_debug message_sent" in caplog.text
     assert "info_gif_proxy_debug" in caplog.text
-    assert "https://example.invalid/original.gif" in caplog.text
-    assert "https://example.invalid/proxy.gif" in caplog.text
+    assert "fetched url=https://example.invalid/original.gif" in caplog.text
+    assert "proxy_url=https://example.invalid/proxy.gif" in caplog.text
     assert "width=240" in caplog.text
     assert "height=240" in caplog.text
 
@@ -448,6 +450,46 @@ async def test_info_debug_fetch_failure_does_not_break_response(monkeypatch) -> 
 
     ctx.send.assert_awaited_once()
     sent_message.channel.fetch_message.assert_awaited_once_with(sent_message.id)
+
+
+@pytest.mark.asyncio
+async def test_info_debug_fetch_failure_logs_failure_type(
+    monkeypatch,
+    caplog,
+) -> None:
+    species = _DummySpecies(name="Pikachu", pokeapi_id=25)
+    core = _core_for_info(species)
+    sent_message = SimpleNamespace(
+        id=123,
+        channel=SimpleNamespace(
+            fetch_message=AsyncMock(side_effect=RuntimeError("discord down"))
+        ),
+    )
+    ctx = _ctx()
+    ctx.send = AsyncMock(return_value=sent_message)
+    cog = InfoCog(core)
+
+    monkeypatch.setenv("GIF_PROXY_DEBUG", "1")
+    caplog.set_level("INFO", logger=info_module.logger.name)
+
+    await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
+
+    assert "info_gif_proxy_debug enabled" in caplog.text
+    assert "info_gif_proxy_debug message_sent" in caplog.text
+    assert "info_gif_proxy_debug fetch_failed error_type=RuntimeError" in caplog.text
+    ctx.send.assert_awaited_once()
+    sent_message.channel.fetch_message.assert_awaited_once_with(sent_message.id)
+
+
+@pytest.mark.parametrize("env_value", ["true", "TRUE", "1"])
+def test_info_gif_proxy_debug_env_values_activate_instrumentation(
+    monkeypatch, env_value
+) -> None:
+    from interfaces.discord.cogs.info import _gif_proxy_debug_enabled
+
+    monkeypatch.setenv("GIF_PROXY_DEBUG", env_value)
+
+    assert _gif_proxy_debug_enabled() is True
 
 
 @pytest.mark.asyncio
