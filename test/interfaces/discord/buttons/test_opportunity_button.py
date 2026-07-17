@@ -7,8 +7,9 @@ from interfaces.discord.buttons.opportunity_button import OpportunityButton
 from interfaces.discord.images import (
     get_opportunity_gif,
     get_spawn_species_gif,
-    get_species_gif,
 )
+
+BASE = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
 
 @pytest.mark.asyncio
@@ -60,7 +61,7 @@ async def test_opportunity_button_uses_direct_url_for_base_spawn(monkeypatch) ->
         ),
         select_opportunity_application=SimpleNamespace(select_opportunity=select),
     )
-    expected_url = get_species_gif(37, False)
+    expected_url = get_spawn_species_gif(37, False)
     interaction = SimpleNamespace(
         guild=SimpleNamespace(id=10),
         user=SimpleNamespace(id=1),
@@ -104,7 +105,7 @@ async def test_opportunity_button_uses_shiny_url_for_shiny_spawn(
         ),
         select_opportunity_application=SimpleNamespace(select_opportunity=AsyncMock()),
     )
-    expected_url = get_species_gif(37, True)
+    expected_url = get_spawn_species_gif(37, True)
     interaction = SimpleNamespace(
         guild=SimpleNamespace(id=10),
         user=SimpleNamespace(id=1),
@@ -244,16 +245,14 @@ async def test_opportunity_button_sends_spawn_without_image_when_unavailable(
     assert "image" not in kwargs["embed"].to_dict()
 
 
-def test_spawn_species_gif_uses_the_historical_collection() -> None:
-    assert get_spawn_species_gif(37, False).endswith("/regular/37.gif")
-    assert get_spawn_species_gif(37, True).endswith("/shiny/37.gif")
-    assert get_spawn_species_gif(25, False).endswith("/regular/25.gif")
-    assert get_spawn_species_gif(906, False).endswith("/regular/906.gif")
-    assert get_spawn_species_gif(959, False).endswith("/regular/959.gif")
-    assert get_spawn_species_gif(1007, False).endswith("/regular/1007.gif")
-    assert "gifs_calidad" not in get_spawn_species_gif(906, False)
-
-
-def test_spawn_species_gif_falls_back_for_missing_historical_assets() -> None:
-    assert get_spawn_species_gif(1015, False) == get_species_gif(1015, False)
-    assert get_spawn_species_gif(1015, True) == get_species_gif(1015, True)
+def test_spawn_species_gif_uses_the_pokeapi_collection_for_base_species() -> None:
+    assert get_spawn_species_gif(25, False) == f"{BASE}/gifs_pokeapi/regular/25.gif"
+    assert get_spawn_species_gif(25, True) == f"{BASE}/gifs_pokeapi/shiny/25.gif"
+    assert get_spawn_species_gif(37, False) == f"{BASE}/gifs_pokeapi/regular/37.gif"
+    assert get_spawn_species_gif(37, True) == f"{BASE}/gifs_pokeapi/shiny/37.gif"
+    assert get_spawn_species_gif(906, False) == f"{BASE}/gifs_pokeapi/regular/906.gif"
+    assert get_spawn_species_gif(906, True) == f"{BASE}/gifs_pokeapi/shiny/906.gif"
+    assert get_spawn_species_gif(959, False) == f"{BASE}/gifs_pokeapi/regular/959.gif"
+    assert get_spawn_species_gif(1007, False) == f"{BASE}/gifs_pokeapi/regular/1007.gif"
+    assert get_spawn_species_gif(1024, False) == f"{BASE}/gifs_pokeapi/regular/1024.gif"
+    assert "mapped_id" not in get_spawn_species_gif(906, False)

@@ -3,8 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from interfaces.discord.images import get_species_gif
-from rendering.sprites import get_capture_creature_gif
+from rendering.sprites import get_capture_creature_gif, get_capture_species_gif
 
 BASE = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
@@ -44,8 +43,11 @@ def test_capture_base_gifs_use_the_historical_collection(pokeapi_id, shiny, suff
     )
 
 
-def test_capture_base_source_does_not_change_general_species_source():
-    assert get_species_gif(906, False) == f"{BASE}/gifs_calidad/regular/1044.gif"
+def test_capture_base_resolver_stays_on_the_historical_collection():
+    assert get_capture_species_gif(25, False) == f"{BASE}/regular/25.gif"
+    assert get_capture_species_gif(25, True) == f"{BASE}/shiny/25.gif"
+    assert get_capture_species_gif(906, False) == f"{BASE}/regular/906.gif"
+    assert get_capture_species_gif(906, True) == f"{BASE}/shiny/906.gif"
 
 
 def test_capture_variant_keeps_showdown_source():
