@@ -1,56 +1,59 @@
+import asyncio
 import logging
 
 import discord
+import requests
 
-from interfaces.discord.images import (
-    download_gif_file,
-    get_opportunity_gif,
-    get_species_gif,
-)
+from interfaces.discord.images import get_opportunity_gif, get_species_gif
 from interfaces.discord.views.capture_view import CaptureView
 
 logger = logging.getLogger(__name__)
 _MISSING_SPAWN_RESOURCES: set[tuple[int, int | None]] = set()
 
 
-async def _opportunity_gif_file(opportunity):
-    gif_url = get_opportunity_gif(opportunity)
-
+def _resource_exists(url: str) -> bool:
     try:
-        return await download_gif_file(gif_url, "spawn.gif")
+        with requests.get(url, timeout=10, stream=True) as response:
+            response.raise_for_status()
+            return True
     except Exception:
-        variant_id = (
-            opportunity.initial_form.id
-            if opportunity.initial_form is not None
+        return False
+
+
+async def _spawn_gif_url(opportunity):
+    species_url = get_species_gif(
+        opportunity.species.pokeapi_id,
+        opportunity.is_shiny,
+    )
+
+    if opportunity.initial_form is None:
+        return (
+            species_url
+            if await asyncio.to_thread(_resource_exists, species_url)
             else None
         )
-        key = (opportunity.species.id, variant_id)
 
-        if key not in _MISSING_SPAWN_RESOURCES:
-            _MISSING_SPAWN_RESOURCES.add(key)
-            logger.warning(
-                "spawn_gif_resource_missing species_id=%s variant_id=%s "
-                "canonical_name=%s asset_key=%s",
-                opportunity.species.id,
-                variant_id,
-                (
-                    f"{opportunity.species.name}:{opportunity.initial_form.name}"
-                    if opportunity.initial_form is not None
-                    else opportunity.species.name
-                ),
-                gif_url,
-            )
+    variant_url = get_opportunity_gif(opportunity)
+    if await asyncio.to_thread(_resource_exists, variant_url):
+        return variant_url
 
-        try:
-            return await download_gif_file(
-                get_species_gif(
-                    opportunity.species.pokeapi_id,
-                    opportunity.is_shiny,
-                ),
-                "spawn.gif",
-            )
-        except Exception:
-            return None
+    variant_id = opportunity.initial_form.id
+    key = (opportunity.species.id, variant_id)
+
+    if key not in _MISSING_SPAWN_RESOURCES:
+        _MISSING_SPAWN_RESOURCES.add(key)
+        logger.warning(
+            "spawn_gif_resource_missing species_id=%s variant_id=%s "
+            "canonical_name=%s asset_key=%s",
+            opportunity.species.id,
+            variant_id,
+            f"{opportunity.species.name}:{opportunity.initial_form.name}",
+            variant_url,
+        )
+
+    return (
+        species_url if await asyncio.to_thread(_resource_exists, species_url) else None
+    )
 
 
 class OpportunityButton(discord.ui.Button):
@@ -99,7 +102,7 @@ class OpportunityButton(discord.ui.Button):
 
         selected = session.selected_opportunity
 
-        gif_file = await _opportunity_gif_file(selected)
+        gif_url = await _spawn_gif_url(selected)
 
         embed = discord.Embed(
             title=(
@@ -111,15 +114,15 @@ class OpportunityButton(discord.ui.Button):
             description=f"**{selected.species.spawn_rarity.name.replace('_', ' ')}**",
         )
 
-        if gif_file is not None:
-            embed.set_image(url="attachment://spawn.gif")
+        if gif_url is not None:
+            embed.set_image(url=gif_url)
 
         view = CaptureView(self._core)
 
         await interaction.edit_original_response(
             content=None,
             embed=embed,
-            attachments=[gif_file] if gif_file is not None else [],
+            attachments=[],
             view=view,
         )
 
