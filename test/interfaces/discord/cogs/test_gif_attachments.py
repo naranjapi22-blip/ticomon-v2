@@ -358,15 +358,19 @@ async def test_info_uses_direct_remote_url_without_attachment(monkeypatch) -> No
 
     await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
 
-    ctx.send.assert_awaited_once()
-    kwargs = ctx.send.await_args.kwargs
-    assert kwargs["content"] == (
+    assert ctx.send.await_count == 2
+    first_call = ctx.send.await_args_list[0]
+    second_call = ctx.send.await_args_list[1]
+
+    assert "content" not in first_call.kwargs
+    assert first_call.kwargs["embed"] is not None
+    assert "image" not in first_call.kwargs["embed"].to_dict()
+    assert first_call.args == ()
+    assert second_call.args == (
         "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
-        f"gifs_pokeapi/regular/25.gif?v={GIF_ASSET_VERSION}"
+        f"gifs_pokeapi/regular/25.gif?v={GIF_ASSET_VERSION}",
     )
-    assert kwargs["embed"] is not None
-    assert "image" not in kwargs["embed"].to_dict()
-    assert "file" not in kwargs
+    assert second_call.kwargs == {}
     helper.assert_not_called()
 
 
@@ -374,19 +378,24 @@ async def test_info_uses_direct_remote_url_without_attachment(monkeypatch) -> No
 async def test_info_does_not_refetch_message_without_debug(monkeypatch) -> None:
     species = _DummySpecies(name="Pikachu", pokeapi_id=25)
     core = _core_for_info(species)
-    sent_message = SimpleNamespace(
+    first_message = SimpleNamespace(
         id=123,
         channel=SimpleNamespace(fetch_message=AsyncMock()),
     )
+    second_message = SimpleNamespace(
+        id=124,
+        channel=SimpleNamespace(fetch_message=AsyncMock()),
+    )
     ctx = _ctx()
-    ctx.send = AsyncMock(return_value=sent_message)
+    ctx.send = AsyncMock(side_effect=[first_message, second_message])
     cog = InfoCog(core)
 
     monkeypatch.delenv("GIF_PROXY_DEBUG", raising=False)
 
     await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
 
-    sent_message.channel.fetch_message.assert_not_called()
+    first_message.channel.fetch_message.assert_not_called()
+    second_message.channel.fetch_message.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -404,8 +413,12 @@ async def test_info_refetches_message_and_logs_proxy_metadata_when_debug_enabled
             height=240,
         )
     )
-    sent_message = SimpleNamespace(
+    first_message = SimpleNamespace(
         id=123,
+        channel=SimpleNamespace(fetch_message=AsyncMock()),
+    )
+    second_message = SimpleNamespace(
+        id=124,
         channel=SimpleNamespace(
             fetch_message=AsyncMock(
                 return_value=SimpleNamespace(embeds=[fetched_embed])
@@ -413,7 +426,7 @@ async def test_info_refetches_message_and_logs_proxy_metadata_when_debug_enabled
         ),
     )
     ctx = _ctx()
-    ctx.send = AsyncMock(return_value=sent_message)
+    ctx.send = AsyncMock(side_effect=[first_message, second_message])
     cog = InfoCog(core)
 
     monkeypatch.setenv("GIF_PROXY_DEBUG", "true")
@@ -421,7 +434,7 @@ async def test_info_refetches_message_and_logs_proxy_metadata_when_debug_enabled
 
     await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
 
-    sent_message.channel.fetch_message.assert_awaited_once_with(sent_message.id)
+    second_message.channel.fetch_message.assert_awaited_once_with(second_message.id)
     assert "info_gif_proxy_debug enabled" in caplog.text
     assert "info_gif_proxy_debug message_sent" in caplog.text
     assert "info_gif_proxy_debug" in caplog.text
@@ -435,22 +448,26 @@ async def test_info_refetches_message_and_logs_proxy_metadata_when_debug_enabled
 async def test_info_debug_fetch_failure_does_not_break_response(monkeypatch) -> None:
     species = _DummySpecies(name="Pikachu", pokeapi_id=25)
     core = _core_for_info(species)
-    sent_message = SimpleNamespace(
+    first_message = SimpleNamespace(
         id=123,
+        channel=SimpleNamespace(fetch_message=AsyncMock()),
+    )
+    second_message = SimpleNamespace(
+        id=124,
         channel=SimpleNamespace(
             fetch_message=AsyncMock(side_effect=RuntimeError("discord down"))
         ),
     )
     ctx = _ctx()
-    ctx.send = AsyncMock(return_value=sent_message)
+    ctx.send = AsyncMock(side_effect=[first_message, second_message])
     cog = InfoCog(core)
 
     monkeypatch.setenv("GIF_PROXY_DEBUG", "true")
 
     await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
 
-    ctx.send.assert_awaited_once()
-    sent_message.channel.fetch_message.assert_awaited_once_with(sent_message.id)
+    assert ctx.send.await_count == 2
+    second_message.channel.fetch_message.assert_awaited_once_with(second_message.id)
 
 
 @pytest.mark.asyncio
@@ -460,14 +477,18 @@ async def test_info_debug_fetch_failure_logs_failure_type(
 ) -> None:
     species = _DummySpecies(name="Pikachu", pokeapi_id=25)
     core = _core_for_info(species)
-    sent_message = SimpleNamespace(
+    first_message = SimpleNamespace(
         id=123,
+        channel=SimpleNamespace(fetch_message=AsyncMock()),
+    )
+    second_message = SimpleNamespace(
+        id=124,
         channel=SimpleNamespace(
             fetch_message=AsyncMock(side_effect=RuntimeError("discord down"))
         ),
     )
     ctx = _ctx()
-    ctx.send = AsyncMock(return_value=sent_message)
+    ctx.send = AsyncMock(side_effect=[first_message, second_message])
     cog = InfoCog(core)
 
     monkeypatch.setenv("GIF_PROXY_DEBUG", "1")
@@ -478,8 +499,8 @@ async def test_info_debug_fetch_failure_logs_failure_type(
     assert "info_gif_proxy_debug enabled" in caplog.text
     assert "info_gif_proxy_debug message_sent" in caplog.text
     assert "info_gif_proxy_debug fetch_failed error_type=RuntimeError" in caplog.text
-    ctx.send.assert_awaited_once()
-    sent_message.channel.fetch_message.assert_awaited_once_with(sent_message.id)
+    assert ctx.send.await_count == 2
+    second_message.channel.fetch_message.assert_awaited_once_with(second_message.id)
 
 
 @pytest.mark.parametrize("env_value", ["true", "TRUE", "1"])
@@ -491,6 +512,27 @@ def test_info_gif_proxy_debug_env_values_activate_instrumentation(
     monkeypatch.setenv("GIF_PROXY_DEBUG", env_value)
 
     assert _gif_proxy_debug_enabled() is True
+
+
+@pytest.mark.asyncio
+async def test_info_without_gif_sends_only_embed(monkeypatch) -> None:
+    species = _DummySpecies(name="Pikachu", pokeapi_id=25)
+    core = _core_for_info(species)
+    ctx = _ctx()
+    cog = InfoCog(core)
+    helper = AsyncMock()
+
+    monkeypatch.setattr(images_module, "download_gif_file", helper)
+    monkeypatch.setattr(info_module, "get_species_gif", lambda **_kwargs: None)
+
+    await InfoCog.info.callback(cog, ctx, pokemon="pikachu")
+
+    ctx.send.assert_awaited_once()
+    kwargs = ctx.send.await_args.kwargs
+    assert kwargs["embed"] is not None
+    assert "content" not in kwargs
+    assert "image" not in kwargs["embed"].to_dict()
+    helper.assert_not_called()
 
 
 @pytest.mark.asyncio

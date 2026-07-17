@@ -97,18 +97,19 @@ class InfoCog(commands.Cog):
             inline=False,
         )
 
-        message_kwargs = {"embed": embed}
-        if gif_url:
-            message_kwargs["content"] = gif_url
+        sent_message = await ctx.send(embed=embed)
+        gif_message = None
 
-        sent_message = await ctx.send(**message_kwargs)
+        if gif_url:
+            gif_message = await ctx.send(gif_url)
 
         if _gif_proxy_debug_enabled():
             logger.info("info_gif_proxy_debug enabled")
-            logger.info("info_gif_proxy_debug message_sent")
             try:
-                fetched_message = await sent_message.channel.fetch_message(
-                    sent_message.id
+                debug_message = gif_message or sent_message
+                logger.info("info_gif_proxy_debug message_sent")
+                fetched_message = await debug_message.channel.fetch_message(
+                    debug_message.id
                 )
                 fetched_embed = (
                     fetched_message.embeds[0] if fetched_message.embeds else None
