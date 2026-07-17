@@ -360,12 +360,13 @@ async def test_info_uses_direct_remote_url_without_attachment(monkeypatch) -> No
 
     ctx.send.assert_awaited_once()
     kwargs = ctx.send.await_args.kwargs
-    assert kwargs["embed"].image.url == (
+    assert kwargs["content"] == (
         "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
         f"gifs_pokeapi/regular/25.gif?v={GIF_ASSET_VERSION}"
     )
+    assert kwargs["embed"] is not None
+    assert "image" not in kwargs["embed"].to_dict()
     assert "file" not in kwargs
-    assert "attachment://" not in kwargs["embed"].image.url
     helper.assert_not_called()
 
 

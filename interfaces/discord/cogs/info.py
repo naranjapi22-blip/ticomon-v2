@@ -97,9 +97,11 @@ class InfoCog(commands.Cog):
             inline=False,
         )
 
-        embed.set_image(url=gif_url)
+        message_kwargs = {"embed": embed}
+        if gif_url:
+            message_kwargs["content"] = gif_url
 
-        sent_message = await ctx.send(embed=embed)
+        sent_message = await ctx.send(**message_kwargs)
 
         if _gif_proxy_debug_enabled():
             logger.info("info_gif_proxy_debug enabled")
