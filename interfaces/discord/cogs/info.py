@@ -1,4 +1,5 @@
 import logging
+import os
 
 import discord
 from discord.ext import commands
@@ -89,4 +90,32 @@ class InfoCog(commands.Cog):
 
         embed.set_image(url=gif_url)
 
-        await ctx.send(embed=embed)
+        sent_message = await ctx.send(embed=embed)
+
+        if os.getenv("GIF_PROXY_DEBUG", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            try:
+                fetched_message = await sent_message.channel.fetch_message(
+                    sent_message.id
+                )
+                fetched_embed = (
+                    fetched_message.embeds[0] if fetched_message.embeds else None
+                )
+
+                if fetched_embed is not None and fetched_embed.image is not None:
+                    logger.info(
+                        (
+                            "info_gif_proxy_debug embed_image_url=%s "
+                            "proxy_url=%s width=%s height=%s"
+                        ),
+                        fetched_embed.image.url,
+                        fetched_embed.image.proxy_url,
+                        fetched_embed.image.width,
+                        fetched_embed.image.height,
+                    )
+            except Exception:
+                logger.exception("info_gif_proxy_debug failed")
