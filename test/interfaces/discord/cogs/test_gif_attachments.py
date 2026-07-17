@@ -1,4 +1,4 @@
-from io import BytesIO
+﻿from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -13,7 +13,6 @@ from interfaces.discord.cogs.info import InfoCog
 from interfaces.discord.cogs.ivs_cog import IVsCog
 from interfaces.discord.cogs.profile_cog import ProfileCog
 from interfaces.discord.images import download_gif_file
-from rendering.gif_urls import GIF_ASSET_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +64,7 @@ class _DummyCreature:
         )
         self.collection_number = collection_number
         self.is_shiny = shiny
-        self.size = "M (1.00×)"
+        self.size = "M (1.00Ã—)"
         self.nature = _DummyNature()
         self.current_form = None
         self.iv_percentage = 100
@@ -368,7 +367,7 @@ async def test_info_uses_direct_remote_url_without_attachment(monkeypatch) -> No
     assert first_call.args == ()
     assert second_call.args == (
         "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
-        f"gifs_pokeapi/regular/25.gif?v={GIF_ASSET_VERSION}",
+        "gifs_pokeapi/regular/25.gif",
     )
     assert second_call.kwargs == {}
     helper.assert_not_called()
@@ -551,7 +550,7 @@ async def test_ivs_uses_direct_remote_url_without_attachment(monkeypatch) -> Non
     kwargs = ctx.send.await_args.kwargs
     assert kwargs["embed"].image.url == (
         "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
-        f"gifs_pokeapi/regular/25.gif?v={GIF_ASSET_VERSION}"
+        "gifs_pokeapi/regular/25.gif"
     )
     assert "file" not in kwargs
     assert "attachment://" not in kwargs["embed"].image.url
@@ -605,24 +604,20 @@ async def test_versioned_urls_produce_distinct_cache_entries(monkeypatch) -> Non
     images_module._GIF_CACHE.clear()
 
     first = await download_gif_file(
-        "https://example.invalid/pikachu.gif?v=20260717-1",
+        "https://example.invalid/pikachu.gif?source=one",
         "first.gif",
     )
     second = await download_gif_file(
-        "https://example.invalid/pikachu.gif?v=20260717-2",
+        "https://example.invalid/pikachu.gif?source=two",
         "second.gif",
     )
 
     assert calls == [
-        "https://example.invalid/pikachu.gif?v=20260717-1",
-        "https://example.invalid/pikachu.gif?v=20260717-2",
+        "https://example.invalid/pikachu.gif?source=one",
+        "https://example.invalid/pikachu.gif?source=two",
     ]
     assert first.filename == "first.gif"
     assert second.filename == "second.gif"
     assert len(images_module._GIF_CACHE) == 2
-    assert (
-        "https://example.invalid/pikachu.gif?v=20260717-1" in images_module._GIF_CACHE
-    )
-    assert (
-        "https://example.invalid/pikachu.gif?v=20260717-2" in images_module._GIF_CACHE
-    )
+    assert "https://example.invalid/pikachu.gif?source=one" in images_module._GIF_CACHE
+    assert "https://example.invalid/pikachu.gif?source=two" in images_module._GIF_CACHE

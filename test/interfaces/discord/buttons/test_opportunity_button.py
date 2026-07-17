@@ -8,7 +8,6 @@ from interfaces.discord.images import (
     get_opportunity_gif,
     get_spawn_species_gif,
 )
-from rendering.gif_urls import GIF_ASSET_VERSION
 
 BASE = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
 
@@ -84,8 +83,8 @@ async def test_opportunity_button_uses_direct_url_for_base_spawn(monkeypatch) ->
     assert kwargs["attachments"] == []
     assert kwargs["embed"].image.url == expected_url
     assert kwargs["embed"].image.url == (
-        f"https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
-        f"gifs_pokeapi/regular/37.gif?v={GIF_ASSET_VERSION}"
+        "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
+        "gifs_pokeapi/regular/37.gif"
     )
 
 
@@ -130,8 +129,8 @@ async def test_opportunity_button_uses_shiny_url_for_shiny_spawn(
     assert kwargs["attachments"] == []
     assert kwargs["embed"].image.url == expected_url
     assert kwargs["embed"].image.url == (
-        f"https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
-        f"gifs_pokeapi/shiny/37.gif?v={GIF_ASSET_VERSION}"
+        "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/"
+        "gifs_pokeapi/shiny/37.gif"
     )
 
 
@@ -180,7 +179,7 @@ async def test_opportunity_button_uses_variant_url_when_available(
     assert kwargs["attachments"] == []
     assert kwargs["embed"].image.url == expected_url
     assert kwargs["embed"].image.url.endswith(
-        f"/showdown_variantes/oricorio/oricorio-pau.gif?v={GIF_ASSET_VERSION}"
+        "/showdown_variantes/oricorio/oricorio-pau.gif"
     )
 
 
@@ -255,31 +254,17 @@ async def test_opportunity_button_sends_spawn_without_image_when_unavailable(
 
 
 def test_spawn_species_gif_uses_the_pokeapi_collection_for_base_species() -> None:
-    assert get_spawn_species_gif(25, False) == (
-        f"{BASE}/gifs_pokeapi/regular/25.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_spawn_species_gif(25, True) == (
-        f"{BASE}/gifs_pokeapi/shiny/25.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_spawn_species_gif(37, False) == (
-        f"{BASE}/gifs_pokeapi/regular/37.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_spawn_species_gif(37, True) == (
-        f"{BASE}/gifs_pokeapi/shiny/37.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_spawn_species_gif(906, False) == (
-        f"{BASE}/gifs_pokeapi/regular/906.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_spawn_species_gif(906, True) == (
-        f"{BASE}/gifs_pokeapi/shiny/906.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_spawn_species_gif(959, False) == (
-        f"{BASE}/gifs_pokeapi/regular/959.gif?v={GIF_ASSET_VERSION}"
-    )
+    assert get_spawn_species_gif(25, False) == (f"{BASE}/gifs_pokeapi/regular/25.gif")
+    assert get_spawn_species_gif(25, True) == (f"{BASE}/gifs_pokeapi/shiny/25.gif")
+    assert get_spawn_species_gif(37, False) == (f"{BASE}/gifs_pokeapi/regular/37.gif")
+    assert get_spawn_species_gif(37, True) == (f"{BASE}/gifs_pokeapi/shiny/37.gif")
+    assert get_spawn_species_gif(906, False) == (f"{BASE}/gifs_pokeapi/regular/906.gif")
+    assert get_spawn_species_gif(906, True) == (f"{BASE}/gifs_pokeapi/shiny/906.gif")
+    assert get_spawn_species_gif(959, False) == (f"{BASE}/gifs_pokeapi/regular/959.gif")
     assert get_spawn_species_gif(1007, False) == (
-        f"{BASE}/gifs_pokeapi/regular/1007.gif?v={GIF_ASSET_VERSION}"
+        f"{BASE}/gifs_pokeapi/regular/1007.gif"
     )
     assert get_spawn_species_gif(1024, False) == (
-        f"{BASE}/gifs_pokeapi/regular/1024.gif?v={GIF_ASSET_VERSION}"
+        f"{BASE}/gifs_pokeapi/regular/1024.gif"
     )
     assert "mapped_id" not in get_spawn_species_gif(906, False)

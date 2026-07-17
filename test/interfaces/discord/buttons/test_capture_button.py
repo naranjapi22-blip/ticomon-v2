@@ -1,4 +1,4 @@
-from io import BytesIO
+﻿from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -101,7 +101,7 @@ async def test_capture_animation_uses_the_same_oricorio_variant_asset() -> None:
         await capture_button._capture_gif(creature, trainer, "POKE_BALL")
 
     assert animation.call_args.kwargs["sprite_path"].endswith(
-        "/oricorio/oricorio-pau.gif?v=20260717-1"
+        "/oricorio/oricorio-pau.gif"
     )
 
 
@@ -143,13 +143,11 @@ async def test_capture_gif_falls_back_without_hiding_a_successful_capture(
     assert (
         animation.call_args_list[0]
         .kwargs["sprite_path"]
-        .endswith("/oricorio/oricorio-pau.gif?v=20260717-1")
+        .endswith("/oricorio/oricorio-pau.gif")
     )
     assert animation.call_args_list[1].kwargs["sprite_path"].endswith(
         "/regular/741.gif"
-    ) or animation.call_args_list[1].kwargs["sprite_path"].endswith(
-        "/regular/741.gif?v=20260717-1"
-    )
+    ) or animation.call_args_list[1].kwargs["sprite_path"].endswith("/regular/741.gif")
     assert caplog.text.count("capture_gif_resource_missing") == 1
     assert "canonical_name=oricorio-baile:pau" in caplog.text
 

@@ -1,9 +1,8 @@
-from types import SimpleNamespace
+﻿from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from rendering.gif_urls import GIF_ASSET_VERSION
 from rendering.sprites import get_capture_creature_gif, get_capture_species_gif
 
 BASE = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
@@ -34,7 +33,7 @@ def creature(species_id, pokeapi_id, shiny=False, form=None, name="pokemon"):
 )
 def test_capture_base_gifs_use_the_historical_collection(pokeapi_id, shiny, suffix):
     assert get_capture_creature_gif(creature(pokeapi_id, pokeapi_id, shiny)).endswith(
-        f"{suffix}?v={GIF_ASSET_VERSION}"
+        f"{suffix}"
     )
     assert "gifs_pokeapi" not in get_capture_creature_gif(
         creature(pokeapi_id, pokeapi_id, shiny)
@@ -45,18 +44,10 @@ def test_capture_base_gifs_use_the_historical_collection(pokeapi_id, shiny, suff
 
 
 def test_capture_base_resolver_stays_on_the_historical_collection():
-    assert get_capture_species_gif(25, False) == (
-        f"{BASE}/regular/25.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_capture_species_gif(25, True) == (
-        f"{BASE}/shiny/25.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_capture_species_gif(906, False) == (
-        f"{BASE}/regular/906.gif?v={GIF_ASSET_VERSION}"
-    )
-    assert get_capture_species_gif(906, True) == (
-        f"{BASE}/shiny/906.gif?v={GIF_ASSET_VERSION}"
-    )
+    assert get_capture_species_gif(25, False) == (f"{BASE}/regular/25.gif")
+    assert get_capture_species_gif(25, True) == (f"{BASE}/shiny/25.gif")
+    assert get_capture_species_gif(906, False) == (f"{BASE}/regular/906.gif")
+    assert get_capture_species_gif(906, True) == (f"{BASE}/shiny/906.gif")
 
 
 def test_capture_variant_keeps_showdown_source():
@@ -67,7 +58,7 @@ def test_capture_variant_keeps_showdown_source():
         name="oricorio-baile",
     )
     assert get_capture_creature_gif(creature_value) == (
-        f"{BASE}/showdown_variantes/oricorio/oricorio-pau.gif?v={GIF_ASSET_VERSION}"
+        f"{BASE}/showdown_variantes/oricorio/oricorio-pau.gif"
     )
 
 
@@ -98,5 +89,5 @@ async def test_shiny_variant_fallback_uses_historical_shiny_species_gif():
         await capture_button._capture_gif(creature_value, trainer, "POKE_BALL")
 
     assert animation.call_args_list[1].kwargs["sprite_path"] == (
-        f"{BASE}/shiny/741.gif?v={GIF_ASSET_VERSION}"
+        f"{BASE}/shiny/741.gif"
     )
