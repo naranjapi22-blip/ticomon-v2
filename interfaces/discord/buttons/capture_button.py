@@ -7,16 +7,16 @@ import discord
 
 from core.spawn.exceptions import NoActiveSpawnSession
 from interfaces.discord.achievement_notifications import send_unlocks
-from interfaces.discord.images import get_creature_gif, get_species_gif
 from rendering.capture_animation import CaptureAnimation
+from rendering.sprites import get_capture_creature_gif, get_capture_species_gif
 
 logger = logging.getLogger(__name__)
 _MISSING_CAPTURE_RESOURCES: set[tuple[int, int | None]] = set()
 
 
 async def _capture_gif(creature, trainer, capture_ball: str):
-    gif_url = get_creature_gif(creature)
-    fallback_url = get_species_gif(
+    gif_url = get_capture_creature_gif(creature)
+    fallback_url = get_capture_species_gif(
         creature.species.pokeapi_id,
         creature.is_shiny,
     )
