@@ -7,6 +7,11 @@ from application.achievement.query_service import AchievementQueryService
 from application.adventure.start_adventure.start_adventure_application_service import (
     StartAdventureApplicationService,
 )
+from application.battle.battle_application_service import BattleApplicationService
+from application.battle.battle_display_service import BattleDisplayService
+from application.battle.battle_execution_service import BattleExecutionService
+from application.battle.battle_replay_service import BattleReplayService
+from application.battle.creature_fighter_adapter import CreatureFighterAdapter
 from application.collection.collection_application_service import (
     CollectionApplicationService,
 )
@@ -48,12 +53,14 @@ from application.shop.shop_application_service import ShopApplicationService
 from application.species_info.species_info_service import (
     SpeciesInfoService,
 )
+from application.team.team_application_service import TeamApplicationService
 from application.trade.trade_application_service import (
     TradeApplicationService,
 )
 from application.trade.trade_display_service import (
     TradeDisplayService,
 )
+from core.battle.engine.battle_simulator import BattleSimulator
 from core.candy.reward_policy import RewardPolicy
 from core.capture.application.capture_service import (
     CaptureApplicationService,
@@ -94,6 +101,11 @@ from core.spawn.rule_engine import RuleEngine
 from core.spawn.species_selector import SpeciesSelector
 from core.spawn.weighted_selector import WeightedSelector
 from core.stats.stat_calculator import StatCalculator
+from infrastructure.battle.in_memory_battle_repository import (
+    InMemoryBattleRepository,
+)
+from infrastructure.battle.poke_env.damage_calculator import PokeEnvDamageCalculator
+from infrastructure.battle.poke_env.learnset_provider import PokeEnvLearnsetProvider
 from infrastructure.evolution.neon_evolution_repository import (
     NeonEvolutionRepository,
 )
@@ -124,6 +136,9 @@ from infrastructure.persistence.repositories.neon_profile_repository import (
 from infrastructure.persistence.repositories.neon_shop_repository import (
     NeonShopRepository,
 )
+from infrastructure.persistence.repositories.neon_team_repository import (
+    NeonTeamRepository,
+)
 from infrastructure.persistence.repositories.neon_trade_repository import (
     NeonTradeRepository,
 )
@@ -151,6 +166,7 @@ from infrastructure.spawn.in_memory_spawn_session_repository import (
 from infrastructure.species.neon_species_repository import (
     NeonSpeciesRepository,
 )
+from rendering.battle.renderer import BattleRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +200,12 @@ class CoreServices:
     preview_release_application: PreviewReleaseApplicationService
     duplicate_application: DuplicateApplicationService
     profile_service: ProfileService
+    team_application_service: TeamApplicationService
+    battle_application_service: BattleApplicationService
+    battle_execution_service: BattleExecutionService
+    battle_display_service: BattleDisplayService
+    battle_replay_service: BattleReplayService
+    battle_renderer: BattleRenderer
     creature_info_service: CreatureInfoService
     creature_collection_service: CreatureCollectionService
     species_info_service: SpeciesInfoService
@@ -272,6 +294,8 @@ def build_core(
     )
 
     profile_repository = NeonProfileRepository()
+    team_repository = NeonTeamRepository()
+    battle_repository = InMemoryBattleRepository()
     trade_repository = NeonTradeRepository()
 
     spawn_session_repository = InMemorySpawnSessionRepository()
@@ -392,6 +416,32 @@ def build_core(
         creature_repository=creature_repository,
         profile_repository=profile_repository,
     )
+    team_application_service = TeamApplicationService(
+        creature_repository=creature_repository,
+        team_repository=team_repository,
+    )
+    learnset_provider = PokeEnvLearnsetProvider()
+    creature_fighter_adapter = CreatureFighterAdapter(
+        stat_calculator=stat_calculator,
+        learnset_provider=learnset_provider,
+    )
+    battle_simulator = BattleSimulator(
+        damage_calculator=PokeEnvDamageCalculator(),
+    )
+    battle_application_service = BattleApplicationService(
+        battle_repository=battle_repository,
+        team_repository=team_repository,
+        creature_repository=creature_repository,
+    )
+    battle_execution_service = BattleExecutionService(
+        battle_application_service=battle_application_service,
+        creature_repository=creature_repository,
+        creature_fighter_adapter=creature_fighter_adapter,
+        battle_simulator=battle_simulator,
+    )
+    battle_display_service = BattleDisplayService()
+    battle_replay_service = BattleReplayService()
+    battle_renderer = BattleRenderer()
 
     selector = SpeciesSelector(
         repository=species_repository,
@@ -442,6 +492,9 @@ def build_core(
     logger.warning(
         "Safari sessions are currently in-memory and do not survive bot restarts."
     )
+    logger.warning(
+        "Battle sessions are currently in-memory and do not survive bot restarts."
+    )
     return CoreServices(
         species_repository=species_repository,
         creature_repository=creature_repository,
@@ -466,6 +519,12 @@ def build_core(
         preview_release_application=preview_release_application,
         duplicate_application=duplicate_application,
         profile_service=profile_service,
+        team_application_service=team_application_service,
+        battle_application_service=battle_application_service,
+        battle_execution_service=battle_execution_service,
+        battle_display_service=battle_display_service,
+        battle_replay_service=battle_replay_service,
+        battle_renderer=battle_renderer,
         creature_info_service=creature_info_service,
         creature_collection_service=creature_collection_service,
         species_info_service=species_info_service,

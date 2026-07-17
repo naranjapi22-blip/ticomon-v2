@@ -227,6 +227,30 @@ class SafariSimulationRunner:
         run_seed: int,
         run_index: int,
     ) -> SafariRunTrace:
+        module_random_state = random.getstate()
+        random.seed(run_seed)
+        try:
+            return await self._run_single_safari_with_seeded_module_random(
+                level=level,
+                participant_count=participant_count,
+                strategy=strategy,
+                catalog=catalog,
+                run_seed=run_seed,
+                run_index=run_index,
+            )
+        finally:
+            random.setstate(module_random_state)
+
+    async def _run_single_safari_with_seeded_module_random(
+        self,
+        *,
+        level: int,
+        participant_count: int,
+        strategy: SafariPlayerStrategy,
+        catalog: Sequence[Species],
+        run_seed: int,
+        run_index: int,
+    ) -> SafariRunTrace:
         run_random = random.Random(run_seed)
         recorder = SafariSimulationRecorder(
             run_random,

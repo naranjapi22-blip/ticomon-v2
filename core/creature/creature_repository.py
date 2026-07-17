@@ -29,6 +29,16 @@ class CreatureRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_many(
+        self,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> list[Creature]:
+        """
+        Returns all creatures matching the given identifiers.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def has_species(
         self,
         trainer_id: int,

@@ -43,7 +43,9 @@ class CommandsCog(commands.Cog):
                 "`!safari` - Start or join a Safari expedition.\n"
                 "`!trade @trainer <collection_number>` - Trade one Pokemon.\n"
                 "`!shop` - Opens the Candy Shops, where type candies can be "
-                "exchanged for special Pokemon and collectible forms."
+                "exchanged for special Pokemon and collectible forms.\n"
+                "`!team` - Manage your private team.\n"
+                "`!battle @trainer` - Challenge another trainer to battle."
             ),
             inline=False,
         )
