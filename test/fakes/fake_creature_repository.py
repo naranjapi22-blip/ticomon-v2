@@ -31,6 +31,16 @@ class FakeCreatureRepository(CreatureRepository):
     ) -> Creature:
         return self._creatures[creature_id]
 
+    async def get_many(
+        self,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> list[Creature]:
+        return [
+            self._creatures[creature_id]
+            for creature_id in creature_ids
+            if creature_id in self._creatures
+        ]
+
     async def save(
         self,
         creature: Creature,

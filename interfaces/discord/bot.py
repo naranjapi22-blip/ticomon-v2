@@ -6,6 +6,7 @@ from discord.ext import commands
 
 from interfaces.discord.bootstrap import build_discord
 from interfaces.discord.cogs.achievements_cog import AchievementsCog
+from interfaces.discord.cogs.battle_cog import BattleCog
 from interfaces.discord.cogs.candy_cog import CandyCog
 from interfaces.discord.cogs.capture_cog import CaptureCog
 from interfaces.discord.cogs.collections_cog import CollectionsCog
@@ -24,6 +25,7 @@ from interfaces.discord.cogs.safari_cog import SafariCog
 from interfaces.discord.cogs.select_cog import SelectCog
 from interfaces.discord.cogs.shop_cog import ShopCog
 from interfaces.discord.cogs.spawn_cog import SpawnCog
+from interfaces.discord.cogs.team_cog import TeamCog
 from interfaces.discord.cogs.top_cog import TopCog
 from interfaces.discord.cogs.trade_cog import TradeCog
 from interfaces.discord.cogs.trainer_cog import TrainerCog
@@ -69,6 +71,8 @@ class TicoMonBot(commands.Bot):
             (ReleaseCog, (self.core,)),
             (DuplicatesCog, (self.core,)),
             (TradeCog, (self.core,)),
+            (TeamCog, (self.core,)),
+            (BattleCog, (self.core,)),
             (SafariCog, (self.core,)),
             (ShopCog, (self.core,)),
             (CommandsCog, ()),

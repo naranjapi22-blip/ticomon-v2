@@ -30,6 +30,8 @@ For validation before pushing changes:
 - `poetry run pytest -q`
 - `python scripts/check_all.py` runs the test suite only.
 
+Battle uses local Gen 9 simulation via `poke-env` (damage calc and learnsets only — no Showdown server). Battle challenge sessions are in-memory and do not survive bot restarts.
+
 ---
 
 ## Features
@@ -47,6 +49,7 @@ For validation before pushing changes:
 - 🎲 Dynamic capture chances
 - 🖼️ Animated capture sequences
 - 🤝 Trading
+- ⚔️ PvP Battles
 - 🦁 Safari
 - 🌿 Nature Mints
 - 🏆 Thematic Collections

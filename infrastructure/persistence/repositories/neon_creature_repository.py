@@ -133,6 +133,56 @@ class NeonCreatureRepository(CreatureRepository):
             species=species,
         )
 
+    async def get_many(
+        self,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> list[Creature]:
+        """
+        Returns all creatures matching the given identifiers.
+        """
+
+        if not creature_ids:
+            return []
+
+        pool = await get_pool()
+
+        async with pool.acquire() as connection:
+            rows = await connection.fetch(
+                """
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.id = ANY($1::bigint[])
+                ORDER BY c.id
+                """,
+                list(creature_ids),
+            )
+
+        species_ids = list(
+            dict.fromkeys(row["species_id"] for row in rows),
+        )
+        species_list = await self._species_repository.get_many(
+            species_ids,
+        )
+        species_by_id = {species.id: species for species in species_list}
+
+        creatures: list[Creature] = []
+
+        for row in rows:
+            species = species_by_id[row["species_id"]]
+            creatures.append(
+                self._mapper.from_row(
+                    row=row,
+                    species=species,
+                )
+            )
+
+        return creatures
+
     async def has_species(
         self,
         trainer_id: int,
