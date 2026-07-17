@@ -16,4 +16,5 @@ def test_gen9_regular_and_shiny_urls_use_the_mapped_ids():
     assert get_species_gif(945, True) == f"{BASE}/gifs_calidad/shiny/1107.gif"
     assert get_species_gif(950, False) == f"{BASE}/gifs_calidad/regular/1100.gif"
     assert get_species_gif(950, True) == f"{BASE}/gifs_calidad/shiny/1100.gif"
+    assert get_species_gif(945, False) != get_species_gif(950, False)
     assert get_species_gif(959, False) == f"{BASE}/gifs_calidad/regular/1142.gif"
