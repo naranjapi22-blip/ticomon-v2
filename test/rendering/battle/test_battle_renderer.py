@@ -11,15 +11,11 @@ from test.rendering.battle.test_sprite_urls import _make_test_gif
 class FakeBattleGifLoader(BattleGifLoader):
     def __init__(self) -> None:
         self._opponent = GifSequence(
-            frames=(
-                Image.new("RGBA", (96, 96), (0, 128, 255, 255)),
-            ),
+            frames=(Image.new("RGBA", (96, 96), (0, 128, 255, 255)),),
             durations_ms=(100,),
         )
         self._initiator = GifSequence(
-            frames=(
-                Image.new("RGBA", (96, 96), (255, 128, 0, 255)),
-            ),
+            frames=(Image.new("RGBA", (96, 96), (255, 128, 0, 255)),),
             durations_ms=(100,),
         )
 
@@ -59,9 +55,7 @@ def test_battle_renderer_produces_gif_bytes():
 class ManyFrameBattleGifLoader(BattleGifLoader):
     def load(self, url: str) -> GifSequence:
         color = (255, 128, 0, 255) if "/back" in url else (0, 128, 255, 255)
-        frames = tuple(
-            Image.new("RGBA", (120, 120), color) for _ in range(60)
-        )
+        frames = tuple(Image.new("RGBA", (120, 120), color) for _ in range(60))
         return GifSequence(frames=frames, durations_ms=tuple([100] * len(frames)))
 
 
