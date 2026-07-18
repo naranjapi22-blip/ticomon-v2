@@ -1,33 +1,11 @@
 import pytest
 
 from application.battle.creature_fighter_adapter import CreatureFighterAdapter
-from core.battle.rules.move_policy import MoveData
 from core.creature.stat import Stat
 from core.stats.stat_calculator import StatCalculator
 from test.builders.creature_builder import CreatureBuilder
 from test.builders.species_builder import SpeciesBuilder
-
-
-class FakeLearnsetProvider:
-    def get_learnset(self, species_showdown_id: str) -> dict[str, MoveData]:
-        return {
-            "tackle": MoveData(
-                move_id="tackle",
-                display_name="Tackle",
-                category="Physical",
-                move_type="normal",
-                base_power=40,
-                accuracy=100,
-            ),
-            "ember": MoveData(
-                move_id="ember",
-                display_name="Ember",
-                category="Special",
-                move_type="fire",
-                base_power=40,
-                accuracy=100,
-            ),
-        }
+from test.fakes.fake_learnset_provider import FakeLearnsetProvider
 
 
 @pytest.fixture
