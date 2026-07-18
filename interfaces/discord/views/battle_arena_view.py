@@ -33,7 +33,7 @@ class BattleArenaView(discord.ui.View):
         self._side_b_name = f"Trainer {opponent_id}"
         self._side_a_meta: list[tuple[int, bool]] = []
         self._side_b_meta: list[tuple[int, bool]] = []
-        self._last_png_bytes: bytes | None = None
+        self._last_gif_bytes: bytes | None = None
         self._battle_background: Image.Image | None = None
         self._side_a_sprite: tuple[int, bool] | None = None
         self._side_b_sprite: tuple[int, bool] | None = None
@@ -156,7 +156,7 @@ class BattleArenaView(discord.ui.View):
                     side_a_display_name=self._side_a_name,
                     side_b_display_name=self._side_b_name,
                 )
-                self._last_png_bytes = renderer.render_to_bytes(
+                self._last_gif_bytes = renderer.render_to_bytes(
                     frame,
                     background=self._battle_background,
                 )
@@ -172,13 +172,13 @@ class BattleArenaView(discord.ui.View):
                 return
 
             attachments = None
-            if self._last_png_bytes is not None:
-                embed.set_image(url="attachment://battle.png")
+            if self._last_gif_bytes is not None:
+                embed.set_image(url="attachment://battle.gif")
                 if image_updated:
                     attachments = [
                         discord.File(
-                            io.BytesIO(self._last_png_bytes),
-                            filename="battle.png",
+                            io.BytesIO(self._last_gif_bytes),
+                            filename="battle.gif",
                         )
                     ]
                 elif self.message.attachments:
@@ -203,14 +203,14 @@ class BattleArenaView(discord.ui.View):
                 description=winner_text,
                 color=discord.Color.gold(),
             )
-            if self._last_png_bytes is not None:
-                final_embed.set_image(url="attachment://battle.png")
+            if self._last_gif_bytes is not None:
+                final_embed.set_image(url="attachment://battle.gif")
                 await self._edit_replay_message(
                     embed=final_embed,
                     attachments=[
                         discord.File(
-                            io.BytesIO(self._last_png_bytes),
-                            filename="battle.png",
+                            io.BytesIO(self._last_gif_bytes),
+                            filename="battle.gif",
                         )
                     ],
                 )

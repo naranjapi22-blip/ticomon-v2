@@ -27,7 +27,20 @@ class DamageCalculator(ABC):
         raise NotImplementedError
 
 
+@dataclass(frozen=True)
+class SpeciesLearnsetQuery:
+    species_id: int
+    pokeapi_id: int
+    species_name: str
+
+
+@dataclass(frozen=True)
+class SpeciesLearnset:
+    species_showdown_id: str
+    moves: dict[str, MoveData]
+
+
 class LearnsetProvider(ABC):
     @abstractmethod
-    def get_learnset(self, species_showdown_id: str) -> dict[str, MoveData]:
+    def get_learnset(self, query: SpeciesLearnsetQuery) -> SpeciesLearnset:
         raise NotImplementedError

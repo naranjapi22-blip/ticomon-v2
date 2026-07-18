@@ -1,7 +1,6 @@
 from core.battle.engine.battle_fighter import BattleFighter
-from core.battle.ports.damage_calculator import LearnsetProvider
+from core.battle.ports.damage_calculator import LearnsetProvider, SpeciesLearnsetQuery
 from core.battle.rules.move_policy import pick_automatic_move
-from core.battle.species_id import to_species_showdown_id
 from core.creature.creature import Creature
 from core.creature.stat import Stat
 from core.stats.stat_calculator import StatCalculator
@@ -29,8 +28,15 @@ class CreatureFighterAdapter:
             raise ValueError("Creature must have an id for battle.")
 
         species = creature.species
-        species_showdown_id = to_species_showdown_id(species.name)
-        learnset = self._learnset_provider.get_learnset(species_showdown_id)
+        species_learnset = self._learnset_provider.get_learnset(
+            SpeciesLearnsetQuery(
+                species_id=species.id,
+                pokeapi_id=species.pokeapi_id,
+                species_name=species.name,
+            ),
+        )
+        species_showdown_id = species_learnset.species_showdown_id
+        learnset = species_learnset.moves
 
         attack = self._stat_calculator.calculate(creature, Stat.ATTACK)
         special_attack = self._stat_calculator.calculate(creature, Stat.SP_ATTACK)

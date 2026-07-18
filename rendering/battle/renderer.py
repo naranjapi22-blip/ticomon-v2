@@ -1,35 +1,33 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Literal
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-from rendering.battle.assets import HEIGHT, WIDTH, BattleAssets
+from rendering.battle.assets import BattleAssets
 from rendering.battle.frame_state import BattleFrameState
-
-BLACK = (0, 0, 0, 255)
-WHITE = (255, 255, 255, 255)
-HP_BAR_YELLOW = (255, 204, 0, 255)
-HP_BAR_EMPTY = (80, 80, 80, 255)
-HP_BAR_BORDER = (40, 40, 40, 255)
-
-TRAINER_FONT_SIZE = 28
-POKEMON_FONT_SIZE = 24
-HP_TEXT_FONT_SIZE = 20
-TEXT_OUTLINE_WIDTH = 2
-HP_BAR_WIDTH = 240
-HP_BAR_HEIGHT = 16
-MARGIN = 36
-OPPONENT_SPRITE_MAX_SIZE = 374
-PLAYER_SPRITE_MAX_SIZE = 528
-OPPONENT_SPRITE_ANCHOR = (930, 100)
-PLAYER_SPRITE_ANCHOR = (70, HEIGHT - 30)
+from rendering.battle.gif_assets import BattleGifLoader, GifSequence, load_gif_sequence
+from rendering.battle.gif_encode import encode_battle_gif, subsample_frame_indices
+from rendering.battle.hud import BattleFonts, draw_battle_hud
+from rendering.battle.layout import (
+    DEFAULT_GIF_FRAME_DURATION_MS,
+    MAX_BATTLE_GIF_FRAMES,
+    OPPONENT_SPRITE_ANCHOR,
+    OPPONENT_SPRITE_MAX_SIZE,
+    PLAYER_SPRITE_ANCHOR,
+    PLAYER_SPRITE_MAX_SIZE,
+)
+from rendering.battle.sprite_placement import paste_sprite
+from rendering.battle.sprite_urls import (
+    battle_initiator_sprite_url,
+    battle_opponent_sprite_url,
+)
 
 
 class BattleRenderer:
-    def __init__(self) -> None:
+    def __init__(self, gif_loader: BattleGifLoader | None = None) -> None:
         self._assets = BattleAssets()
+        self._gif_loader = gif_loader
 
     def get_background_for_battle(self, battle_id: int) -> Image.Image:
         return self._assets.get_background_for_battle(battle_id)
@@ -40,63 +38,10 @@ class BattleRenderer:
         *,
         background: Image.Image | None = None,
     ) -> Image.Image:
-        canvas = (
-            background.copy()
-            if background is not None
-            else self._assets.get_background().copy()
-        )
-        draw = ImageDraw.Draw(canvas)
-        trainer_font = self._assets.get_font(TRAINER_FONT_SIZE)
-        pokemon_font = self._assets.get_font(POKEMON_FONT_SIZE)
-        hp_text_font = self._assets.get_font(HP_TEXT_FONT_SIZE)
-
-        self._draw_sprite(
-            canvas,
-            frame.side_b_pokeapi_id,
-            shiny=frame.side_b_shiny,
-            anchor=OPPONENT_SPRITE_ANCHOR,
-            anchor_mode="top_right",
-            max_size=OPPONENT_SPRITE_MAX_SIZE,
-            flip=False,
-        )
-        self._draw_sprite(
-            canvas,
-            frame.side_a_pokeapi_id,
-            shiny=frame.side_a_shiny,
-            anchor=PLAYER_SPRITE_ANCHOR,
-            anchor_mode="bottom_left",
-            max_size=PLAYER_SPRITE_MAX_SIZE,
-            flip=True,
-        )
-
-        self._draw_hp_bar(
-            draw,
-            anchor_x=MARGIN,
-            y=36,
-            align="left",
-            label=frame.side_b_name,
-            pokemon_name=frame.side_b_active_name,
-            hp=frame.side_b_hp,
-            hp_max=frame.side_b_hp_max,
-            trainer_font=trainer_font,
-            pokemon_font=pokemon_font,
-            hp_text_font=hp_text_font,
-        )
-        self._draw_hp_bar(
-            draw,
-            anchor_x=WIDTH - MARGIN,
-            y=HEIGHT - 150,
-            align="right",
-            label=frame.side_a_name,
-            pokemon_name=frame.side_a_active_name,
-            hp=frame.side_a_hp,
-            hp_max=frame.side_a_hp_max,
-            trainer_font=trainer_font,
-            pokemon_font=pokemon_font,
-            hp_text_font=hp_text_font,
-        )
-
-        return canvas
+        gif_bytes = self.render_to_bytes(frame, background=background)
+        gif = Image.open(BytesIO(gif_bytes))
+        gif.seek(0)
+        return gif.convert("RGBA")
 
     def render_to_bytes(
         self,
@@ -104,149 +49,119 @@ class BattleRenderer:
         *,
         background: Image.Image | None = None,
     ) -> bytes:
-        image = self.render(frame, background=background)
-        buffer = BytesIO()
-        image.save(buffer, format="PNG")
-        return buffer.getvalue()
+        base_background = (
+            background.copy()
+            if background is not None
+            else self._assets.get_background().copy()
+        )
+        opponent_sequence = self._load_sprite_sequence(
+            battle_opponent_sprite_url(
+                frame.side_b_pokeapi_id,
+                shiny=frame.side_b_shiny,
+            ),
+            pokeapi_id=frame.side_b_pokeapi_id,
+            shiny=frame.side_b_shiny,
+        )
+        initiator_sequence = self._load_sprite_sequence(
+            battle_initiator_sprite_url(
+                frame.side_a_pokeapi_id,
+                shiny=frame.side_a_shiny,
+            ),
+            pokeapi_id=frame.side_a_pokeapi_id,
+            shiny=frame.side_a_shiny,
+        )
 
-    def _draw_sprite(
+        fonts = BattleFonts(
+            trainer=self._assets.get_font(28),
+            pokemon=self._assets.get_font(24),
+            hp_text=self._assets.get_font(20),
+        )
+        frames, durations = self._compose_frames(
+            frame,
+            base_background=base_background,
+            opponent_sequence=opponent_sequence,
+            initiator_sequence=initiator_sequence,
+            fonts=fonts,
+        )
+
+        return encode_battle_gif(frames, durations)
+
+    def _compose_frames(
         self,
-        canvas: Image.Image,
-        pokeapi_id: int,
+        frame: BattleFrameState,
         *,
-        shiny: bool,
-        anchor: tuple[int, int],
-        anchor_mode: Literal["bottom_left", "top_right"],
-        max_size: int,
-        flip: bool,
-    ) -> None:
-        sprite = self._scale_sprite(
-            self._assets.get_sprite(pokeapi_id, shiny=shiny).copy(),
-            max_size,
+        base_background: Image.Image,
+        opponent_sequence: GifSequence,
+        initiator_sequence: GifSequence,
+        fonts: BattleFonts,
+    ) -> tuple[list[Image.Image], list[int]]:
+        source_frame_count = max(
+            len(opponent_sequence.frames),
+            len(initiator_sequence.frames),
         )
-        if flip:
-            sprite = sprite.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-
-        content_bbox = sprite.getbbox()
-        if content_bbox is None:
-            return
-
-        content_left, content_top, content_right, content_bottom = content_bbox
-        anchor_x, anchor_y = anchor
-        if anchor_mode == "bottom_left":
-            position = (anchor_x - content_left, anchor_y - content_bottom)
-        else:
-            position = (anchor_x - content_right, anchor_y - content_top)
-
-        canvas.paste(sprite, position, sprite)
-
-    @staticmethod
-    def _scale_sprite(sprite: Image.Image, max_size: int) -> Image.Image:
-        scale = min(max_size / sprite.width, max_size / sprite.height)
-        if scale <= 0:
-            return sprite
-        new_width = max(int(sprite.width * scale), 1)
-        new_height = max(int(sprite.height * scale), 1)
-        if new_width == sprite.width and new_height == sprite.height:
-            return sprite
-        return sprite.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-    def _draw_outlined_text(
-        self,
-        draw: ImageDraw.ImageDraw,
-        xy: tuple[int, int],
-        text: str,
-        font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-        *,
-        anchor: str | None = None,
-    ) -> None:
-        draw.text(
-            xy,
-            text,
-            fill=BLACK,
-            font=font,
-            anchor=anchor,
-            stroke_width=TEXT_OUTLINE_WIDTH,
-            stroke_fill=WHITE,
+        frame_indices = subsample_frame_indices(
+            source_frame_count,
+            MAX_BATTLE_GIF_FRAMES,
         )
+        output_frames: list[Image.Image] = []
+        durations: list[int] = []
 
-    def _text_size(
-        self,
-        text: str,
-        font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-    ) -> tuple[int, int]:
-        left, top, right, bottom = font.getbbox(text)
-        return right - left, bottom - top
+        for source_index in frame_indices:
+            canvas = base_background.copy()
+            opponent_frame = opponent_sequence.frames[
+                source_index % len(opponent_sequence.frames)
+            ]
+            initiator_frame = initiator_sequence.frames[
+                source_index % len(initiator_sequence.frames)
+            ]
 
-    def _draw_hp_bar(
-        self,
-        draw: ImageDraw.ImageDraw,
-        *,
-        anchor_x: int,
-        y: int,
-        align: Literal["left", "right"],
-        label: str,
-        pokemon_name: str,
-        hp: int,
-        hp_max: int,
-        trainer_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-        pokemon_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-        hp_text_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-    ) -> None:
-        trainer_anchor = "lt" if align == "left" else "rt"
-        pokemon_anchor = trainer_anchor
-
-        self._draw_outlined_text(
-            draw,
-            (anchor_x, y),
-            label,
-            trainer_font,
-            anchor=trainer_anchor,
-        )
-
-        trainer_height = self._text_size(label, trainer_font)[1]
-        pokemon_y = y + trainer_height + 6
-        self._draw_outlined_text(
-            draw,
-            (anchor_x, pokemon_y),
-            pokemon_name,
-            pokemon_font,
-            anchor=pokemon_anchor,
-        )
-
-        pokemon_height = self._text_size(pokemon_name, pokemon_font)[1]
-        bar_y = pokemon_y + pokemon_height + 8
-        if align == "left":
-            bar_x = anchor_x
-        else:
-            bar_x = anchor_x - HP_BAR_WIDTH
-
-        fraction = 0 if hp_max <= 0 else max(0.0, min(1.0, hp / hp_max))
-        fill_width = int(HP_BAR_WIDTH * fraction)
-
-        draw.rectangle(
-            (bar_x, bar_y, bar_x + HP_BAR_WIDTH, bar_y + HP_BAR_HEIGHT),
-            fill=HP_BAR_EMPTY,
-            outline=HP_BAR_BORDER,
-        )
-        if fill_width > 0:
-            draw.rectangle(
-                (bar_x, bar_y, bar_x + fill_width, bar_y + HP_BAR_HEIGHT),
-                fill=HP_BAR_YELLOW,
+            paste_sprite(
+                canvas,
+                opponent_frame,
+                anchor=OPPONENT_SPRITE_ANCHOR,
+                anchor_mode="top_right",
+                max_size=OPPONENT_SPRITE_MAX_SIZE,
+            )
+            paste_sprite(
+                canvas,
+                initiator_frame,
+                anchor=PLAYER_SPRITE_ANCHOR,
+                anchor_mode="bottom_left",
+                max_size=PLAYER_SPRITE_MAX_SIZE,
             )
 
-        hp_label = f"{hp}/{hp_max}"
-        if align == "left":
-            hp_x = bar_x + HP_BAR_WIDTH + 8
-            hp_anchor = "lt"
-        else:
-            hp_x = bar_x - 8
-            hp_anchor = "rt"
+            draw = ImageDraw.Draw(canvas)
+            draw_battle_hud(draw, frame, fonts)
 
-        self._draw_outlined_text(
-            draw,
-            (hp_x, bar_y - 2),
-            hp_label,
-            hp_text_font,
-            anchor=hp_anchor,
-        )
+            opponent_duration = opponent_sequence.durations_ms[
+                source_index % len(opponent_sequence.durations_ms)
+            ]
+            initiator_duration = initiator_sequence.durations_ms[
+                source_index % len(initiator_sequence.durations_ms)
+            ]
+            durations.append(
+                max(
+                    opponent_duration,
+                    initiator_duration,
+                    DEFAULT_GIF_FRAME_DURATION_MS,
+                )
+            )
+            output_frames.append(canvas.convert("RGB"))
+
+        return output_frames, durations
+
+    def _load_sprite_sequence(
+        self,
+        url: str,
+        *,
+        pokeapi_id: int,
+        shiny: bool,
+    ) -> GifSequence:
+        try:
+            return load_gif_sequence(url, loader=self._gif_loader)
+        except Exception:
+            sprite = self._assets.get_sprite(pokeapi_id, shiny=shiny).convert("RGBA")
+            return GifSequence(
+                frames=(sprite,),
+                durations_ms=(DEFAULT_GIF_FRAME_DURATION_MS,),
+            )
