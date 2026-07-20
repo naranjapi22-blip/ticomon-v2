@@ -101,8 +101,8 @@ class BattleVideoArenaView(BattleArenaView):
                     )
                     await self.message.edit(
                         embed=discord.Embed(
-                            title="🏆 Battle Complete",
-                            description=(f"{result.winner_side_name} wins!"),
+                            title="Battle Video",
+                            description="Battle video ready.",
                             color=discord.Color.gold(),
                         ),
                         view=self,

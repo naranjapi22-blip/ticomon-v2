@@ -25,6 +25,28 @@ from rendering.battle.sprite_urls import (
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_SPECIAL_ATTACK_COLOR = (95, 205, 255)
+SPECIAL_ATTACK_COLORS = {
+    "normal": (220, 220, 220),
+    "fire": (255, 90, 40),
+    "water": (60, 150, 255),
+    "electric": (255, 220, 50),
+    "grass": (80, 200, 90),
+    "ice": (130, 220, 255),
+    "fighting": (200, 70, 60),
+    "poison": (180, 80, 210),
+    "ground": (190, 145, 75),
+    "flying": (150, 180, 255),
+    "psychic": (255, 90, 170),
+    "bug": (160, 190, 50),
+    "rock": (170, 145, 80),
+    "ghost": (120, 90, 190),
+    "dragon": (100, 80, 255),
+    "dark": (90, 75, 75),
+    "steel": (170, 180, 195),
+    "fairy": (255, 150, 210),
+}
+
 
 class _AnimatedSprite:
     def __init__(self, sequence: GifSequence) -> None:
@@ -49,6 +71,13 @@ def _move_id_from_message(message: str) -> str | None:
     return re.sub(r"[^a-z0-9]", "", match.group(1).lower())
 
 
+def _visual_move_message(message: str) -> str:
+    match = re.match(r"^.+?'s (?P<pokemon>.+?) uses (?P<move>.+)!$", message)
+    if match is None:
+        return message
+    return f"{match.group('pokemon')} uses {match.group('move')}!"
+
+
 def _animation_from_message(message: str) -> str:
     move_id = _move_id_from_message(message)
     if move_id is None:
@@ -66,27 +95,56 @@ def _animation_from_message(message: str) -> str:
     return "special_attack"
 
 
+def _special_attack_color(message: str) -> tuple[int, int, int]:
+    move_id = _move_id_from_message(message)
+    if move_id is None:
+        return DEFAULT_SPECIAL_ATTACK_COLOR
+    try:
+        move = Move(move_id, gen=9)
+        move_type = getattr(getattr(move, "type", None), "name", "").lower()
+    except Exception:
+        return DEFAULT_SPECIAL_ATTACK_COLOR
+    return SPECIAL_ATTACK_COLORS.get(move_type, DEFAULT_SPECIAL_ATTACK_COLOR)
+
+
 def _animation_frames(
     result: BattleResult,
     fighter_metadata: dict[str, tuple[tuple[int, bool], ...]],
     side_a_name: str,
     side_b_name: str,
-) -> list[tuple[BattleStepType, BattleFrameState, str | None]]:
+) -> list[
+    tuple[
+        BattleStepType,
+        BattleFrameState,
+        str | None,
+        tuple[int, int, int] | None,
+    ]
+]:
     display = BattleDisplayService()
-    frames: list[tuple[BattleStepType, BattleFrameState, str | None]] = []
+    frames: list[
+        tuple[
+            BattleStepType,
+            BattleFrameState,
+            str | None,
+            tuple[int, int, int] | None,
+        ]
+    ] = []
     pending_move: str | None = None
-    pending_damage: str | None = None
     pending_animation: str | None = None
+    pending_color: tuple[int, int, int] | None = None
     turn_number = 0
 
     for step in result.steps:
         if step.step_type is BattleStepType.MOVE:
             pending_move = step.message
-            pending_damage = None
             pending_animation = _animation_from_message(step.message)
+            pending_color = (
+                _special_attack_color(step.message)
+                if pending_animation == "special_attack"
+                else None
+            )
             continue
         if step.step_type is BattleStepType.DAMAGE:
-            pending_damage = step.message
             continue
 
         side_a_state = step.state_snapshot.get(step.side_a_name, {})
@@ -101,7 +159,12 @@ def _animation_frames(
         if step.step_type is BattleStepType.ATTACK:
             turn_number += 1
             message = " ".join(
-                part for part in (pending_move, pending_damage, step.message) if part
+                part
+                for part in (
+                    _visual_move_message(pending_move) if pending_move else None,
+                    step.message,
+                )
+                if part
             )
             frame = display.frame_from_step(
                 step,
@@ -118,11 +181,12 @@ def _animation_frames(
                     BattleStepType.ATTACK,
                     replace(frame, attack_line=message),
                     pending_animation,
+                    pending_color,
                 )
             )
             pending_move = None
-            pending_damage = None
             pending_animation = None
+            pending_color = None
             continue
 
         if step.step_type in {
@@ -140,7 +204,14 @@ def _animation_frames(
                 side_a_display_name=side_a_name,
                 side_b_display_name=side_b_name,
             )
-            frames.append((step.step_type, frame, None))
+            if step.step_type is BattleStepType.VICTORY:
+                frame = replace(
+                    frame,
+                    attack_line=(
+                        f"🏆 Battle Complete\n{result.winner_side_name} wins!"
+                    ),
+                )
+            frames.append((step.step_type, frame, None, None))
 
     return frames
 
@@ -224,6 +295,7 @@ def _draw_effect(
     current: BattleFrameState,
     progress: float,
     animation: str,
+    color: tuple[int, int, int],
 ) -> None:
     if animation != "special_attack":
         return
@@ -243,9 +315,11 @@ def _draw_effect(
     trail_x = round(start[0] + (end[0] - start[0]) * trail_progress)
     trail_y = round(start[1] + (end[1] - start[1]) * trail_progress)
     radius = 22 + round(8 * pulse)
+    light_color = tuple(min(255, channel + 45) for channel in color)
+    dark_color = tuple(max(0, channel - 35) for channel in color)
     draw.line(
         (trail_x, trail_y, effect_x, effect_y),
-        fill=(130, 225, 255, min(alpha + 70, 255)),
+        fill=(*color, min(alpha + 70, 255)),
         width=18,
     )
     draw.ellipse(
@@ -255,8 +329,8 @@ def _draw_effect(
             effect_x + radius,
             effect_y + radius,
         ),
-        fill=(95, 205, 255, min(alpha + 45, 255)),
-        outline=(235, 252, 255, 255),
+        fill=(*light_color, min(alpha + 45, 255)),
+        outline=(*light_color, 255),
         width=3,
     )
     if progress >= 0.78:
@@ -270,7 +344,7 @@ def _draw_effect(
                 end[0] + impact_radius,
                 end[1] + impact_radius,
             ),
-            outline=(255, 255, 255, impact_alpha),
+            outline=(*light_color, impact_alpha),
             width=5,
         )
         for offset in (-1, 1):
@@ -281,7 +355,7 @@ def _draw_effect(
                     end[0] + offset * 58,
                     end[1] - offset * 58,
                 ),
-                fill=(180, 240, 255, impact_alpha),
+                fill=(*dark_color, impact_alpha),
                 width=4,
             )
 
@@ -296,6 +370,7 @@ def _draw_frame(
     elapsed_seconds: float,
     sprites: dict[tuple[int, bool, bool], _AnimatedSprite],
     animation: str | None,
+    special_attack_color: tuple[int, int, int] | None = None,
 ) -> Image.Image:
     image = background.copy().convert("RGBA")
     player_x, player_y = 270, 500
@@ -314,7 +389,11 @@ def _draw_frame(
                 opponent_x += shake
             if current_side_a_changed:
                 player_x += shake
-    if step_type is BattleStepType.ATTACK and animation == "special_attack":
+    if (
+        step_type is BattleStepType.ATTACK
+        and animation == "special_attack"
+        and progress >= 0.78
+    ):
         reaction = 5 if int(progress * 30) % 2 == 0 else -5
         if frame.side_b_hp < previous.side_b_hp:
             opponent_x += reaction
@@ -414,7 +493,21 @@ def _draw_frame(
             current=frame,
             progress=progress,
             animation=animation or "special_attack",
+            color=special_attack_color or DEFAULT_SPECIAL_ATTACK_COLOR,
         )
+    if step_type is BattleStepType.VICTORY:
+        draw.multiline_text(
+            (WIDTH // 2, HEIGHT // 2),
+            frame.attack_line,
+            font=_font(30),
+            anchor="mm",
+            align="center",
+            fill="white",
+            stroke_width=3,
+            stroke_fill="black",
+        )
+        return image.convert("RGB")
+
     draw.rounded_rectangle(
         (28, HEIGHT - 80, WIDTH - 28, HEIGHT - 20),
         radius=14,
@@ -438,9 +531,9 @@ def _draw_frame(
 def _step_duration(step_type: BattleStepType) -> float:
     return {
         BattleStepType.START: 1.0,
-        BattleStepType.ATTACK: 0.60,
+        BattleStepType.ATTACK: 1.00,
         BattleStepType.SWITCH: 0.80,
-        BattleStepType.VICTORY: 1.40,
+        BattleStepType.VICTORY: 2.40,
     }[step_type]
 
 
@@ -514,7 +607,7 @@ def render_battle_video(
     total_frames = 0
     previous_frame = display_frames[0][1]
     try:
-        for step_type, current_frame, animation in display_frames:
+        for step_type, current_frame, animation, special_attack_color in display_frames:
             count = max(1, round(_step_duration(step_type) * fps))
             for frame_index in range(count):
                 progress = frame_index / max(count - 1, 1)
@@ -532,6 +625,7 @@ def render_battle_video(
                     elapsed_seconds=total_frames / fps,
                     sprites=sprites,
                     animation=animation,
+                    special_attack_color=special_attack_color,
                 )
                 process.stdin.write(image.tobytes())
                 total_frames += 1
