@@ -1,5 +1,6 @@
 from core.creature.creature import Creature
 from core.creature.ivs import IVs
+from core.creature.move import canonicalize_move_id
 from core.creature.nature import Nature
 from core.creature.size import Size
 from core.species.variant import Variant
@@ -49,6 +50,11 @@ class CreatureMapper:
                 else None
             ),
             original_trainer_id=original_trainer_id,
+            ability_id=_row_value("ability_id"),
+            moves=tuple(
+                canonicalize_move_id(move)
+                for move in (_row_value("equipped_moves") or _row_value("moves") or ())
+            ),
         )
 
     @staticmethod
@@ -72,4 +78,6 @@ class CreatureMapper:
             creature.ivs.special_defense,
             creature.ivs.speed,
             creature.minted_nature.name if creature.minted_nature else None,
+            creature.ability_id,
+            list(creature.moves),
         )

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from dataclasses import replace
 from datetime import UTC, date, datetime
 
 from core.achievement.activity import AchievementActivity
@@ -16,6 +15,7 @@ from core.creature.creature import Creature
 from core.creature.creature_mapper import CreatureMapper
 from core.safari.daily_progress import SafariDailyWorld
 from core.safari.unlock import SafariUnlock
+from infrastructure.battle.poke_env.loadout_catalog import PokeEnvLoadoutCatalog
 from infrastructure.db_config import get_pool
 from infrastructure.persistence.mappers.candy_mapper import CandyMapper
 from infrastructure.safari.daily_world_mapper import SafariDailyWorldMapper
@@ -39,6 +39,7 @@ class _NeonCaptureTransaction(CaptureTransaction):
         self._candy_mapper = CandyMapper()
         self._daily_world_mapper = SafariDailyWorldMapper()
         self._unlock_mapper = SafariUnlockMapper()
+        self._loadout_catalog = PokeEnvLoadoutCatalog()
 
     async def save_creature(self, creature: Creature) -> Creature:
         if creature.trainer_id is None or creature.trainer_id <= 0:
@@ -56,6 +57,30 @@ class _NeonCaptureTransaction(CaptureTransaction):
             """,
             creature.trainer_id,
         )
+        abilities = self._loadout_catalog.abilities_for(creature.species)
+        if not abilities:
+            raise ValueError(
+                f"No ability catalog is available for species {creature.species.id}."
+            )
+        ability_id = creature.ability_id
+        valid_abilities = {ability.id for ability in abilities}
+        if ability_id not in valid_abilities:
+            ability_id = abilities[0].id if abilities else None
+        if not creature.moves:
+            from dataclasses import replace
+
+            creature = replace(
+                creature,
+                ability_id=ability_id,
+                moves=self._loadout_catalog.initial_moves(
+                    creature.species,
+                    seed=creature.id or creature.species.id,
+                ),
+            )
+        elif creature.ability_id != ability_id:
+            from dataclasses import replace
+
+            creature = replace(creature, ability_id=ability_id)
         params = self._creature_mapper.to_row(creature)
         row = await self._connection.fetchrow(
             """
@@ -75,10 +100,11 @@ class _NeonCaptureTransaction(CaptureTransaction):
                 special_defense_iv,
                 speed_iv,
                 minted_nature
+                , ability_id, equipped_moves
             )
                 VALUES (
                     $1, $2, $3, $4, $5, $6, $7,
-                    $8, $9, $10, $11, $12, $13, $14, $15
+                    $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
                 )
                 RETURNING id, collection_number
                 """,

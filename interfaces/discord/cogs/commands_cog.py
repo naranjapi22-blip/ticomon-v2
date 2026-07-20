@@ -46,6 +46,8 @@ class CommandsCog(commands.Cog):
                 "exchanged for special Pokemon and collectible forms.\n"
                 "`!team` - Manage your private team.\n"
                 "`!battle @trainer` - Challenge another trainer to battle."
+                "\n`!pvp @trainer` - Challenge another trainer to fast PvP."
+                "\n`!moves <collection>` - View or edit a PvP moveset."
             ),
             inline=False,
         )

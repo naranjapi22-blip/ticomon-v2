@@ -32,6 +32,7 @@ from application.mint.nature_mint_application_service import (
 )
 from application.pokedex.pokedex_service import PokedexService
 from application.profile.profile_service import ProfileService
+from application.pvp import PvpApplicationService
 from application.release.preview_release_application_service import (
     PreviewReleaseApplicationService,
 )
@@ -220,6 +221,7 @@ class CoreServices:
     nature_mint_application: NatureMintApplicationService
     shop_application: ShopApplicationService
     collection_application: CollectionApplicationService
+    pvp_application_service: PvpApplicationService
 
 
 def build_core(
@@ -484,6 +486,7 @@ def build_core(
         creature_repository=creature_repository,
         achievement_award_service=capture_achievement_award_service,
     )
+    pvp_application_service = PvpApplicationService()
     trade_display_service = TradeDisplayService(
         trade_repository=trade_repository,
         creature_repository=creature_repository,
@@ -540,4 +543,5 @@ def build_core(
         shop_application=shop_application,
         collection_application=collection_application,
         safari_daily_progress_application=safari_daily_progress_application,
+        pvp_application_service=pvp_application_service,
     )

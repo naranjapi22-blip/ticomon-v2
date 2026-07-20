@@ -2,6 +2,7 @@ from core.creature.creature import Creature
 from core.creature.creature_mapper import CreatureMapper
 from core.creature.creature_repository import CreatureRepository
 from core.species.species_repository import SpeciesRepository
+from infrastructure.battle.poke_env.loadout_catalog import PokeEnvLoadoutCatalog
 from infrastructure.db_config import get_pool
 
 
@@ -16,11 +17,58 @@ class NeonCreatureRepository(CreatureRepository):
     ) -> None:
         self._mapper = CreatureMapper()
         self._species_repository = species_repository
+        self._loadout_catalog = PokeEnvLoadoutCatalog()
+
+    def _ensure_loadout(self, creature: Creature) -> Creature:
+        abilities = self._loadout_catalog.abilities_for(creature.species)
+        if not abilities and not creature.ability_id:
+            raise ValueError(
+                f"No ability catalog is available for species {creature.species.id}."
+            )
+        ability_id = creature.ability_id
+        valid_abilities = {ability.id for ability in abilities}
+        if ability_id not in valid_abilities:
+            ability_id = abilities[0].id if abilities else None
+        moves = creature.moves or self._loadout_catalog.initial_moves(
+            creature.species,
+            seed=creature.id or creature.collection_number or creature.species.id,
+        )
+        return CreatureMapper.from_row(
+            {
+                "id": creature.id,
+                "collection_number": creature.collection_number,
+                "trainer_id": creature.trainer_id,
+                "original_trainer_id": creature.original_trainer_id,
+                "hp_iv": creature.ivs.hp,
+                "attack_iv": creature.ivs.attack,
+                "defense_iv": creature.ivs.defense,
+                "special_attack_iv": creature.ivs.special_attack,
+                "special_defense_iv": creature.ivs.special_defense,
+                "speed_iv": creature.ivs.speed,
+                "size": creature.size.value,
+                "nature": creature.nature.name,
+                "minted_nature": (
+                    creature.minted_nature.name if creature.minted_nature else None
+                ),
+                "is_shiny": creature.is_shiny,
+                "variant_id": (
+                    creature.current_form.id if creature.current_form else None
+                ),
+                "variant_name": (
+                    creature.current_form.name if creature.current_form else None
+                ),
+                "ability_id": ability_id,
+                "equipped_moves": moves,
+            },
+            creature.species,
+        )
 
     async def save(
         self,
         creature: Creature,
     ) -> Creature:
+
+        creature = self._ensure_loadout(creature)
 
         pool = await get_pool()
 
@@ -60,10 +108,11 @@ class NeonCreatureRepository(CreatureRepository):
                         special_defense_iv,
                         speed_iv,
                         minted_nature
+                        , ability_id, equipped_moves
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7,
-                        $8, $9, $10, $11, $12, $13, $14, $15
+                        $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
                     )
                     RETURNING id
                     """,
@@ -473,6 +522,8 @@ class NeonCreatureRepository(CreatureRepository):
         creature: Creature,
     ) -> Creature:
 
+        creature = self._ensure_loadout(creature)
+
         pool = await get_pool()
 
         async with pool.acquire() as connection:
@@ -496,7 +547,8 @@ class NeonCreatureRepository(CreatureRepository):
                     defense_iv = $9,
                     special_attack_iv = $10,
                     special_defense_iv = $11,
-                    speed_iv = $12
+                        speed_iv = $12
+                        , ability_id = $14, equipped_moves = $15
                 WHERE id = $13
                 RETURNING id
                 """,
@@ -513,6 +565,8 @@ class NeonCreatureRepository(CreatureRepository):
                 params[11],  # special_defense_iv
                 params[12],  # speed_iv
                 creature.id,
+                params[14],
+                params[15],
             )
 
             if updated is None:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from core.creature.iv_rating import IVRating
 from core.creature.ivs import IVs
+from core.creature.move import validate_moves
 from core.creature.nature import Nature
 from core.creature.size import Size
 from core.creature.stat import Stat
@@ -34,10 +35,13 @@ class Creature:
     id: int | None = None
     collection_number: int | None = None
     original_trainer_id: int | None = None
+    ability_id: str | None = None
+    moves: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.original_trainer_id is None and self.trainer_id is not None:
             self.original_trainer_id = self.trainer_id
+        self.moves = validate_moves(self.moves)
 
     def stat_for(self, stat: Stat) -> int:
         return self.species.base_stats.for_stat(stat)
