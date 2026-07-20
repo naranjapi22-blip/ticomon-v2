@@ -52,12 +52,15 @@ class FakePool:
 
 @pytest.mark.asyncio
 async def test_sync_catalog_deduplicates_and_commits_bulk_batches(monkeypatch):
-    species = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+    species = [SimpleNamespace(id=658), SimpleNamespace(id=2)]
     ability = SimpleNamespace(
         id="static", display_name="Static", slot=1, is_hidden=False
     )
     hidden_ability = SimpleNamespace(
         id="lightningrod", display_name="Lightning Rod", slot=3, is_hidden=True
+    )
+    duplicate_slot_ability = SimpleNamespace(
+        id="overgrow", display_name="Overgrow", slot=3, is_hidden=False
     )
     move = SimpleNamespace(
         id="tackle",
@@ -82,10 +85,14 @@ async def test_sync_catalog_deduplicates_and_commits_bulk_batches(monkeypatch):
 
     class FakeCatalog:
         def abilities_for(self, item):
-            return (ability, hidden_ability) if item.id == 1 else (ability,)
+            return (
+                (ability, hidden_ability, duplicate_slot_ability)
+                if item.id == 658
+                else (ability,)
+            )
 
         def moves_for(self, item):
-            return (move, second_move) if item.id == 1 else (move,)
+            return (move, second_move, move) if item.id == 658 else (move,)
 
     connection = FakeConnection()
     monkeypatch.setattr(synchronizer, "get_pool", lambda: _pool(connection))
@@ -99,8 +106,8 @@ async def test_sync_catalog_deduplicates_and_commits_bulk_batches(monkeypatch):
     summary = await synchronizer.sync_catalog()
 
     assert summary["species"] == 2
-    assert summary["abilities"] == 3
-    assert summary["moves"] == 3
+    assert summary["abilities"] == 4
+    assert summary["moves"] == 4
     assert summary["rows_written"] == 2 + 2 + 3 + 3
     assert connection.committed_transactions == 8
     assert [query for query, _ in connection.calls] == [
@@ -114,6 +121,19 @@ async def test_sync_catalog_deduplicates_and_commits_bulk_batches(monkeypatch):
         synchronizer.SPECIES_MOVE_INSERT,
     ]
     assert all("ON CONFLICT" in query for query, _ in connection.calls)
+    species_ability_rows = [
+        rows
+        for query, rows in connection.calls
+        if query == synchronizer.SPECIES_ABILITY_INSERT
+    ]
+    flattened_ability_rows = [row for batch in species_ability_rows for row in batch]
+    assert {(row[0], row[2]) for row in flattened_ability_rows} == {
+        (658, 1),
+        (658, 3),
+        (2, 1),
+    }
+    assert (658, "lightningrod", 3, True) in flattened_ability_rows
+    assert (658, "overgrow", 3, False) not in flattened_ability_rows
 
 
 @pytest.mark.asyncio

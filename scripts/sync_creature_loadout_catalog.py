@@ -46,8 +46,8 @@ SPECIES_ABILITY_INSERT = """
     INSERT INTO species_abilities
         (species_id, ability_id, slot, is_hidden)
     VALUES ($1, $2, $3, $4)
-    ON CONFLICT (species_id, ability_id) DO UPDATE
-    SET slot = EXCLUDED.slot, is_hidden = EXCLUDED.is_hidden
+    ON CONFLICT (species_id, slot) DO UPDATE
+    SET ability_id = EXCLUDED.ability_id, is_hidden = EXCLUDED.is_hidden
     """
 
 SPECIES_MOVE_INSERT = """
@@ -77,6 +77,22 @@ def _print_progress(summary: dict[str, int]) -> None:
         f"rows_written={summary['rows_written']}",
         flush=True,
     )
+
+
+def _deduplicate_species_abilities(abilities):
+    """Keep one deterministic ability per slot and avoid duplicate ability IDs."""
+    by_slot = {}
+    for ability in sorted(abilities, key=lambda item: (item.slot, item.id)):
+        current = by_slot.get(ability.slot)
+        if current is None or ability.id < current.id:
+            by_slot[ability.slot] = ability
+
+    by_id = {}
+    for ability in sorted(by_slot.values(), key=lambda item: (item.id, item.slot)):
+        current = by_id.get(ability.id)
+        if current is None or ability.slot < current.slot:
+            by_id[ability.id] = ability
+    return tuple(sorted(by_id.values(), key=lambda item: item.slot))
 
 
 async def _write_batches(
@@ -119,9 +135,13 @@ async def sync_catalog(*, dry_run: bool = False) -> dict[str, int]:
             summary["moves"] += len(moves)
             summary["species_without_abilities"] += not bool(abilities)
             summary["species_without_moves"] += not bool(moves)
-            for ability in abilities:
+            # The schema has UNIQUE (species_id, slot) and PRIMARY KEY
+            # (species_id, ability_id). For a slot collision, the
+            # lexicographically smallest canonical ability ID wins. If one
+            # ability appears in multiple slots, its lowest slot wins.
+            for ability in _deduplicate_species_abilities(abilities):
                 abilities_by_id[ability.id] = ability
-                species_abilities[(item.id, ability.id)] = (
+                species_abilities[(item.id, ability.slot)] = (
                     item.id,
                     ability.id,
                     ability.slot,
@@ -129,6 +149,7 @@ async def sync_catalog(*, dry_run: bool = False) -> dict[str, int]:
                 )
             for move in moves:
                 moves_by_id[move.id] = move
+                # species_moves uses PRIMARY KEY (species_id, move_id).
                 species_moves[(item.id, move.id)] = (item.id, move.id)
             if summary["species"] % PROGRESS_INTERVAL == 0:
                 _print_progress(summary)
