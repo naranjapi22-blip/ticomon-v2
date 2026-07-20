@@ -1,10 +1,10 @@
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
-import asyncpg
 import pytest
 import pytest_asyncio
 
+from application.safari.exceptions import SafariUnlockAlreadyExists
 from core.safari import (
     SafariDailyWorld,
     SafariMapInfluence,
@@ -132,7 +132,7 @@ async def test_unlock_cycle_date_persistence_and_expiry(safari_daily_guild_id):
     rows = await _fetch_unlock_rows(safari_daily_guild_id)
     assert {row["status"] for row in rows} == {"EXPIRED", "AVAILABLE"}
 
-    with pytest.raises(asyncpg.UniqueViolationError):
+    with pytest.raises(SafariUnlockAlreadyExists):
         await repository.save(
             _unlock(
                 safari_daily_guild_id,
