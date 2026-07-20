@@ -2,7 +2,10 @@ import asyncio
 from textwrap import dedent
 
 from infrastructure.db_config import close_pool, get_pool
-from scripts.creature_schema import ensure_creature_original_trainer_id
+from scripts.creature_schema import (
+    ensure_creature_loadout_columns,
+    ensure_creature_original_trainer_id,
+)
 
 
 async def create_safari_schema() -> None:
@@ -11,6 +14,7 @@ async def create_safari_schema() -> None:
 
     async with pool.acquire() as connection:
         async with connection.transaction():
+            await ensure_creature_loadout_columns(connection)
             await connection.execute(dedent("""
                     CREATE TABLE IF NOT EXISTS safari_daily_worlds (
                         guild_id BIGINT NOT NULL

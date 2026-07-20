@@ -5,12 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from infrastructure.db_config import close_pool, get_pool
+from scripts.creature_schema import ensure_creature_loadout_columns
 
 
 async def create_collection_schema() -> None:
     pool = await get_pool()
     async with pool.acquire() as connection:
         async with connection.transaction():
+            await ensure_creature_loadout_columns(connection)
             await connection.execute("""
                 CREATE TABLE IF NOT EXISTS trainer_collection_entries (
                     trainer_id BIGINT NOT NULL REFERENCES trainers(trainer_id),

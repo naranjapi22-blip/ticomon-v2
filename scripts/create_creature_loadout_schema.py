@@ -8,35 +8,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from infrastructure.db_config import close_pool, get_pool  # noqa: E402
+from scripts.creature_schema import ensure_creature_loadout_columns  # noqa: E402
 
 
 async def create_creature_loadout_schema() -> None:
     pool = await get_pool()
     async with pool.acquire() as connection:
         async with connection.transaction():
-            await connection.execute("""
-                ALTER TABLE creatures
-                ADD COLUMN IF NOT EXISTS ability_id TEXT NULL
-                """)
-            await connection.execute("""
-                ALTER TABLE creatures
-                ADD COLUMN IF NOT EXISTS equipped_moves TEXT[] NOT NULL DEFAULT '{}'
-                """)
-            await connection.execute("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1
-                        FROM pg_constraint
-                        WHERE conname = 'creatures_equipped_moves_max_four'
-                    ) THEN
-                        ALTER TABLE creatures
-                        ADD CONSTRAINT creatures_equipped_moves_max_four
-                        CHECK (cardinality(equipped_moves) <= 4);
-                    END IF;
-                END
-                $$
-                """)
+            await ensure_creature_loadout_columns(connection)
             await connection.execute("""
                 CREATE TABLE IF NOT EXISTS abilities (
                     id TEXT PRIMARY KEY,

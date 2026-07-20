@@ -1,10 +1,12 @@
 import logging
+from dataclasses import replace
 
 from asyncpg.exceptions import UndefinedTableError
 
 from core.candy.candy_inventory import CandyInventory
 from core.creature.creature_mapper import CreatureMapper
 from core.shop.repository import ShopRepository
+from infrastructure.battle.poke_env.loadout_catalog import PokeEnvLoadoutCatalog
 from infrastructure.db_config import get_pool
 from infrastructure.persistence.mappers.candy_mapper import CandyMapper
 
@@ -16,6 +18,23 @@ class NeonShopRepository(ShopRepository):
         self._species_repository = species_repository
         self._creature_mapper = CreatureMapper()
         self._candy_mapper = CandyMapper()
+        self._loadout_catalog = PokeEnvLoadoutCatalog()
+
+    def _ensure_loadout(self, creature):
+        abilities = self._loadout_catalog.abilities_for(creature.species)
+        if not abilities:
+            raise ValueError(
+                f"No ability catalog is available for species {creature.species.id}."
+            )
+        valid_abilities = {ability.id for ability in abilities}
+        ability_id = creature.ability_id
+        if ability_id not in valid_abilities:
+            ability_id = abilities[0].id
+        moves = creature.moves or self._loadout_catalog.initial_moves(
+            creature.species,
+            seed=creature.id or creature.species.id,
+        )
+        return replace(creature, ability_id=ability_id, moves=moves)
 
     async def purchase(
         self,
@@ -81,6 +100,7 @@ class NeonShopRepository(ShopRepository):
         product_id,
         idempotency_key,
     ):
+        creature = self._ensure_loadout(creature)
         pool = await get_pool()
         async with pool.acquire() as connection:
             async with connection.transaction():
@@ -131,10 +151,11 @@ class NeonShopRepository(ShopRepository):
                         species_id, current_form_id, is_shiny, nature, size,
                         hp_iv, attack_iv, defense_iv, special_attack_iv,
                         special_defense_iv, speed_iv, minted_nature
+                        , ability_id, equipped_moves
                     )
                     VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8,
-                        $9, $10, $11, $12, $13, $14, $15
+                        $9, $10, $11, $12, $13, $14, $15, $16, $17
                     )
                     RETURNING id
                     """,
