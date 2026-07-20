@@ -28,3 +28,18 @@ def validate_moves(moves: tuple[str, ...] | list[str]) -> tuple[str, ...]:
     if len(set(normalized)) != len(normalized):
         raise ValueError("A creature cannot equip duplicate moves.")
     return normalized
+
+
+def validate_equipped_moves(
+    moves: tuple[str, ...] | list[str],
+    legal_move_ids: set[str] | frozenset[str],
+) -> tuple[str, ...]:
+    normalized = validate_moves(moves)
+    if not 1 <= len(normalized) <= MAX_CREATURE_MOVES:
+        raise ValueError("A creature must equip between one and four moves.")
+    illegal = set(normalized) - set(legal_move_ids)
+    if illegal:
+        raise ValueError(
+            "These moves are not legal for this species: " + ", ".join(sorted(illegal))
+        )
+    return normalized

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from core.creature.creature import Creature
 from core.creature.creature_repository import CreatureRepository
 
@@ -24,6 +26,7 @@ class FakeCreatureRepository(CreatureRepository):
         self.saved: list[Creature] = []
         self.updated: list[Creature] = []
         self.deleted: list[Creature] = []
+        self.legal_moves = {}
 
     async def get(
         self,
@@ -70,6 +73,16 @@ class FakeCreatureRepository(CreatureRepository):
         self.updated.append(creature)
 
         return creature
+
+    async def get_legal_moves(self, species_id: int):
+        return tuple(self.legal_moves.get(species_id, ()))
+
+    async def update_moves(self, *, trainer_id, collection_number, moves, ability_id):
+        creature = await self.get_by_collection_number(trainer_id, collection_number)
+        if creature.ability_id != ability_id:
+            raise ValueError("The creature loadout could not be updated.")
+        updated = replace(creature, moves=tuple(moves))
+        return await self.update(updated)
 
     async def has_species(
         self,

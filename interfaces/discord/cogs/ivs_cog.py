@@ -33,10 +33,19 @@ class IVsCog(commands.Cog):
         collection_number: int,
     ):
         try:
-            creature = await self.core.creature_info_service.get_creature(
-                trainer_id=ctx.author.id,
-                collection_number=collection_number,
-            )
+            loadout_service = getattr(self.core, "creature_loadout_service", None)
+            if loadout_service is not None:
+                loadout = await loadout_service.get_loadout(
+                    ctx.author.id, collection_number
+                )
+                creature = loadout.creature
+                ability_name = loadout.ability.display_name if loadout.ability else None
+            else:
+                creature = await self.core.creature_info_service.get_creature(
+                    trainer_id=ctx.author.id,
+                    collection_number=collection_number,
+                )
+                ability_name = getattr(creature, "ability_id", None)
 
         except ValueError:
             await ctx.send(
@@ -88,6 +97,7 @@ class IVsCog(commands.Cog):
                     else []
                 ),
                 f"✨ **Shiny:** {'Yes' if creature.is_shiny else 'No'}",
+                f"🔹 **Ability:** {ability_name or '—'}",
             ]
         )
 

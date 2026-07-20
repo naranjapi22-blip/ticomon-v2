@@ -517,6 +517,91 @@ class NeonCreatureRepository(CreatureRepository):
 
         return {row["species_id"] for row in rows}
 
+    async def get_legal_moves(self, species_id: int):
+        """Returns the persisted species_moves catalog in one query."""
+        from core.creature.move import CreatureMove, canonicalize_move_id
+
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            rows = await connection.fetch(
+                """
+                SELECT m.id, m.display_name, m.type, m.category, m.power,
+                       m.accuracy, m.pp, m.priority
+                FROM species_moves sm
+                JOIN moves m ON m.id = sm.move_id
+                WHERE sm.species_id = $1
+                ORDER BY m.display_name
+                """,
+                species_id,
+            )
+        return tuple(
+            CreatureMove(
+                id=canonicalize_move_id(row["id"]),
+                display_name=row["display_name"],
+                move_type=row["type"],
+                category=row["category"],
+                base_power=row["power"],
+                accuracy=row["accuracy"],
+                pp=row["pp"],
+                priority=row["priority"],
+            )
+            for row in rows
+        )
+
+    async def update_moves(
+        self,
+        *,
+        trainer_id: int,
+        collection_number: int,
+        moves: tuple[str, ...],
+        ability_id: str | None,
+    ) -> Creature:
+        """Atomically replaces only equipped_moves and preserves ability_id."""
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                updated = await connection.fetchrow(
+                    """
+                    UPDATE creatures c
+                    SET equipped_moves = $3::text[]
+                    WHERE c.trainer_id = $1
+                      AND c.collection_number = $2
+                      AND c.ability_id IS NOT DISTINCT FROM $4
+                      AND cardinality($3::text[]) BETWEEN 1 AND 4
+                      AND cardinality($3::text[]) = (
+                          SELECT count(DISTINCT requested.move_id)
+                          FROM unnest($3::text[]) requested(move_id)
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM unnest($3::text[]) requested(move_id)
+                          WHERE NOT EXISTS (
+                              SELECT 1 FROM species_moves sm
+                              WHERE sm.species_id = c.species_id
+                                AND sm.move_id = requested.move_id
+                          )
+                      )
+                    RETURNING c.id
+                    """,
+                    trainer_id,
+                    collection_number,
+                    list(moves),
+                    ability_id,
+                )
+                if updated is None:
+                    raise ValueError("The creature loadout could not be updated.")
+                row = await connection.fetchrow(
+                    """
+                    SELECT c.*, sv.id AS variant_id, sv.name AS variant_name
+                    FROM creatures c
+                    LEFT JOIN species_variants sv ON sv.id = c.current_form_id
+                    WHERE c.id = $1
+                    """,
+                    updated["id"],
+                )
+        species = await self._species_repository.get(row["species_id"])
+        return self._mapper.from_row(row, species)
+
     async def update(
         self,
         creature: Creature,

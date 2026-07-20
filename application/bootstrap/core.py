@@ -21,6 +21,7 @@ from application.creature.creature_collection_service import (
 from application.creature.creature_info_service import (
     CreatureInfoService,
 )
+from application.creature.creature_loadout_service import CreatureLoadoutService
 from application.duplicates.duplicate_application_service import (
     DuplicateApplicationService,
 )
@@ -107,6 +108,7 @@ from infrastructure.battle.in_memory_battle_repository import (
 )
 from infrastructure.battle.poke_env.damage_calculator import PokeEnvDamageCalculator
 from infrastructure.battle.poke_env.learnset_provider import PokeEnvLearnsetProvider
+from infrastructure.battle.poke_env.loadout_catalog import PokeEnvLoadoutCatalog
 from infrastructure.evolution.neon_evolution_repository import (
     NeonEvolutionRepository,
 )
@@ -222,6 +224,7 @@ class CoreServices:
     shop_application: ShopApplicationService
     collection_application: CollectionApplicationService
     pvp_application_service: PvpApplicationService
+    creature_loadout_service: CreatureLoadoutService
 
 
 def build_core(
@@ -489,6 +492,10 @@ def build_core(
     pvp_application_service = PvpApplicationService(
         creature_repository=creature_repository,
     )
+    creature_loadout_service = CreatureLoadoutService(
+        creature_repository=creature_repository,
+        catalog=PokeEnvLoadoutCatalog(),
+    )
     trade_display_service = TradeDisplayService(
         trade_repository=trade_repository,
         creature_repository=creature_repository,
@@ -546,4 +553,5 @@ def build_core(
         collection_application=collection_application,
         safari_daily_progress_application=safari_daily_progress_application,
         pvp_application_service=pvp_application_service,
+        creature_loadout_service=creature_loadout_service,
     )

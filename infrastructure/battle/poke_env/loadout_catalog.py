@@ -47,6 +47,11 @@ class PokeEnvLoadoutCatalog:
             except Exception:
                 continue
             data = move_data_from_poke_env(move_id, move)
+            pp = getattr(move, "max_pp", None)
+            if pp is None:
+                pp = getattr(move, "pp", None)
+            if pp is None:
+                pp = getattr(getattr(move, "_data", None), "pp", None)
             result.append(
                 CreatureMove(
                     id=canonicalize_move_id(move_id),
@@ -55,7 +60,7 @@ class PokeEnvLoadoutCatalog:
                     category=data.category,
                     base_power=data.base_power or None,
                     accuracy=data.accuracy,
-                    pp=int(getattr(move, "pp", 0) or 0),
+                    pp=int(pp or 0),
                     priority=int(getattr(move, "priority", 0) or 0),
                 )
             )

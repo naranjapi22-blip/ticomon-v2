@@ -286,6 +286,7 @@ class PvpBoardView(discord.ui.View):
     def _format_snapshot_player(player_id, pokemon, remaining: int) -> str:
         if pokemon is None:
             return f"<@{player_id}>: waiting for Pokémon — {remaining} remaining"
+            return f"<@{player_id}>: waiting for Pokémon — {remaining} remaining"
         hp = f"{pokemon.hp_fraction:.0%} HP"
         status = f" · {pokemon.status}" if pokemon.status else ""
         return (

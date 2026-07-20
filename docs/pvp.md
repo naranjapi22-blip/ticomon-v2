@@ -51,7 +51,7 @@ ranking, rewards, or permanent PvP history is introduced.
 
 `!battle` remains a separate legacy flow. The manual PvP controller is not a
 fallback to the legacy simulator. A local manual run requires the existing bot
-environment plus a local Pokémon Showdown server; unit tests use injected
+ environment plus a local Pokémon Showdown server; unit tests use injected
 session/controller doubles and do not contact Discord or Showdown.
 
 ## Local Showdown
@@ -90,6 +90,6 @@ poetry run pytest -q -m showdown_local
 ```
 
 Protocol text is used only for the current compact event. HP, status, active
-Pokémon, remaining team members, forced-switch state, and completion come from
+ Pokémon, remaining team members, forced-switch state, and completion come from
 structured Battle snapshots. If the server is unavailable, the bot reports a
 controlled startup error and releases the PvP session.
