@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
+from poke_env.battle.move import Move
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -120,7 +121,24 @@ def build_fighter(
     )
 
 
+def animation_for_move(move_id: str) -> str:
+    move = Move(move_id, gen=9)
+    if move.category.name.lower() == "physical":
+        return "physical_attack"
+    return "special_attack"
+
+
 def simulate_battle():
+    pikachu_moves = (
+        ("thunderbolt", "Thunderbolt"),
+        ("quickattack", "Quick Attack"),
+        ("thunderbolt", "Thunderbolt"),
+    )
+    charizard_moves = (
+        ("flamethrower", "Flamethrower"),
+        ("tackle", "Tackle"),
+        ("flamethrower", "Flamethrower"),
+    )
     pikachu_team = tuple(
         build_fighter(
             creature_id=index,
@@ -130,10 +148,10 @@ def simulate_battle():
             pokemon_type="electric",
             hp=100,
             speed=110,
-            move_id="thunderbolt",
-            move_name="Thunderbolt",
+            move_id=move_id,
+            move_name=move_name,
         )
-        for index in range(1, 4)
+        for index, (move_id, move_name) in enumerate(pikachu_moves, 1)
     )
     charizard_team = tuple(
         build_fighter(
@@ -144,17 +162,17 @@ def simulate_battle():
             pokemon_type="fire",
             hp=100,
             speed=95,
-            move_id="flamethrower",
-            move_name="Flamethrower",
+            move_id=move_id,
+            move_name=move_name,
         )
-        for index in range(1, 4)
+        for index, (move_id, move_name) in enumerate(charizard_moves, 1)
     )
 
     simulator = BattleSimulator(
         DemoDamageCalculator(),
         random_source=DeterministicRandom(),
     )
-    return simulator.run(
+    result = simulator.run(
         pikachu_team,
         charizard_team,
         side_a_name="Alice",
@@ -162,9 +180,17 @@ def simulate_battle():
         side_a_trainer_id=1,
         side_b_trainer_id=2,
     )
+    move_animations = {
+        fighter.move_display_name: animation_for_move(fighter.move_id)
+        for fighter in (*pikachu_team, *charizard_team)
+    }
+    return result, move_animations
 
 
-def build_display_frames(result) -> list[tuple[BattleStepType, BattleFrameState]]:
+def build_display_frames(
+    result,
+    move_animations: dict[str, str],
+) -> list[tuple[BattleStepType, BattleFrameState, str | None]]:
     """
     Convert the Core's detailed events into coherent visual scenes.
 
@@ -172,16 +198,25 @@ def build_display_frames(result) -> list[tuple[BattleStepType, BattleFrameState]
     the resulting HP, while the three messages together explain what happened.
     """
     display = BattleDisplayService()
-    frames: list[tuple[BattleStepType, BattleFrameState]] = []
+    frames: list[tuple[BattleStepType, BattleFrameState, str | None]] = []
 
     pending_move_message: str | None = None
     pending_damage_message: str | None = None
+    pending_animation: str | None = None
     visual_turn = 0
 
     for step in result.steps:
         if step.step_type == BattleStepType.MOVE:
             pending_move_message = step.message
             pending_damage_message = None
+            pending_animation = next(
+                (
+                    animation
+                    for move_name, animation in move_animations.items()
+                    if f"uses {move_name}!" in step.message
+                ),
+                "special_attack",
+            )
             continue
 
         if step.step_type == BattleStepType.DAMAGE:
@@ -213,10 +248,12 @@ def build_display_frames(result) -> list[tuple[BattleStepType, BattleFrameState]
                 (
                     BattleStepType.ATTACK,
                     replace(frame, attack_line=" ".join(message_parts)),
+                    pending_animation,
                 )
             )
             pending_move_message = None
             pending_damage_message = None
+            pending_animation = None
             continue
 
         if step.step_type in {
@@ -234,7 +271,7 @@ def build_display_frames(result) -> list[tuple[BattleStepType, BattleFrameState]
                 side_a_display_name="Alice",
                 side_b_display_name="Bob",
             )
-            frames.append((step.step_type, frame))
+            frames.append((step.step_type, frame, None))
 
     return frames
 
@@ -446,32 +483,41 @@ def draw_effect(
     previous: BattleFrameState,
     current: BattleFrameState,
     progress: float,
+    animation: str,
 ) -> None:
+    if animation != "special_attack":
+        return
+
     draw = ImageDraw.Draw(image, "RGBA")
     pulse = 1.0 - abs(progress * 2.0 - 1.0)
     alpha = round(190 * pulse)
 
     if current.side_b_hp < previous.side_b_hp:
-        draw.line(
-            (365, 410, 800, 225),
-            fill=(255, 235, 45, min(alpha + 50, 255)),
-            width=16,
-        )
-        draw.ellipse(
-            (675, 100, 930, 365),
-            fill=(255, 255, 255, alpha // 2),
-        )
+        start, end = (365, 410), (800, 225)
+    elif current.side_a_hp < previous.side_a_hp:
+        start, end = (730, 235), (310, 420)
+    else:
+        return
 
-    if current.side_a_hp < previous.side_a_hp:
-        draw.line(
-            (730, 235, 310, 420),
-            fill=(255, 120, 60, min(alpha + 50, 255)),
-            width=16,
-        )
-        draw.ellipse(
-            (40, 230, 420, 555),
-            fill=(255, 255, 255, alpha // 2),
-        )
+    effect_x = round(start[0] + (end[0] - start[0]) * progress)
+    effect_y = round(start[1] + (end[1] - start[1]) * progress)
+    radius = 22 + round(10 * pulse)
+    draw.line(
+        (start[0], start[1], effect_x, effect_y),
+        fill=(120, 220, 255, min(alpha + 50, 255)),
+        width=12,
+    )
+    draw.ellipse(
+        (
+            effect_x - radius,
+            effect_y - radius,
+            effect_x + radius,
+            effect_y + radius,
+        ),
+        fill=(220, 250, 255, alpha),
+        outline=(255, 255, 255, min(alpha + 50, 255)),
+        width=4,
+    )
 
 
 def draw_pokemon(
@@ -484,6 +530,7 @@ def draw_pokemon(
     current: BattleFrameState,
     progress: float,
     step_type: BattleStepType,
+    animation: str | None,
 ) -> None:
     player = contain_sprite(
         player_gif.frame_at(elapsed_seconds),
@@ -501,7 +548,7 @@ def draw_pokemon(
     opponent_x = 800
     opponent_y = 345
 
-    if step_type == BattleStepType.ATTACK:
+    if step_type == BattleStepType.ATTACK and animation == "physical_attack":
         side_a_attacking = current.side_b_hp < previous.side_b_hp
         side_b_attacking = current.side_a_hp < previous.side_a_hp
         lunge = ease_in_out(1.0 - abs(progress * 2.0 - 1.0))
@@ -553,6 +600,7 @@ def render_scene(
     elapsed_seconds: float,
     player_gif: AnimatedGif,
     opponent_gif: AnimatedGif,
+    animation: str | None,
 ) -> Image.Image:
     image = background.copy().convert("RGBA")
 
@@ -565,6 +613,7 @@ def render_scene(
         current=frame,
         progress=progress,
         step_type=step_type,
+        animation=animation,
     )
 
     draw_hp_panel(
@@ -594,6 +643,7 @@ def render_scene(
             previous=previous,
             current=frame,
             progress=progress,
+            animation=animation or "special_attack",
         )
 
     draw_caption(image, frame.attack_line)
@@ -613,8 +663,8 @@ def encode_video(
     if ffmpeg is None:
         raise RuntimeError("FFmpeg was not found in PATH.")
 
-    result = simulate_battle()
-    display_frames = build_display_frames(result)
+    result, move_animations = simulate_battle()
+    display_frames = build_display_frames(result, move_animations)
 
     assets = BattleAssets()
     background = assets.get_background_for_battle(battle_id)
@@ -665,7 +715,7 @@ def encode_video(
     previous_frame = display_frames[0][1]
 
     try:
-        for step_type, current_frame in display_frames:
+        for step_type, current_frame, animation in display_frames:
             duration = step_duration(step_type)
             count = max(1, round(duration * fps))
 
@@ -691,6 +741,7 @@ def encode_video(
                     elapsed_seconds=elapsed_seconds,
                     player_gif=player_gif,
                     opponent_gif=opponent_gif,
+                    animation=animation,
                 )
                 process.stdin.write(image.tobytes())
                 total_frames += 1
