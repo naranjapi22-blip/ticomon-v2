@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
+
 import discord
 
 from application.pvp.models import PvpAction, PvpActionKind
+from application.pvp.snapshots import PvpBattleSnapshot
 from core.pvp.session import PvpPhase
 
 
@@ -143,6 +147,7 @@ class PvpTeamSelectionView(discord.ui.View):
         self.session_id = session.id
         self.player_ids = session.player_ids
         self.message: discord.Message | None = None
+        self.board: PvpBoardView | None = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id not in self.player_ids:
@@ -162,12 +167,25 @@ class PvpTeamSelectionView(discord.ui.View):
             trainer_id,
             on_event=self._on_event,
             on_finished=self._on_finished,
+            on_snapshot=self._on_snapshot,
         )
 
     async def _on_event(self, message: str) -> None:
         if self.message is None:
             return
-        await PvpBoardView.from_selection(self).set_event(message)
+        board = await self._get_board()
+        await board.set_event(message)
+
+    async def _on_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
+        if self.message is None:
+            return
+        board = await self._get_board()
+        await board.set_snapshot(snapshot)
+
+    async def _get_board(self) -> "PvpBoardView":
+        if self.board is None:
+            self.board = await PvpBoardView.from_selection(self)
+        return self.board
 
     async def _on_finished(self, battle: object) -> None:
         if self.message is None:
@@ -192,12 +210,14 @@ class PvpBoardView(discord.ui.View):
         self.source = source
         self.current_event = "Choose an action."
         self.ready: set[int] = set()
+        self.snapshot: PvpBattleSnapshot | None = None
+        self._snapshots: dict[int, PvpBattleSnapshot] = {}
 
     @classmethod
     async def from_selection(cls, source: PvpTeamSelectionView) -> "PvpBoardView":
         board = cls(source)
         if source.message is not None:
-            await source.message.edit(content=board.render(), view=board)
+            await board._edit_message()
         return board
 
     def render(self) -> str:
@@ -206,19 +226,10 @@ class PvpBoardView(discord.ui.View):
         except ValueError:
             return "PvP session finished."
         ready = ", ".join(f"<@{player_id}>" for player_id in self.ready) or "none"
-        teams = session.selected_creatures
-        active_lines = []
-        for player_id in session.player_ids:
-            team = teams.get(player_id, ())
-            if team:
-                active_lines.append(
-                    f"<@{player_id}>: {team[0].species.name} — 100% HP — "
-                    f"{len(team)} remaining"
-                )
-            else:
-                active_lines.append(f"<@{player_id}>: team pending")
+        active_lines = self._render_players(session)
+        turn = self.snapshot.turn if self.snapshot is not None else session.turn_number
         return (
-            f"⚔️ PvP — Turn {session.turn_number}\n"
+            f"⚔️ PvP — Turn {turn}\n"
             f"<@{session.initiator_id}> vs <@{session.opponent_id}>\n\n"
             + "\n".join(active_lines)
             + "\n\n"
@@ -226,11 +237,81 @@ class PvpBoardView(discord.ui.View):
             f"Ready: {ready}"
         )
 
+    def _render_players(self, session) -> list[str]:
+        if self.snapshot is None:
+            lines = []
+            for player_id in session.player_ids:
+                team = session.selected_creatures.get(player_id, ())
+                if team:
+                    lines.append(
+                        f"<@{player_id}>: {team[0].species.name} — 100% HP — "
+                        f"{len(team)} remaining"
+                    )
+                else:
+                    lines.append(f"<@{player_id}>: team pending")
+            return lines
+
+        snapshot = self._display_snapshot()
+        player = snapshot.player_active
+        opponent = snapshot.opponent_active
+        return [
+            self._format_snapshot_player(
+                snapshot.player_id,
+                player,
+                snapshot.player_remaining,
+            ),
+            self._format_snapshot_player(
+                snapshot.opponent_id,
+                opponent,
+                snapshot.opponent_remaining,
+            ),
+        ]
+
+    def _display_snapshot(self) -> PvpBattleSnapshot:
+        assert self.snapshot is not None
+        session = self.core.pvp_application_service.registry.get(self.session_id)
+        canonical = self._snapshots.get(session.initiator_id, self.snapshot)
+        opponent = self._snapshots.get(session.opponent_id)
+        if opponent is None:
+            return canonical
+        return replace(
+            canonical,
+            force_switch_opponent=opponent.force_switch_player,
+            finished=canonical.finished or opponent.finished,
+            winner_id=canonical.winner_id or opponent.winner_id,
+            tie=canonical.tie and opponent.tie,
+        )
+
+    @staticmethod
+    def _format_snapshot_player(player_id, pokemon, remaining: int) -> str:
+        if pokemon is None:
+            return f"<@{player_id}>: waiting for Pokémon — {remaining} remaining"
+        hp = f"{pokemon.hp_fraction:.0%} HP"
+        status = f" · {pokemon.status}" if pokemon.status else ""
+        return (
+            f"<@{player_id}>: {pokemon.species_name} — {hp}{status} — "
+            f"{remaining} remaining"
+        )
+
     async def set_event(self, message: str) -> None:
         self.current_event = message
         self.ready.clear()
-        if self.message is not None:
+        await self._edit_message()
+
+    async def set_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
+        self._snapshots[snapshot.player_id] = snapshot
+        self.snapshot = snapshot
+        await self._edit_message()
+
+    async def _edit_message(self) -> None:
+        if self.message is None:
+            return
+        try:
             await self.message.edit(content=self.render(), view=self)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            asyncio.create_task(
+                self.core.pvp_application_service.cleanup(self.session_id)
+            )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         try:

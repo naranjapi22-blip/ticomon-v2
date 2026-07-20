@@ -53,3 +53,43 @@ ranking, rewards, or permanent PvP history is introduced.
 fallback to the legacy simulator. A local manual run requires the existing bot
 environment plus a local Pokémon Showdown server; unit tests use injected
 session/controller doubles and do not contact Discord or Showdown.
+
+## Local Showdown
+
+Install the official server outside this repository and start it from its
+checkout:
+
+```powershell
+git clone https://github.com/smogon/pokemon-showdown.git
+cd pokemon-showdown
+npm install
+node pokemon-showdown start --no-security
+```
+
+The expected WebSocket endpoint is `ws://localhost:8000/showdown/websocket`.
+TicoMon uses that endpoint by default. Override it only for another local test
+server with `SHOWDOWN_WEBSOCKET_URL`; `SHOWDOWN_AUTHENTICATION_URL` defaults to
+`http://localhost:8000/action.php?`.
+
+The controller uses `gen9customgame`, level 50, zero EVs, real IVs, persisted
+abilities and moves, effective nature, no item, and no special mechanics.
+
+Run the non-Discord smoke diagnostic with:
+
+```powershell
+poetry run python -m scripts.diagnose_pvp_showdown
+```
+
+It connects two manual players, submits legal moves, records snapshots from
+the updated `poke-env Battle`, and closes both clients. The marked integration
+test uses the same cycle and is skipped only when the local WebSocket is not
+reachable:
+
+```powershell
+poetry run pytest -q -m showdown_local
+```
+
+Protocol text is used only for the current compact event. HP, status, active
+Pokémon, remaining team members, forced-switch state, and completion come from
+structured Battle snapshots. If the server is unavailable, the bot reports a
+controlled startup error and releases the PvP session.

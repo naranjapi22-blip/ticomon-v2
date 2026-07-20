@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from poke_env.battle import AbstractBattle
 from poke_env.player import Player
 from poke_env.player.battle_order import SingleBattleOrder
+from poke_env.ps_client import ServerConfiguration
 from poke_env.teambuilder import Teambuilder, TeambuilderPokemon
 
 from application.pvp.models import (
@@ -16,12 +18,22 @@ from application.pvp.models import (
     PvpActionKind,
     PvpLegalActions,
 )
+from application.pvp.snapshots import PvpBattleSnapshot, snapshot_battle
 from core.creature.creature import Creature
 from infrastructure.battle.poke_env.pvp_set_adapter import PvpSetAdapter
 
 logger = logging.getLogger(__name__)
 
 PVP_BATTLE_FORMAT = "gen9customgame"
+SHOWDOWN_CONNECTION_TIMEOUT_SECONDS = 10
+SHOWDOWN_START_TIMEOUT_SECONDS = 15
+SHOWDOWN_CLOSE_TIMEOUT_SECONDS = 5
+SHOWDOWN_WEBSOCKET_URL = os.getenv(
+    "SHOWDOWN_WEBSOCKET_URL", "ws://localhost:8000/showdown/websocket"
+)
+SHOWDOWN_AUTHENTICATION_URL = os.getenv(
+    "SHOWDOWN_AUTHENTICATION_URL", "http://localhost:8000/action.php?"
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +41,7 @@ class PvpControllerCallbacks:
     on_actions: Callable[[int, PvpLegalActions], Awaitable[PvpAction]]
     on_protocol: Callable[[list[list[str]]], Awaitable[None]]
     on_finished: Callable[[AbstractBattle], Awaitable[None]]
+    on_snapshot: Callable[[PvpBattleSnapshot], Awaitable[None]] | None = None
 
 
 class ManualPvpPlayer(Player):
@@ -40,6 +53,7 @@ class ManualPvpPlayer(Player):
         **kwargs: Any,
     ) -> None:
         self.trainer_id = trainer_id
+        self.opponent_id: int | None = None
         self._callbacks = callbacks
         super().__init__(
             battle_format=PVP_BATTLE_FORMAT,
@@ -62,6 +76,15 @@ class ManualPvpPlayer(Player):
     async def _handle_battle_message(self, split_messages):
         await self._callbacks.on_protocol(split_messages)
         await super()._handle_battle_message(split_messages)
+        if self._callbacks.on_snapshot is not None:
+            for battle in self.battles.values():
+                await self._callbacks.on_snapshot(
+                    snapshot_battle(
+                        battle,
+                        player_id=self.trainer_id,
+                        opponent_id=self.opponent_id or 0,
+                    )
+                )
 
     def _battle_finished_callback(self, battle: AbstractBattle) -> None:
         asyncio.create_task(self._callbacks.on_finished(battle))
@@ -132,14 +155,34 @@ class PokeEnvPvpController:
         packed_teams = {
             trainer_id: self._pack_team(team) for trainer_id, team in teams.items()
         }
+        player_kwargs = {
+            "callbacks": callbacks,
+            "loop": asyncio.get_running_loop(),
+            "server_configuration": ServerConfiguration(
+                websocket_url=SHOWDOWN_WEBSOCKET_URL,
+                authentication_url=SHOWDOWN_AUTHENTICATION_URL,
+            ),
+        }
         first = self._player_factory(
-            player_ids[0], packed_teams[player_ids[0]], callbacks
+            player_ids[0], packed_teams[player_ids[0]], **player_kwargs
         )
         second = self._player_factory(
-            player_ids[1], packed_teams[player_ids[1]], callbacks
+            player_ids[1], packed_teams[player_ids[1]], **player_kwargs
         )
         self._players = first, second
-        self._battle_task = asyncio.create_task(first.battle_against(second))
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    first.ps_client.logged_in.wait(),
+                    second.ps_client.logged_in.wait(),
+                ),
+                timeout=SHOWDOWN_CONNECTION_TIMEOUT_SECONDS,
+            )
+            self._battle_task = asyncio.create_task(first.battle_against(second))
+            await asyncio.sleep(0)
+        except Exception:
+            await self.close()
+            raise
 
     async def forfeit(self, trainer_id: int) -> None:
         if self._players is None:
@@ -151,9 +194,32 @@ class PokeEnvPvpController:
                     return
 
     async def close(self) -> None:
-        if self._battle_task is not None and not self._battle_task.done():
-            self._battle_task.cancel()
-            await asyncio.gather(self._battle_task, return_exceptions=True)
+        if self._battle_task is not None:
+            if not self._battle_task.done():
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._battle_task),
+                        timeout=SHOWDOWN_CLOSE_TIMEOUT_SECONDS,
+                    )
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    self._battle_task.cancel()
+                    await asyncio.gather(self._battle_task, return_exceptions=True)
+            else:
+                try:
+                    self._battle_task.result()
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    logger.debug("PvP Showdown task ended with an error", exc_info=True)
+        if self._players is not None:
+            for player in self._players:
+                try:
+                    await asyncio.wait_for(
+                        player.ps_client.stop_listening(),
+                        timeout=SHOWDOWN_CLOSE_TIMEOUT_SECONDS,
+                    )
+                except Exception:
+                    logger.debug("Unable to close a PvP Showdown player", exc_info=True)
         self._battle_task = None
         self._players = None
 

@@ -16,7 +16,9 @@ def pytest_collection_modifyitems(
 
     for item in items:
         path = Path(str(item.path))
-        if "integration" in path.parts or path.name.startswith("test_neon_"):
+        if (
+            "integration" in path.parts or path.name.startswith("test_neon_")
+        ) and "showdown_local" not in item.keywords:
             item.add_marker("neon_db")
             if not neon_database_url:
                 item.add_marker(skip_neon_db)

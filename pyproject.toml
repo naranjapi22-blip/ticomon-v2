@@ -50,6 +50,7 @@ testpaths = ["test"]
 python_files = ["test_*.py"]
 markers = [
     "neon_db: tests that require NEON_DATABASE_URL",
+    "showdown_local: tests that require a local Pokemon Showdown server",
 ]
 
 [build-system]

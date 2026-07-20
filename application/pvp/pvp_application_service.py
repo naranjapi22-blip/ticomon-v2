@@ -9,6 +9,7 @@ from uuid import UUID
 
 from application.pvp.events import PvpEventTranslator
 from application.pvp.models import PvpAction, PvpLegalActions
+from application.pvp.snapshots import PvpBattleSnapshot
 from application.pvp.team_validator import PvpTeamValidator
 from core.pvp.session import (
     ACTION_TIMEOUT_SECONDS,
@@ -47,6 +48,9 @@ class PvpApplicationService:
         self._legal_actions: dict[tuple[UUID, int], PvpLegalActions] = {}
         self._event_handlers: dict[UUID, Callable[[str], Awaitable[None]]] = {}
         self._finish_handlers: dict[UUID, Callable[[object], Awaitable[None]]] = {}
+        self._snapshot_handlers: dict[
+            UUID, Callable[[PvpBattleSnapshot], Awaitable[None]]
+        ] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
@@ -81,6 +85,7 @@ class PvpApplicationService:
         *,
         on_event: Callable[[str], Awaitable[None]] | None = None,
         on_finished: Callable[[object], Awaitable[None]] | None = None,
+        on_snapshot: Callable[[PvpBattleSnapshot], Awaitable[None]] | None = None,
     ) -> bool:
         session = self.registry.get(session_id)
         async with session.lock:
@@ -107,6 +112,8 @@ class PvpApplicationService:
                 self._event_handlers[session_id] = on_event
             if on_finished is not None:
                 self._finish_handlers[session_id] = on_finished
+            if on_snapshot is not None:
+                self._snapshot_handlers[session_id] = on_snapshot
             session.begin_battle()
 
         callbacks = PvpControllerCallbacks(
@@ -115,6 +122,7 @@ class PvpApplicationService:
             ),
             on_protocol=lambda messages: self.handle_protocol(session_id, messages),
             on_finished=lambda battle: self.finish_from_controller(session_id, battle),
+            on_snapshot=lambda snapshot: self.handle_snapshot(session_id, snapshot),
         )
         try:
             await controller.start(teams, callbacks)
@@ -242,6 +250,13 @@ class PvpApplicationService:
             await handler(battle)
         await self.cleanup(session_id)
 
+    async def handle_snapshot(
+        self, session_id: UUID, snapshot: PvpBattleSnapshot
+    ) -> None:
+        handler = self._snapshot_handlers.get(session_id)
+        if handler is not None:
+            await handler(snapshot)
+
     async def decline(self, session_id: UUID) -> None:
         session = self.registry.get(session_id)
         session.cancel()
@@ -275,6 +290,7 @@ class PvpApplicationService:
         session.cancel()
         self._event_handlers.pop(session_id, None)
         self._finish_handlers.pop(session_id, None)
+        self._snapshot_handlers.pop(session_id, None)
         self.registry.remove(session_id)
 
     def _automatic_action(self, legal: PvpLegalActions) -> PvpAction:
