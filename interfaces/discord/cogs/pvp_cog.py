@@ -28,11 +28,12 @@ class PvpCog(commands.Cog):
         except ValueError as error:
             await ctx.send(f"PvP challenge unavailable: {error}")
             return
-        view = PvpChallengeView(self._core, session, opponent.id)
-        await ctx.send(
+        view = PvpChallengeView(self._core, session)
+        message = await ctx.send(
             f"<@{ctx.author.id}> challenged <@{opponent.id}> to fast PvP.",
             view=view,
         )
+        view.message = message
 
     @pvp.error
     async def pvp_error(self, ctx: commands.Context, error) -> None:

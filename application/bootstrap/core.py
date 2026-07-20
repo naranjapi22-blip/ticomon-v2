@@ -486,7 +486,9 @@ def build_core(
         creature_repository=creature_repository,
         achievement_award_service=capture_achievement_award_service,
     )
-    pvp_application_service = PvpApplicationService()
+    pvp_application_service = PvpApplicationService(
+        creature_repository=creature_repository,
+    )
     trade_display_service = TradeDisplayService(
         trade_repository=trade_repository,
         creature_repository=creature_repository,

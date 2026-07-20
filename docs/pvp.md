@@ -35,8 +35,21 @@ catalog ability is assigned. Initial moves are sorted deterministically by
 offensive/STAB suitability and id, limited to four, and never replace a
 non-empty configured moveset. Missing catalogs are reported and never invented.
 
-The current Discord slice implements challenge lifecycle and loadout
-conversion. Accepting the preliminary `!pvp` challenge ends the session with a
-controlled message; no battle is started yet. Action resolution, forced
-switches, and specialized protocol presentation remain follow-up work. No
-Showdown server, FFmpeg, animation, ranking, or history is introduced here.
+The fast PvP flow now implements challenge acceptance, private 3v3 selection,
+loadout validation, manual `poke-env` players, private legal actions, 15-second
+move timeouts, 10-second forced-switch timeouts, forfeits, compact protocol
+translation, and in-memory cleanup. The controller uses two human-controlled
+`poke-env` players and requires a reachable Pokémon Showdown server using the
+configured `poke-env` server configuration (the default is local Showdown on
+`ws://localhost:8000/showdown/websocket`).
+
+The technical battle format is Gen 9 at level 50, with zero EVs, persisted IVs,
+effective nature, persisted ability, four equipped moves, and no item. PP and
+all battle effects remain owned by Showdown. The Discord board edits one public
+message and does not retain a visible event history. No FFmpeg, animation,
+ranking, rewards, or permanent PvP history is introduced.
+
+`!battle` remains a separate legacy flow. The manual PvP controller is not a
+fallback to the legacy simulator. A local manual run requires the existing bot
+environment plus a local Pokémon Showdown server; unit tests use injected
+session/controller doubles and do not contact Discord or Showdown.
