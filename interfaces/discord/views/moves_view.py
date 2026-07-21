@@ -93,6 +93,22 @@ class MoveLoadoutView(discord.ui.View):
                 pass
 
 
+class MoveSlotSelect(discord.ui.Select):
+    def __init__(self, editor, slot_index: int, options, *, placeholder: str) -> None:
+        self.editor = editor
+        self.slot_index = slot_index
+        super().__init__(
+            placeholder=placeholder,
+            options=options,
+            min_values=1,
+            max_values=1,
+            custom_id=f"move-slot-{slot_index + 1}",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.editor._handle_move_selection(interaction, self.slot_index, self)
+
+
 class MoveEditorView(discord.ui.View):
     def __init__(self, service, loadout: CreatureLoadout, owner_id: int) -> None:
         super().__init__(timeout=180)
@@ -101,7 +117,8 @@ class MoveEditorView(discord.ui.View):
         self.owner_id = owner_id
         self.message = None
         self.legal_moves = list(loadout.legal_moves)
-        self.selected = list(loadout.creature.moves)
+        self.selected = list(loadout.creature.moves[:4])
+        self.selected.extend([""] * (4 - len(self.selected)))
         self.page = 0
         self._refresh_selects()
 
@@ -115,48 +132,58 @@ class MoveEditorView(discord.ui.View):
 
     def _refresh_selects(self) -> None:
         for child in list(self.children):
-            if isinstance(child, discord.ui.Select):
+            if isinstance(child, MoveSlotSelect):
                 self.remove_item(child)
         start = self.page * PAGE_SIZE
-        options = [
-            discord.SelectOption(label=move.display_name[:100], value=move.id)
-            for move in self.legal_moves[start : start + PAGE_SIZE]
-        ]
-        for slot in range(4):
-            empty_option = discord.SelectOption(label="None", value=EMPTY_MOVE)
-            select = discord.ui.Select(
-                placeholder=f"Move slot {slot + 1}",
-                options=[empty_option] + options,
-                min_values=1,
-                max_values=1,
-                custom_id=f"move-slot-{slot + 1}",
+        page_moves = list(self.legal_moves[start : start + PAGE_SIZE])
+        move_by_id = {move.id: move for move in self.legal_moves}
+        for slot_index in range(4):
+            selected_value = self.selected[slot_index]
+            if selected_value not in move_by_id:
+                selected_value = ""
+                self.selected[slot_index] = selected_value
+            visible_moves = list(page_moves)
+            if selected_value and selected_value not in {
+                move.id for move in visible_moves
+            }:
+                visible_moves.insert(0, move_by_id[selected_value])
+            options = [
+                discord.SelectOption(
+                    label="Empty slot",
+                    value=EMPTY_MOVE,
+                    default=not selected_value,
+                )
+            ]
+            options.extend(
+                discord.SelectOption(
+                    label=move.display_name[:100],
+                    value=move.id,
+                    default=move.id == selected_value,
+                )
+                for move in visible_moves
             )
-            if slot < len(self.selected):
-                for option in select.options:
-                    option.default = option.value == self.selected[slot]
-            else:
-                empty_option.default = True
+            placeholder = (
+                move_by_id[selected_value].display_name
+                if selected_value
+                else f"Move slot {slot_index + 1}"
+            )
+            select = MoveSlotSelect(self, slot_index, options, placeholder=placeholder)
             _validate_select_values(select)
-            select.callback = self._select_callback(slot, select)
             self.add_item(select)
 
-    def _select_callback(self, slot, select):
-        async def callback(interaction):
-            value = select.values[0]
-            if value == EMPTY_MOVE:
-                value = ""
-            if value and value in self.selected[:slot] + self.selected[slot + 1 :]:
-                await interaction.response.send_message(
-                    "A creature cannot equip duplicate moves.", ephemeral=True
-                )
-                return
-            while len(self.selected) <= slot:
-                self.selected.append("")
-            self.selected[slot] = value
-            self.selected = [item for item in self.selected if item]
-            await interaction.response.edit_message(view=self)
-
-        return callback
+    async def _handle_move_selection(self, interaction, slot_index, select) -> None:
+        value = select.values[0]
+        if value == EMPTY_MOVE:
+            value = ""
+        other_values = self.selected[:slot_index] + self.selected[slot_index + 1 :]
+        if value and value in other_values:
+            await interaction.response.send_message(
+                "A creature cannot equip duplicate moves.", ephemeral=True
+            )
+            return
+        self.selected[slot_index] = value
+        self._refresh_selects()
+        await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary, row=4)
     async def previous(self, interaction, button) -> None:

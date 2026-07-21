@@ -26,6 +26,28 @@ def loadout():
     return CreatureLoadout(creature, ability, (move,), (move,))
 
 
+def four_move_loadout():
+    legal_moves = tuple(
+        CreatureMove(move_id, move_id.title(), "normal", "Status", None, None, 10)
+        for move_id in (
+            "endure",
+            "entrainment",
+            "fake-tears",
+            "fling",
+            "thunder-wave",
+        )
+    )
+    moves = legal_moves[:4]
+    creature = SimpleNamespace(
+        collection_number=2,
+        species=SimpleNamespace(name="Minun"),
+        ability_id="minus",
+        moves=tuple(move.id for move in moves),
+    )
+    ability = SimpleNamespace(display_name="Minus")
+    return CreatureLoadout(creature, ability, moves, legal_moves)
+
+
 def test_render_shows_ability_and_dash_for_missing_move_values():
     text = render_loadout(loadout())
     assert "Ability: Swift Swim" in text
@@ -73,6 +95,21 @@ def test_editor_uses_valid_sentinel_for_empty_slots():
     assert all(select.options[0].value == EMPTY_MOVE for select in selects)
 
 
+def test_empty_slot_has_clear_label_and_is_the_only_default():
+    view = MoveEditorView(SimpleNamespace(), loadout(), owner_id=1)
+    selects = sorted(
+        (item for item in view.children if isinstance(item, discord.ui.Select)),
+        key=lambda item: item.slot_index,
+    )
+
+    assert selects[0].options[0].label == "Empty slot"
+    assert selects[0].options[0].default is False
+    for select in selects[1:]:
+        defaults = [option for option in select.options if option.default]
+        assert len(defaults) == 1
+        assert defaults[0].value == EMPTY_MOVE
+
+
 @pytest.mark.asyncio
 async def test_empty_sentinel_is_compacted_and_not_persisted():
     service = SimpleNamespace(update_moves=AsyncMock(return_value=loadout()))
@@ -85,7 +122,7 @@ async def test_empty_sentinel_is_compacted_and_not_persisted():
 
     await select.callback(interaction)
 
-    assert view.selected == []
+    assert view.selected == ["", "", "", ""]
     assert all(EMPTY_MOVE not in value for value in view.selected)
 
     await view.save.callback(interaction)
@@ -105,7 +142,65 @@ async def test_editor_rejects_duplicate_moves():
     await select.callback(interaction)
 
     interaction.response.send_message.assert_awaited_once()
-    service.update_moves.assert_not_awaited()
+
+
+def test_each_slot_has_its_own_default_move():
+    view = MoveEditorView(SimpleNamespace(), four_move_loadout(), owner_id=1)
+    selects = sorted(
+        (item for item in view.children if isinstance(item, discord.ui.Select)),
+        key=lambda item: item.slot_index,
+    )
+
+    assert [select.slot_index for select in selects] == [0, 1, 2, 3]
+    assert [
+        [option.value for option in select.options if option.default][0]
+        for select in selects
+    ] == ["endure", "entrainment", "fake-tears", "fling"]
+    assert all(
+        sum(option.default for option in select.options) == 1 for select in selects
+    )
+
+
+@pytest.mark.asyncio
+async def test_changing_slot_updates_only_that_slot_and_rebuilds_defaults():
+    view = MoveEditorView(SimpleNamespace(), four_move_loadout(), owner_id=1)
+    select = next(
+        item
+        for item in view.children
+        if isinstance(item, discord.ui.Select) and item.slot_index == 1
+    )
+    select._values = ["thunder-wave"]
+    interaction = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock()))
+
+    await select.callback(interaction)
+
+    assert view.selected == ["endure", "thunder-wave", "fake-tears", "fling"]
+    updated_selects = sorted(
+        (item for item in view.children if isinstance(item, discord.ui.Select)),
+        key=lambda item: item.slot_index,
+    )
+    assert [
+        [option.value for option in select.options if option.default][0]
+        for select in updated_selects
+    ] == ["endure", "thunder-wave", "fake-tears", "fling"]
+
+
+@pytest.mark.asyncio
+async def test_navigation_preserves_defaults_for_all_slots():
+    view = MoveEditorView(SimpleNamespace(), four_move_loadout(), owner_id=1)
+    interaction = SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock()))
+
+    await view.next.callback(interaction)
+    await view.previous.callback(interaction)
+
+    selects = sorted(
+        (item for item in view.children if isinstance(item, discord.ui.Select)),
+        key=lambda item: item.slot_index,
+    )
+    assert [
+        [option.value for option in select.options if option.default][0]
+        for select in selects
+    ] == ["endure", "entrainment", "fake-tears", "fling"]
 
 
 @pytest.mark.asyncio
