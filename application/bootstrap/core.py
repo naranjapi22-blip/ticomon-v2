@@ -291,6 +291,7 @@ def build_core(
     )
     evolution_repository = NeonEvolutionRepository()
     reward_policy = RewardPolicy()
+    stat_calculator = StatCalculator()
 
     creature_info_service = CreatureInfoService(
         creature_repository=creature_repository,
@@ -299,6 +300,7 @@ def build_core(
     creature_collection_service = CreatureCollectionService(
         creature_repository=creature_repository,
         species_repository=species_repository,
+        stat_calculator=stat_calculator,
     )
 
     species_info_service = SpeciesInfoService(
@@ -317,8 +319,6 @@ def build_core(
     safari_daily_world_repository = NeonSafariDailyWorldRepository()
     safari_daily_active_trainer_repository = NeonSafariDailyActiveTrainerRepository()
     safari_unlock_repository = NeonSafariUnlockRepository()
-
-    stat_calculator = StatCalculator()
 
     chance_calculator = chance_calculator or CaptureChanceCalculator()
 
