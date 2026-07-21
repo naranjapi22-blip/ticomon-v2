@@ -13,6 +13,7 @@ class Ability:
     display_name: str
     slot: int = 1
     is_hidden: bool = False
+    effect: str | None = None
 
 
 class AbilityCatalog:

@@ -22,7 +22,10 @@ def loadout():
         ability_id="swift-swim",
         moves=("splash",),
     )
-    ability = SimpleNamespace(display_name="Swift Swim")
+    ability = SimpleNamespace(
+        display_name="Swift Swim",
+        effect="Boosts Water-type moves in rain.",
+    )
     return CreatureLoadout(creature, ability, (move,), (move,))
 
 
@@ -70,6 +73,7 @@ def minun_loadout():
 def test_render_shows_ability_and_dash_for_missing_move_values():
     text = render_loadout(loadout())
     assert "Ability: Swift Swim" in text
+    assert "Effect: Boosts Water-type moves in rain." in text
     assert "Power —" in text
     assert "Accuracy —" in text
     assert "PP 40" in text
@@ -100,6 +104,13 @@ async def test_loadout_view_rejects_other_users_and_expires():
 def test_cancel_starts_from_the_persisted_loadout():
     view = MoveLoadoutView(SimpleNamespace(), loadout(), owner_id=1)
     assert view.loadout.creature.moves == ("splash",)
+
+
+def test_render_loadout_uses_effect_fallback():
+    creature_loadout = loadout()
+    creature_loadout.ability.effect = None
+
+    assert "Effect: Effect unavailable." in render_loadout(creature_loadout)
 
 
 def test_editor_uses_valid_sentinel_for_empty_slots():

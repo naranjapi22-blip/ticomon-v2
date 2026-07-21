@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
+import requests
 from poke_env.battle.move import Move
 
 from core.battle.rules.move_policy import move_data_from_poke_env
@@ -9,6 +12,36 @@ from infrastructure.battle.poke_env.showdown_species_resolver import (
     _gen9_data,
     resolve_showdown_id,
 )
+
+
+def _normalize_effect(effect) -> str | None:
+    if not effect:
+        return None
+    return " ".join(str(effect).split())[:300]
+
+
+@lru_cache(maxsize=512)
+def _ability_effect(ability_id: str) -> str | None:
+    try:
+        response = requests.get(
+            f"https://pokeapi.co/api/v2/ability/{ability_id}/", timeout=3
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+
+    entries = data.get("effect_entries", ())
+    english = next(
+        (entry for entry in entries if entry.get("language", {}).get("name") == "en"),
+        None,
+    )
+    if english is None:
+        return None
+    effect = english.get("short_effect") or english.get("effect")
+    if not effect:
+        return None
+    return _normalize_effect(effect)
 
 
 class PokeEnvLoadoutCatalog:
@@ -27,10 +60,20 @@ class PokeEnvLoadoutCatalog:
         for slot, name in raw.items():
             if not name:
                 continue
+            if isinstance(name, dict):
+                display_name = name.get("name")
+                effect = _normalize_effect(
+                    name.get("short_effect") or name.get("effect")
+                )
+            else:
+                display_name = name
+                effect = None
+            ability_id = canonicalize_ability_id(display_name)
             result.append(
                 Ability(
-                    id=canonicalize_ability_id(name),
-                    display_name=name,
+                    id=ability_id,
+                    display_name=display_name,
+                    effect=effect or _ability_effect(ability_id),
                     slot=1 if slot == "0" else 2 if slot == "1" else 3,
                     is_hidden=slot == "H",
                 )

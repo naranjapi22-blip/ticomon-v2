@@ -67,10 +67,14 @@ def _value(value) -> str:
 def render_loadout(loadout: CreatureLoadout) -> str:
     creature = loadout.creature
     ability = loadout.ability.display_name if loadout.ability else creature.ability_id
+    ability_effect = (
+        getattr(loadout.ability, "effect", None) if loadout.ability else None
+    ) or "Effect unavailable."
     lines = [
         f"**#{creature.collection_number} {creature.species.name}**",
         f"Species: {creature.species.name}",
         f"Ability: {ability or '—'}",
+        f"Effect: {ability_effect}",
         "",
     ]
     if not loadout.moves:

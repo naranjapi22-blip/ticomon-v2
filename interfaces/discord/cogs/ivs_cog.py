@@ -40,12 +40,18 @@ class IVsCog(commands.Cog):
                 )
                 creature = loadout.creature
                 ability_name = loadout.ability.display_name if loadout.ability else None
+                ability_effect = (
+                    getattr(loadout.ability, "effect", None)
+                    if loadout.ability
+                    else None
+                )
             else:
                 creature = await self.core.creature_info_service.get_creature(
                     trainer_id=ctx.author.id,
                     collection_number=collection_number,
                 )
                 ability_name = getattr(creature, "ability_id", None)
+                ability_effect = None
 
         except ValueError:
             await ctx.send(
@@ -98,6 +104,7 @@ class IVsCog(commands.Cog):
                 ),
                 f"✨ **Shiny:** {'Yes' if creature.is_shiny else 'No'}",
                 f"🔹 **Ability:** {ability_name or '—'}",
+                f"**Effect:** {ability_effect or 'Effect unavailable.'}",
             ]
         )
 
