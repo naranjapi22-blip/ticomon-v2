@@ -136,6 +136,9 @@ from infrastructure.persistence.repositories.neon_nature_mint_repository import 
 from infrastructure.persistence.repositories.neon_profile_repository import (
     NeonProfileRepository,
 )
+from infrastructure.persistence.repositories.neon_release_unit_of_work import (
+    NeonReleaseUnitOfWork,
+)
 from infrastructure.persistence.repositories.neon_shop_repository import (
     NeonShopRepository,
 )
@@ -408,6 +411,7 @@ def build_core(
         creature_repository=creature_repository,
         candy_repository=candy_repository,
         reward_policy=reward_policy,
+        unit_of_work=NeonReleaseUnitOfWork(),
     )
 
     preview_release_application = PreviewReleaseApplicationService(

@@ -61,4 +61,8 @@ class FakeSpeciesRepository(SpeciesRepository):
         self,
         species_ids: list[int] | tuple[int, ...],
     ) -> list[Species]:
-        return [self._species[species_id] for species_id in species_ids]
+        return [
+            self._species[species_id]
+            for species_id in dict.fromkeys(species_ids)
+            if species_id in self._species
+        ]

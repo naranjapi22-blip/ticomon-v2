@@ -91,6 +91,15 @@ class CreatureRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_by_collection_numbers(
+        self,
+        trainer_id: int,
+        collection_numbers: list[int] | tuple[int, ...],
+    ) -> list[Creature]:
+        """Returns a trainer's creatures for the requested collection numbers."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_by_species(
         self,
         trainer_id: int,
@@ -153,4 +162,13 @@ class CreatureRepository(ABC):
         """
         Deletes an existing Creature.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_many(
+        self,
+        trainer_id: int,
+        creatures: list[Creature] | tuple[Creature, ...],
+    ) -> None:
+        """Deletes multiple creatures owned by the trainer atomically."""
         raise NotImplementedError

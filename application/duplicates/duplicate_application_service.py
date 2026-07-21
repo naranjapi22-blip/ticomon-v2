@@ -24,13 +24,18 @@ class DuplicateApplicationService:
             trainer_id,
         )
 
+        species_map = {
+            species.id: species
+            for species in await self._species_repository.get_many(
+                [species_id for species_id, _ in duplicates]
+            )
+        }
         results = []
 
         for species_id, amount in duplicates:
-
-            species = await self._species_repository.get(
-                species_id,
-            )
+            species = species_map.get(species_id)
+            if species is None:
+                continue
 
             results.append(
                 DuplicateSpeciesResult(
@@ -48,21 +53,32 @@ class DuplicateApplicationService:
         pokemon_type: str,
     ) -> list[DuplicateSpeciesResult]:
 
-        duplicates = await self.get_duplicates(
+        raw_duplicates = await self._creature_repository.get_duplicate_species(
             trainer_id,
         )
+        species_map = {
+            species.id: species
+            for species in await self._species_repository.get_many(
+                [species_id for species_id, _ in raw_duplicates]
+            )
+        }
 
         results = []
 
-        for duplicate in duplicates:
-
-            species = await self._species_repository.get(
-                duplicate.species_id,
-            )
+        for species_id, amount in raw_duplicates:
+            species = species_map.get(species_id)
+            if species is None:
+                continue
 
             if pokemon_type.lower() in [
                 species_type.lower() for species_type in species.types
             ]:
-                results.append(duplicate)
+                results.append(
+                    DuplicateSpeciesResult(
+                        species_id=species_id,
+                        species_name=species.name,
+                        amount=amount,
+                    )
+                )
 
         return results

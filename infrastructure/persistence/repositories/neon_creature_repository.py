@@ -363,6 +363,53 @@ class NeonCreatureRepository(CreatureRepository):
             species=species,
         )
 
+    async def get_by_collection_numbers(
+        self,
+        trainer_id: int,
+        collection_numbers: list[int] | tuple[int, ...],
+    ) -> list[Creature]:
+        requested = list(collection_numbers)
+        if not requested:
+            return []
+
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            rows = await connection.fetch(
+                """
+                SELECT
+                    c.*,
+                    sv.id AS variant_id,
+                    sv.name AS variant_name
+                FROM creatures c
+                LEFT JOIN species_variants sv
+                    ON sv.id = c.current_form_id
+                WHERE c.trainer_id = $1
+                  AND c.collection_number = ANY($2::integer[])
+                ORDER BY c.collection_number
+                """,
+                trainer_id,
+                requested,
+            )
+
+        rows_by_number = {row["collection_number"]: row for row in rows}
+        for collection_number in requested:
+            if collection_number not in rows_by_number:
+                raise ValueError(f"Creature #{collection_number} was not found.")
+
+        species_by_id = {
+            species.id: species
+            for species in await self._species_repository.get_many(
+                list({row["species_id"] for row in rows})
+            )
+        }
+        return [
+            self._mapper.from_row(
+                row=rows_by_number[number],
+                species=species_by_id[rows_by_number[number]["species_id"]],
+            )
+            for number in requested
+        ]
+
     async def get_by_species(
         self,
         trainer_id: int,
@@ -697,6 +744,30 @@ class NeonCreatureRepository(CreatureRepository):
                 """,
                 creature.id,
             )
+
+    async def delete_many(
+        self,
+        trainer_id: int,
+        creatures: list[Creature] | tuple[Creature, ...],
+    ) -> None:
+        creature_ids = [creature.id for creature in creatures]
+        if not creature_ids:
+            return
+
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                result = await connection.execute(
+                    """
+                    DELETE FROM creatures
+                    WHERE trainer_id = $1
+                      AND id = ANY($2::bigint[])
+                    """,
+                    trainer_id,
+                    creature_ids,
+                )
+                if result != f"DELETE {len(creature_ids)}":
+                    raise ValueError("One or more creatures could not be released.")
 
 
 async def _fetch_creature(

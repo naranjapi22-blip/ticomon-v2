@@ -253,8 +253,9 @@ class NeonSpeciesRepository(SpeciesRepository):
                 rarity.value,
             )
 
-            variants_map = await self._load_all_variants(
+            variants_map = await self._load_variants_for_species(
                 connection,
+                [row["id"] for row in rows],
             )
 
             species = []
@@ -295,8 +296,9 @@ class NeonSpeciesRepository(SpeciesRepository):
                 list(species_ids),
             )
 
-            variants_map = await self._load_all_variants(
+            variants_map = await self._load_variants_for_species(
                 connection,
+                [row["id"] for row in rows],
             )
 
             species = []

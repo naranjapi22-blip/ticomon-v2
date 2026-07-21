@@ -3,6 +3,7 @@ from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_repository import CandyRepository
 from core.candy.reward_policy import RewardPolicy
 from core.creature.creature_repository import CreatureRepository
+from core.release.release_unit_of_work import ReleaseUnitOfWork
 
 
 class ReleaseApplicationService:
@@ -15,10 +16,12 @@ class ReleaseApplicationService:
         creature_repository: CreatureRepository,
         candy_repository: CandyRepository,
         reward_policy: RewardPolicy,
+        unit_of_work: ReleaseUnitOfWork | None = None,
     ) -> None:
         self._creature_repository = creature_repository
         self._candy_repository = candy_repository
         self._reward_policy = reward_policy
+        self._unit_of_work = unit_of_work
 
     async def release(
         self,
@@ -26,21 +29,45 @@ class ReleaseApplicationService:
         collection_numbers: list[int],
     ) -> ReleaseResult:
 
-        inventory = await self._candy_repository.get(
-            trainer_id,
-        )
+        if len(collection_numbers) != len(set(collection_numbers)):
+            raise ValueError("Collection numbers must be unique.")
 
-        released_creatures = []
+        if self._unit_of_work is not None:
+            async with self._unit_of_work.transaction() as transaction:
+                released_creatures = (
+                    await transaction.get_creatures_by_collection_numbers(
+                        trainer_id,
+                        collection_numbers,
+                    )
+                )
+                inventory = await transaction.get_candy_inventory(trainer_id)
+                reward_bundle = CandyBundle()
+
+                for creature in released_creatures:
+                    bundle = self._reward_policy.reward_for(creature)
+                    reward_bundle = reward_bundle.merge(bundle)
+                    inventory.add(bundle)
+
+                await transaction.delete_creatures(trainer_id, released_creatures)
+                await transaction.save_candy_inventory(trainer_id, inventory)
+
+            return ReleaseResult(
+                success=True,
+                released_creatures=released_creatures,
+                reward_bundle=reward_bundle,
+            )
+
+        creatures = await self._creature_repository.get_by_collection_numbers(
+            trainer_id,
+            collection_numbers,
+        )
+        inventory = await self._candy_repository.get(trainer_id)
+
+        released_creatures = creatures
 
         reward_bundle = CandyBundle()
 
-        for collection_number in collection_numbers:
-
-            creature = await self._creature_repository.get_by_collection_number(
-                trainer_id,
-                collection_number,
-            )
-
+        for creature in creatures:
             bundle = self._reward_policy.reward_for(
                 creature,
             )
@@ -53,13 +80,7 @@ class ReleaseApplicationService:
                 bundle,
             )
 
-            await self._creature_repository.delete(
-                creature,
-            )
-
-            released_creatures.append(
-                creature,
-            )
+        await self._creature_repository.delete_many(trainer_id, released_creatures)
 
         await self._candy_repository.save(
             trainer_id,

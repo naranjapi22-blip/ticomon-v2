@@ -142,6 +142,16 @@ class FakeCreatureRepository(CreatureRepository):
 
         return creature
 
+    async def get_by_collection_numbers(
+        self,
+        trainer_id: int,
+        collection_numbers: list[int] | tuple[int, ...],
+    ) -> list[Creature]:
+        return [
+            await self.get_by_collection_number(trainer_id, collection_number)
+            for collection_number in collection_numbers
+        ]
+
     async def get_by_species(
         self,
         trainer_id: int,
@@ -196,6 +206,19 @@ class FakeCreatureRepository(CreatureRepository):
             )
 
         self.deleted.append(creature)
+
+    async def delete_many(
+        self,
+        trainer_id: int,
+        creatures: list[Creature] | tuple[Creature, ...],
+    ) -> None:
+        for creature in creatures:
+            if creature.trainer_id != trainer_id:
+                raise ValueError("Creature does not belong to the trainer.")
+            self._creatures.pop(creature.id, None)
+            if creature.collection_number is not None:
+                self._collection_numbers.pop(creature.collection_number, None)
+        self.deleted.extend(creatures)
 
     async def get_duplicate_species(
         self,

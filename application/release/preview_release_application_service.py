@@ -28,27 +28,23 @@ class PreviewReleaseApplicationService:
         collection_numbers: list[int],
     ) -> PreviewReleaseResult:
 
-        creatures = []
+        if len(collection_numbers) != len(set(collection_numbers)):
+            raise ValueError("Collection numbers must be unique.")
+
+        creatures = await self._creature_repository.get_by_collection_numbers(
+            trainer_id,
+            collection_numbers,
+        )
 
         reward_bundle = CandyBundle()
 
-        for collection_number in collection_numbers:
-
-            creature = await self._creature_repository.get_by_collection_number(
-                trainer_id,
-                collection_number,
-            )
-
+        for creature in creatures:
             bundle = self._reward_policy.reward_for(
                 creature,
             )
 
             reward_bundle = reward_bundle.merge(
                 bundle,
-            )
-
-            creatures.append(
-                creature,
             )
 
         return PreviewReleaseResult(
