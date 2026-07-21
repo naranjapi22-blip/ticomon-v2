@@ -104,7 +104,7 @@ flower color, so each stage is collected through the usual evolution system.
 Run the following once for every new database before using Collections:
 
 ```bash
-python scripts/create_collection_schema.py
+poetry run python scripts/create_collection_schema.py
 ```
 
 The script is idempotent. It creates the historical entry table and the
@@ -119,7 +119,7 @@ Run this separate, idempotent backfill after the schema exists to record the
 creatures currently owned by trainers:
 
 ```bash
-python scripts/backfill_collection_entries.py
+poetry run python scripts/backfill_collection_entries.py
 ```
 
 The backfill never changes creatures or grants rewards automatically. A

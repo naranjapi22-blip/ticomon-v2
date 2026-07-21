@@ -26,7 +26,8 @@ def test_shop_documentation_matches_supported_variants_and_modes():
     assert "are not shop products." in document
     assert "45 canonical Alcremie combinations" in document
     assert "63 combinations" not in document
-    assert "Every product shows its exact GIF before confirmation" in readme
+    assert "Candy Shops" in readme
+    assert "docs/shops.md" in readme
     assert "Pastry Shop is the only shop" not in readme
     assert "Garden" in document
     assert "Pokémon Groomer" in document

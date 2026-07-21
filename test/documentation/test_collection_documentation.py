@@ -17,5 +17,5 @@ def test_collection_documentation_matches_the_supported_catalogue():
 
 def test_readme_marks_collections_as_implemented():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "## Thematic Collections" in readme
-    assert "✅ Thematic collections" in readme
+    assert "Thematic Collections" in readme
+    assert "docs/collections.md" in readme

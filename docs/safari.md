@@ -28,5 +28,5 @@
 - Safari sessions are currently in-memory and do not survive bot restarts.
 - Watch structured logs for Safari open, start, encounter, route, and finish events.
 - Use the simulator for balance analysis; it is read-only and does not write production data.
-- Run `poetry run ruff check .`, `poetry run black --check .`, and `poetry run pytest -q` before pushing changes.
-- Use `python scripts/check_all.py` when you only need the test suite.
+- Run `poetry run ruff check .`, `poetry run black --check .`, and `poetry run pytest -q -m "not neon_db"` before pushing changes.
+- Use `poetry run python scripts/check_all.py` when you only need the test suite.

@@ -129,7 +129,7 @@ reversions.
 Before using purchases in a new database, run:
 
 ```bash
-python scripts/create_shop_schema.py
+poetry run python scripts/create_shop_schema.py
 ```
 
 The script is idempotent and creates `shop_purchase_receipts`, which stores
