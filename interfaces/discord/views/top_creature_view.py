@@ -12,14 +12,6 @@ from application.creature.creature_collection_service import (
 from interfaces.discord.views.creature_list_view import CreatureListView
 
 METRIC_LABELS = {metric: metric.label for metric in TopMetric}
-STAT_LABELS = (
-    ("HP", "HP"),
-    ("Attack", "Atk"),
-    ("Defense", "Def"),
-    ("Sp. Atk", "SpA"),
-    ("Sp. Def", "SpD"),
-    ("Speed", "Spe"),
-)
 
 
 def format_ranked_creature_entry(
@@ -27,26 +19,14 @@ def format_ranked_creature_entry(
     position: int,
 ) -> str:
     creature = ranking.creature
-    stats = ranking.stats
     shiny = "✨ " if creature.is_shiny else ""
     name = creature.species.name.title()
     current_form = getattr(creature, "current_form", None)
     if current_form is not None:
         name = f"{name} ({current_form.name.title()})"
-    types = " / ".join(
-        type_name.title() for type_name in getattr(creature.species, "types", ())
-    )
-    total_stats = stats.get(
-        "Total Stats",
-        sum(stats[key] for key, _ in STAT_LABELS),
-    )
-    stat_line = " · ".join(f"{label} {stats[key]}" for key, label in STAT_LABELS)
     return (
-        f"#{position} · {shiny}{name} · Collection #{creature.collection_number}\n"
-        f"{ranking.metric.label}: {ranking.score} · Total Stats: "
-        f"{total_stats}\n"
-        f"{stat_line}\n"
-        f"{types} · IVs: {creature.iv_percentage}%"
+        f"#{position} · {shiny}{name} · Collection #{creature.collection_number} · "
+        f"{ranking.metric.label}: {ranking.score} · IVs: {creature.iv_percentage}%"
     )
 
 
@@ -138,10 +118,10 @@ class TopCreatureView(CreatureListView):
         ]
 
     def _title(self) -> str:
-        title = f"Top {self.metric.label} Pokémon"
-        if self.pokemon_type is not None:
-            title = f"{title} · Type: {self.pokemon_type.title()}"
-        return title
+        type_label = (
+            self.pokemon_type.title() if self.pokemon_type is not None else "All Types"
+        )
+        return f"Ranking: {self.metric.label} · Type: {type_label}"
 
     def build_embed(self) -> discord.Embed:
         embed = super().build_embed()

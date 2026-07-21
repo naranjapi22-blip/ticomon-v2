@@ -72,6 +72,7 @@ def test_top_view_exposes_all_metrics_and_pokemon_types() -> None:
     assert len(metric_select.options) == 6
     assert len(type_select.options) == 19
     assert type_select.options[0].label == "All Types"
+    assert view.title == "Ranking: Total Stats · Type: All Types"
     assert view.build_embed().footer.text == "Page 1/1 · 1 creatures · Level 50 · 0 EVs"
 
 
@@ -147,3 +148,55 @@ async def test_top_view_timeout_disables_all_controls() -> None:
     await view.on_timeout()
 
     assert all(item.disabled for item in view.children)
+
+
+def test_top_entry_is_one_line_and_contains_only_ranking_summary() -> None:
+    view = TopCreatureView(
+        author_id=1,
+        trainer_id=1,
+        rankings=[_ranking(76)],
+        metric=TopMetric.OVERALL,
+        pokemon_type=None,
+        load_rankings=AsyncMock(return_value=[]),
+    )
+
+    entry = view.entries[0]
+
+    assert entry.count("\n") == 0
+    assert entry.startswith("#1")
+    assert "Collection #76" in entry
+    assert "Total Stats: 600" in entry
+    assert "IVs: 100%" in entry
+    assert "HP 100" not in entry
+    assert "Electric" not in entry
+    assert entry.count("Total Stats") == 1
+
+
+@pytest.mark.parametrize(
+    ("metric", "label", "score"),
+    [
+        (TopMetric.PHYSICAL_ATTACK, "Physical Attack", 100),
+        (TopMetric.SPECIAL_ATTACK, "Special Attack", 100),
+        (TopMetric.PHYSICAL_DEFENSE, "Physical Bulk", 200),
+        (TopMetric.SPECIAL_DEFENSE, "Special Bulk", 200),
+        (TopMetric.SPEED, "Speed", 100),
+    ],
+)
+def test_top_entry_uses_active_metric_label(
+    metric: TopMetric,
+    label: str,
+    score: int,
+) -> None:
+    ranking = _ranking(1, metric)
+    ranking = RankedCreature(ranking.creature, ranking.stats, score, metric)
+    view = TopCreatureView(
+        author_id=1,
+        trainer_id=1,
+        rankings=[ranking],
+        metric=metric,
+        pokemon_type=None,
+        load_rankings=AsyncMock(return_value=[]),
+    )
+
+    assert f"{label}: {score}" in view.entries[0]
+    assert "\n" not in view.entries[0]
