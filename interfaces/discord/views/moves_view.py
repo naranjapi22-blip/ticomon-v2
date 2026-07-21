@@ -5,6 +5,27 @@ import discord
 from application.creature.creature_loadout_service import CreatureLoadout
 
 PAGE_SIZE = 24  # Keep one option available for the empty slot.
+EMPTY_MOVE = "__empty__"
+
+
+def _validate_select_values(select: discord.ui.Select) -> None:
+    for option in select.options:
+        if not isinstance(option.value, str) or not 1 <= len(option.value) <= 100:
+            raise ValueError("Move editor generated an invalid Discord select value.")
+
+
+async def _send_ephemeral_once(interaction, content: str) -> None:
+    response = interaction.response
+    is_done = getattr(response, "is_done", False)
+    if callable(is_done):
+        is_done = is_done()
+    if is_done:
+        followup = getattr(interaction, "followup", None)
+        send = getattr(followup, "send", None)
+        if send is not None:
+            await send(content, ephemeral=True)
+        return
+    await response.send_message(content, ephemeral=True)
 
 
 def _value(value) -> str:
@@ -49,12 +70,18 @@ class MoveLoadoutView(discord.ui.View):
 
     @discord.ui.button(label="Change Moves", style=discord.ButtonStyle.primary)
     async def change_moves(self, interaction, button) -> None:
-        editor = MoveEditorView(self.service, self.loadout, self.owner_id)
-        editor.message = self.message or interaction.message
-        await interaction.response.edit_message(
-            content=render_loadout(self.loadout) + "\n\nSelect 1 to 4 moves.",
-            view=editor,
-        )
+        try:
+            editor = MoveEditorView(self.service, self.loadout, self.owner_id)
+            editor.message = self.message or interaction.message
+            await interaction.response.edit_message(
+                content=render_loadout(self.loadout) + "\n\nSelect 1 to 4 moves.",
+                view=editor,
+            )
+        except (discord.HTTPException, ValueError):
+            await _send_ephemeral_once(
+                interaction,
+                "I could not open the moves editor. Please try again later.",
+            )
 
     async def on_timeout(self) -> None:
         for child in self.children:
@@ -96,9 +123,10 @@ class MoveEditorView(discord.ui.View):
             for move in self.legal_moves[start : start + PAGE_SIZE]
         ]
         for slot in range(4):
+            empty_option = discord.SelectOption(label="None", value=EMPTY_MOVE)
             select = discord.ui.Select(
                 placeholder=f"Move slot {slot + 1}",
-                options=[discord.SelectOption(label="None", value="")] + options,
+                options=[empty_option] + options,
                 min_values=1,
                 max_values=1,
                 custom_id=f"move-slot-{slot + 1}",
@@ -106,12 +134,17 @@ class MoveEditorView(discord.ui.View):
             if slot < len(self.selected):
                 for option in select.options:
                     option.default = option.value == self.selected[slot]
+            else:
+                empty_option.default = True
+            _validate_select_values(select)
             select.callback = self._select_callback(slot, select)
             self.add_item(select)
 
     def _select_callback(self, slot, select):
         async def callback(interaction):
             value = select.values[0]
+            if value == EMPTY_MOVE:
+                value = ""
             if value and value in self.selected[:slot] + self.selected[slot + 1 :]:
                 await interaction.response.send_message(
                     "A creature cannot equip duplicate moves.", ephemeral=True
