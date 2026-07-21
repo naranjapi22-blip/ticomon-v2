@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+import application.pvp.pvp_application_service as pvp_service_module
 from application.pvp.events import PvpEventTranslator
 from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
 from application.pvp.pvp_application_service import PvpApplicationService
@@ -56,6 +57,77 @@ async def test_actions_are_private_and_must_be_legal():
     assert await waiting == action
 
     await service.cleanup(session.id)
+
+
+@pytest.mark.asyncio
+async def test_move_timeout_applies_one_legal_action(monkeypatch):
+    monkeypatch.setattr(pvp_service_module, "ACTION_TIMEOUT_SECONDS", 0.01)
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    session.phase = PvpPhase.WAITING_FOR_ACTIONS
+    legal = PvpLegalActions(
+        moves=(PvpAction(PvpActionKind.MOVE, "move:tackle", "Tackle"),)
+    )
+
+    action = await service.request_action(session.id, 1, legal)
+
+    assert action in legal.moves
+    assert session.selected_actions == {1: action.identifier}
+
+
+@pytest.mark.asyncio
+async def test_forced_switch_timeout_applies_only_a_legal_switch(monkeypatch):
+    monkeypatch.setattr(pvp_service_module, "FORCED_SWITCH_TIMEOUT_SECONDS", 0.01)
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    session.phase = PvpPhase.FORCED_SWITCH
+    legal = PvpLegalActions(
+        switches=(PvpAction(PvpActionKind.SWITCH, "switch:bench", "Bench"),),
+        forced_switch=True,
+    )
+
+    action = await service.request_action(session.id, 1, legal)
+
+    assert action in legal.switches
+    assert session.selected_actions == {1: action.identifier}
+
+
+@pytest.mark.asyncio
+async def test_manual_action_wins_just_before_timeout(monkeypatch):
+    monkeypatch.setattr(pvp_service_module, "ACTION_TIMEOUT_SECONDS", 0.05)
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    session.phase = PvpPhase.WAITING_FOR_ACTIONS
+    action = PvpAction(PvpActionKind.MOVE, "move:tackle", "Tackle")
+    legal = PvpLegalActions(moves=(action,))
+    waiting = asyncio.create_task(service.request_action(session.id, 1, legal))
+    await asyncio.sleep(0.01)
+
+    assert await service.submit_action(session.id, 1, action)
+    assert await waiting == action
+    assert session.selected_actions == {1: action.identifier}
+
+
+@pytest.mark.asyncio
+async def test_obsolete_request_does_not_replace_new_request(monkeypatch):
+    monkeypatch.setattr(pvp_service_module, "ACTION_TIMEOUT_SECONDS", 0.01)
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    session.phase = PvpPhase.WAITING_FOR_ACTIONS
+    first_legal = PvpLegalActions(
+        moves=(PvpAction(PvpActionKind.MOVE, "move:first", "First"),)
+    )
+    second_action = PvpAction(PvpActionKind.MOVE, "move:second", "Second")
+    second_legal = PvpLegalActions(moves=(second_action,))
+
+    first = asyncio.create_task(service.request_action(session.id, 1, first_legal))
+    await asyncio.sleep(0)
+    second = asyncio.create_task(service.request_action(session.id, 1, second_legal))
+    await asyncio.sleep(0)
+    assert await service.submit_action(session.id, 1, second_action)
+    assert await second == second_action
+    with pytest.raises(asyncio.CancelledError):
+        await first
 
 
 def test_timeout_action_policy_uses_only_legal_moves():

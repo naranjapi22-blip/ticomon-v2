@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import replace
 
 import discord
@@ -8,6 +9,7 @@ import discord
 from application.pvp.models import PvpAction, PvpActionKind
 from application.pvp.snapshots import PvpBattleSnapshot
 from core.pvp.session import PvpPhase
+from interfaces.discord.views.creature_selection_view import CreatureSelectionView
 
 
 class PvpChallengeView(discord.ui.View):
@@ -78,45 +80,6 @@ class PvpChallengeView(discord.ui.View):
                 pass
 
 
-class PvpTeamModal(discord.ui.Modal, title="Select PvP team"):
-    collection_numbers = discord.ui.TextInput(
-        label="Collection numbers",
-        placeholder="Example: 12, 18, 27",
-        min_length=1,
-        max_length=40,
-    )
-
-    def __init__(self, view: "PvpTeamSelectionView") -> None:
-        super().__init__()
-        self.team_view = view
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        try:
-            numbers = tuple(
-                int(value.strip())
-                for value in str(self.collection_numbers.value).split(",")
-                if value.strip()
-            )
-            team = await self.team_view.core.pvp_application_service.select_team(
-                self.team_view.session_id,
-                interaction.user.id,
-                numbers,
-            )
-        except (ValueError, TypeError) as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
-            return
-        summary = "\n".join(
-            f"#{creature.collection_number} {creature.species.name} — "
-            f"{creature.ability_id} — {', '.join(creature.moves)}"
-            for creature in team
-        )
-        await interaction.response.send_message(
-            f"Your selection is saved. Confirm it when ready:\n{summary}",
-            view=PvpTeamConfirmView(self.team_view),
-            ephemeral=True,
-        )
-
-
 class PvpTeamConfirmView(discord.ui.View):
     def __init__(self, team_view: "PvpTeamSelectionView") -> None:
         super().__init__(timeout=180)
@@ -124,18 +87,19 @@ class PvpTeamConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Confirm team", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             ready = await self.team_view.confirm(interaction.user.id)
         except ValueError as error:
-            await interaction.response.send_message(str(error), ephemeral=True)
+            await interaction.followup.send(str(error), ephemeral=True)
             return
         if not ready:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Your team is confirmed. Waiting for the other trainer.",
                 ephemeral=True,
             )
             return
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "Both teams are confirmed. Starting PvP…", ephemeral=True
         )
 
@@ -157,9 +121,41 @@ class PvpTeamSelectionView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Select team", style=discord.ButtonStyle.primary)
+    @discord.ui.button(
+        label="Pick Your Team", style=discord.ButtonStyle.primary, emoji="📋"
+    )
     async def select_team(self, interaction: discord.Interaction, button) -> None:
-        await interaction.response.send_modal(PvpTeamModal(self))
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            options = await self.core.pvp_application_service.get_team_selector(
+                interaction.user.id
+            )
+        except (ValueError, TypeError, RuntimeError) as error:
+            await interaction.followup.send(str(error), ephemeral=True)
+            return
+        if len(options) < 3:
+            await interaction.followup.send(
+                "❌ You need at least 3 creatures to choose a PvP team.",
+                ephemeral=True,
+            )
+            return
+        selection_view = CreatureSelectionView(
+            owner_id=interaction.user.id,
+            required_count=3,
+            options=options,
+            on_selected=lambda selected: self.core.pvp_application_service.select_team(
+                self.session_id, interaction.user.id, selected
+            ),
+            success_message=lambda team: (
+                "Your selection is saved. Confirm it when ready:"
+            ),
+            success_view=lambda _team: PvpTeamConfirmView(self),
+        )
+        await interaction.followup.send(
+            "Choose exactly **3** Pokémon from your collection.",
+            view=selection_view,
+            ephemeral=True,
+        )
 
     async def confirm(self, trainer_id: int) -> bool:
         return await self.core.pvp_application_service.confirm_team(
@@ -212,6 +208,11 @@ class PvpBoardView(discord.ui.View):
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
         self._snapshots: dict[int, PvpBattleSnapshot] = {}
+        self._pending_edit: tuple[str, tuple] | None = None
+        self._edit_task: asyncio.Task | None = None
+        self._last_edit_at = 0.0
+        self._last_render: tuple[str, tuple] | None = None
+        self._edit_interval = 0.5
 
     @classmethod
     async def from_selection(cls, source: PvpTeamSelectionView) -> "PvpBoardView":
@@ -307,12 +308,43 @@ class PvpBoardView(discord.ui.View):
     async def _edit_message(self) -> None:
         if self.message is None:
             return
-        try:
-            await self.message.edit(content=self.render(), view=self)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-            asyncio.create_task(
-                self.core.pvp_application_service.cleanup(self.session_id)
+        state = (self.render(), self._component_signature())
+        if state == self._last_render or state == self._pending_edit:
+            return
+        self._pending_edit = state
+        if self._edit_task is None or self._edit_task.done():
+            self._edit_task = asyncio.create_task(self._flush_edits())
+
+    def _component_signature(self) -> tuple:
+        return tuple(
+            (
+                getattr(child, "custom_id", None),
+                getattr(child, "label", None),
+                getattr(child, "disabled", None),
             )
+            for child in self.children
+        )
+
+    async def _flush_edits(self) -> None:
+        while self._pending_edit is not None and self.message is not None:
+            wait = self._edit_interval - (time.monotonic() - self._last_edit_at)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            state = self._pending_edit
+            self._pending_edit = None
+            if state == self._last_render:
+                continue
+            content, _ = state
+            try:
+                await self.message.edit(content=content, view=self)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                self._pending_edit = None
+                asyncio.create_task(
+                    self.core.pvp_application_service.cleanup(self.session_id)
+                )
+                return
+            self._last_render = state
+            self._last_edit_at = time.monotonic()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         try:
@@ -354,6 +386,8 @@ class PvpBoardView(discord.ui.View):
         )
 
     async def on_timeout(self) -> None:
+        if self._edit_task is not None and not self._edit_task.done():
+            self._edit_task.cancel()
         await self.core.pvp_application_service.cleanup(self.session_id)
 
 
@@ -378,7 +412,7 @@ class PvpActionView(discord.ui.View):
     def _callback(self, action: PvpAction):
         async def callback(interaction: discord.Interaction) -> None:
             try:
-                await self.board.core.pvp_application_service.submit_action(
+                accepted = await self.board.core.pvp_application_service.submit_action(
                     self.board.session_id,
                     interaction.user.id,
                     action,
@@ -386,13 +420,16 @@ class PvpActionView(discord.ui.View):
             except ValueError as error:
                 await interaction.response.send_message(str(error), ephemeral=True)
                 return
+            if not accepted:
+                await interaction.response.send_message(
+                    "That action window has already been resolved.", ephemeral=True
+                )
+                return
             self.board.ready.add(interaction.user.id)
             await interaction.response.edit_message(
                 content="Action selected.", view=None
             )
             if self.board.message is not None:
-                await self.board.message.edit(
-                    content=self.board.render(), view=self.board
-                )
+                await self.board._edit_message()
 
         return callback

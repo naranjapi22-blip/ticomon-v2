@@ -2,17 +2,13 @@ from __future__ import annotations
 
 import discord
 
-from application.battle.exceptions import BattleApplicationError, BattleNotFound
+from application.battle.exceptions import BattleNotFound
 from application.bootstrap.core import CoreServices
 from core.battle.battle import PARTY_SIZE
-from core.battle.exceptions import (
-    BattleNotParticipant,
-    InvalidBattleParty,
-    InvalidBattleState,
-)
+from interfaces.discord.views.creature_selection_view import CreatureSelectionView
 
 
-class BattleSelectionView(discord.ui.View):
+class BattleSelectionView(CreatureSelectionView):
     def __init__(
         self,
         core: CoreServices,
@@ -21,71 +17,28 @@ class BattleSelectionView(discord.ui.View):
         options: list[tuple[int, str]],
         challenge_view: "BattleChallengeView",
     ) -> None:
-        super().__init__(timeout=180)
+        super().__init__(
+            owner_id=trainer_id,
+            required_count=PARTY_SIZE,
+            options=options,
+            on_selected=self._save_selection,
+            success_message=lambda _battle: (
+                f"✅ Your battle team is locked ({PARTY_SIZE} Pokémon)."
+            ),
+            error_prefix="❌ Could not save team: ",
+        )
         self.core = core
         self.battle_id = battle_id
         self.trainer_id = trainer_id
         self.challenge_view = challenge_view
 
-        select = discord.ui.Select(
-            placeholder=f"Choose {PARTY_SIZE} team members",
-            min_values=PARTY_SIZE,
-            max_values=PARTY_SIZE,
-            options=[
-                discord.SelectOption(
-                    label=label[:100],
-                    value=str(collection_number),
-                )
-                for collection_number, label in options[:25]
-            ],
-        )
-        select.callback = self.on_select
-        self.add_item(select)
-
-    async def interaction_check(
-        self,
-        interaction: discord.Interaction,
-    ) -> bool:
-        if interaction.user.id != self.trainer_id:
-            await interaction.response.send_message(
-                "❌ This team selection is not yours.",
-                ephemeral=True,
-            )
-            return False
-        return True
-
-    async def on_select(self, interaction: discord.Interaction) -> None:
-        selected = [int(value) for value in interaction.data.get("values", [])]
-
-        await interaction.response.defer(ephemeral=True)
-
+    async def _save_selection(self, selected: list[int]):
         service = self.core.battle_application_service
-        try:
-            battle = await service.set_party_from_collection_numbers(
-                self.battle_id,
-                self.trainer_id,
-                selected,
-            )
-        except (
-            BattleNotFound,
-            BattleNotParticipant,
-            InvalidBattleParty,
-            InvalidBattleState,
-            BattleApplicationError,
-        ) as error:
-            await interaction.followup.send(
-                f"❌ Could not save team: {error}",
-                ephemeral=True,
-            )
-            return
-
-        await interaction.followup.send(
-            f"✅ Your battle team is locked ({PARTY_SIZE} Pokémon).",
-            ephemeral=True,
+        battle = await service.set_party_from_collection_numbers(
+            self.battle_id, self.trainer_id, selected
         )
-
         await self.challenge_view.refresh_display(battle)
-        self.stop()
+        return battle
 
 
 class BattleChallengeView(discord.ui.View):

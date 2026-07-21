@@ -5,7 +5,7 @@ import logging
 import random
 import time
 from collections.abc import Awaitable, Callable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from application.pvp.events import PvpEventTranslator
 from application.pvp.models import PvpAction, PvpLegalActions
@@ -46,6 +46,7 @@ class PvpApplicationService:
         self._random = random_source or random.Random()
         self._action_waiters: dict[tuple[UUID, int], asyncio.Future[PvpAction]] = {}
         self._legal_actions: dict[tuple[UUID, int], PvpLegalActions] = {}
+        self._request_ids: dict[tuple[UUID, int], str] = {}
         self._event_handlers: dict[UUID, Callable[[str], Awaitable[None]]] = {}
         self._finish_handlers: dict[UUID, Callable[[object], Awaitable[None]]] = {}
         self._snapshot_handlers: dict[
@@ -54,6 +55,22 @@ class PvpApplicationService:
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
+
+    async def get_team_selector(self, trainer_id: int) -> list[tuple[int, str]]:
+        if self._creature_repository is None:
+            raise RuntimeError("PvP creature repository is not configured.")
+        creatures = await self._creature_repository.get_by_trainer(trainer_id)
+        options = []
+        for creature in creatures:
+            if creature.collection_number is None:
+                continue
+            label = creature.species.name.title()
+            if creature.is_shiny:
+                label = f"✨ {label}"
+            options.append(
+                (creature.collection_number, f"#{creature.collection_number} {label}")
+            )
+        return options
 
     async def select_team(
         self,
@@ -161,59 +178,92 @@ class PvpApplicationService:
             key = (session_id, trainer_id)
             loop = asyncio.get_running_loop()
             future: asyncio.Future[PvpAction] = loop.create_future()
+            request_id = str(uuid4())
             self._action_waiters[key] = future
             self._legal_actions[key] = legal
+            self._request_ids[key] = request_id
+            session.register_action_request(trainer_id, request_id)
             timeout = (
                 FORCED_SWITCH_TIMEOUT_SECONDS
                 if legal.forced_switch
                 else ACTION_TIMEOUT_SECONDS
             )
         try:
-            return await asyncio.wait_for(future, timeout=timeout)
+            return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
         except asyncio.TimeoutError:
             action = self._automatic_action(legal)
             async with session.lock:
-                session.choose_action(trainer_id, action.identifier)
-                pending_actions = [
-                    pending
-                    for (pending_session_id, _), pending in self._action_waiters.items()
-                    if pending_session_id == session_id
-                ]
-                if len(pending_actions) == 2 and all(
-                    pending.done() for pending in pending_actions
-                ):
-                    session.begin_resolution()
-            return action
+                request_id = self._request_ids.get(key)
+                applied = request_id is not None and session.try_choose_action(
+                    trainer_id, request_id, action.identifier
+                )
+                if applied:
+                    if not future.done():
+                        future.set_result(action)
+                    self._begin_resolution_if_ready(session, session_id)
+                    logger.info(
+                        "Applied PvP action timeout",
+                        extra=self._log_context(
+                            session, trainer_id, request_id, legal, "applied"
+                        ),
+                    )
+                    return action
+                logger.info(
+                    "Discarded obsolete PvP action timeout",
+                    extra=self._log_context(
+                        session, trainer_id, request_id, legal, "discarded"
+                    ),
+                )
+                if future.done() and not future.cancelled():
+                    return future.result()
+                raise asyncio.CancelledError
         finally:
-            self._action_waiters.pop(key, None)
-            self._legal_actions.pop(key, None)
+            if self._action_waiters.get(key) is future:
+                self._action_waiters.pop(key, None)
+                self._legal_actions.pop(key, None)
+                self._request_ids.pop(key, None)
 
     async def submit_action(
         self,
         session_id: UUID,
         trainer_id: int,
         action: PvpAction,
-    ) -> None:
+    ) -> bool:
         session = self.registry.get(session_id)
         async with session.lock:
             key = (session_id, trainer_id)
             legal = self._legal_actions.get(key)
             future = self._action_waiters.get(key)
-            if legal is None or future is None or future.done():
-                raise ValueError("This action window is no longer active.")
+            request_id = self._request_ids.get(key)
+            if legal is None or future is None or request_id is None or future.done():
+                return False
             if action.identifier not in {item.identifier for item in legal.all_actions}:
                 raise ValueError("That action is not legal in the current state.")
+            if not session.try_choose_action(trainer_id, request_id, action.identifier):
+                return False
             future.set_result(action)
-            session.choose_action(trainer_id, action.identifier)
-            pending_actions = [
-                pending
-                for (pending_session_id, _), pending in self._action_waiters.items()
-                if pending_session_id == session_id
-            ]
-            if len(pending_actions) == 2 and all(
-                pending.done() for pending in pending_actions
-            ):
-                session.begin_resolution()
+            self._begin_resolution_if_ready(session, session_id)
+            return True
+
+    def _begin_resolution_if_ready(self, session: PvpSession, session_id: UUID) -> None:
+        pending = [
+            future
+            for (pending_session_id, _), future in self._action_waiters.items()
+            if pending_session_id == session_id
+        ]
+        if len(pending) == 2 and all(future.done() for future in pending):
+            session.begin_resolution()
+
+    @staticmethod
+    def _log_context(session, trainer_id, request_id, legal, timeout_status):
+        return {
+            "session_id": str(session.id),
+            "trainer_id": trainer_id,
+            "request_id": request_id,
+            "request_type": "forced_switch" if legal.forced_switch else "move",
+            "session_state": session.phase.value,
+            "timeout_status": timeout_status,
+        }
 
     def legal_actions_for(self, session_id: UUID, trainer_id: int) -> PvpLegalActions:
         self.registry.get(session_id)._require_player(trainer_id)
@@ -267,8 +317,8 @@ class PvpApplicationService:
             session = self.registry.get(session_id)
         except ValueError:
             return
-        for future in list(self._action_waiters.values()):
-            if not future.done():
+        for key, future in list(self._action_waiters.items()):
+            if key[0] == session_id and not future.done():
                 future.cancel()
         self._action_waiters = {
             key: value
@@ -278,6 +328,11 @@ class PvpApplicationService:
         self._legal_actions = {
             key: value
             for key, value in self._legal_actions.items()
+            if key[0] != session_id
+        }
+        self._request_ids = {
+            key: value
+            for key, value in self._request_ids.items()
             if key[0] != session_id
         }
         controller = session.battle_controller

@@ -38,6 +38,7 @@ class PvpSession:
     message: object | None = field(default=None, repr=False)
     battle_controller: object | None = field(default=None, repr=False)
     timeout_tasks: set[asyncio.Task] = field(default_factory=set, repr=False)
+    active_action_requests: dict[int, str] = field(default_factory=dict, repr=False)
     started_monotonic: float | None = field(default=None, repr=False)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
@@ -90,8 +91,27 @@ class PvpSession:
         self.action_turn = self.turn_number
         return len(self.selected_actions) == 2
 
+    def register_action_request(self, trainer_id: int, request_id: str) -> None:
+        self._require_player(trainer_id)
+        if self.phase not in {PvpPhase.WAITING_FOR_ACTIONS, PvpPhase.FORCED_SWITCH}:
+            raise ValueError("The session is not accepting actions.")
+        self.active_action_requests[trainer_id] = request_id
+
+    def try_choose_action(self, trainer_id: int, request_id: str, action: str) -> bool:
+        if self.active_action_requests.get(trainer_id) != request_id:
+            return False
+        if self.phase not in {PvpPhase.WAITING_FOR_ACTIONS, PvpPhase.FORCED_SWITCH}:
+            return False
+        if not action:
+            return False
+        self.selected_actions[trainer_id] = action
+        self.action_turn = self.turn_number
+        self.active_action_requests.pop(trainer_id, None)
+        return True
+
     def clear_actions(self) -> None:
         self.selected_actions.clear()
+        self.active_action_requests.clear()
 
     def begin_turn_resolution(self) -> tuple[tuple[int, str], ...]:
         if self.phase != PvpPhase.WAITING_FOR_ACTIONS:
@@ -112,9 +132,11 @@ class PvpSession:
 
     def finish(self) -> None:
         self.phase = PvpPhase.FINISHED
+        self.active_action_requests.clear()
 
     def cancel(self) -> None:
         self.phase = PvpPhase.CANCELLED
+        self.active_action_requests.clear()
 
     def _require_player(self, trainer_id: int) -> None:
         if trainer_id not in self.player_ids:
