@@ -235,6 +235,8 @@ class ManualPvpPlayer(Player):
                 move = order.order
                 pp = getattr(move, "current_pp", getattr(move, "pp", "?"))
                 max_pp = getattr(move, "max_pp", getattr(move, "pp", "?"))
+                if isinstance(pp, (int, float)) and pp <= 0:
+                    continue
                 action = PvpAction(
                     kind=PvpActionKind.MOVE,
                     identifier=identifier,
@@ -243,12 +245,19 @@ class ManualPvpPlayer(Player):
                     move_type=_display_value(getattr(move, "type", None)),
                     category=_display_value(getattr(move, "category", None)),
                     power=_numeric_value(getattr(move, "base_power", None)),
-                    accuracy=_numeric_value(getattr(move, "accuracy", None)),
+                    accuracy=_accuracy_percent(getattr(move, "accuracy", None)),
                 )
                 moves.append(action)
                 orders[identifier] = order
             elif hasattr(order.order, "name"):
                 identifier = f"switch:{order.order.name}"
+                if bool(getattr(order.order, "fainted", False)):
+                    continue
+                active = getattr(battle, "active_pokemon", None)
+                if active is not None and order.order.name == getattr(
+                    active, "species", None
+                ):
+                    continue
                 action = PvpAction(
                     kind=PvpActionKind.SWITCH,
                     identifier=identifier,
@@ -283,6 +292,20 @@ def _numeric_value(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _accuracy_percent(value) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= numeric <= 1 and isinstance(value, float):
+        return round(numeric * 100)
+    if 0 <= numeric <= 100:
+        return round(numeric)
+    return None
 
 
 class PokeEnvPvpController:

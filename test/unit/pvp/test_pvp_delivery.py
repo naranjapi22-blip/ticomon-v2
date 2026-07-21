@@ -332,3 +332,27 @@ def test_explicit_zero_damage_is_allowed_without_ko():
     steps = translator.translate([["battle", "-damage", "p2a: Hydrapple", "212/212"]])
 
     assert steps[0].message == "Hydrapple took 0 damage."
+
+
+def test_canonical_translator_does_not_mix_opposite_client_sides():
+    translator = PvpEventTranslator(player_id=1, opponent_id=2)
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            9,
+            2,
+            1,
+            PvpPokemonSnapshot("Walking Wake", None, 87, 204, 0.4, None, False),
+            PvpPokemonSnapshot("Zacian", None, 198, 198, 1.0, None, False),
+            1,
+            1,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    steps = translator.translate([["battle", "-damage", "p1a: Zacian", "123/198"]])
+
+    assert steps[0].message == "Zacian took 75 damage."

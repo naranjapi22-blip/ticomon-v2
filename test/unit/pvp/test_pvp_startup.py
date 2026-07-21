@@ -13,12 +13,21 @@ from infrastructure.battle.poke_env.pvp_controller import (
     ManualPvpPlayer,
     PokeEnvPvpController,
     PvpControllerCallbacks,
+    _accuracy_percent,
     _RetrievedTaskSet,
 )
 
 controller_module = importlib.import_module(
     "infrastructure.battle.poke_env.pvp_controller"
 )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(1.0, 100), (0.9, 90), (100, 100), (90, 90), (None, None)],
+)
+def test_accuracy_values_are_normalized_to_percent(value, expected):
+    assert _accuracy_percent(value) == expected
 
 
 class TeamRepository:

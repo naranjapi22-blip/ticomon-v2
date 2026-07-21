@@ -81,6 +81,7 @@ class PvpApplicationService:
             UUID, Callable[[PvpBattleSnapshot], Awaitable[None]]
         ] = {}
         self._finished_sessions: set[UUID] = set()
+        self._finalizing_sessions: set[UUID] = set()
         self._event_translators: dict[UUID, PvpEventTranslator] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
@@ -214,7 +215,9 @@ class PvpApplicationService:
                 self.registry.remove(session_id)
                 raise
             session.battle_controller = controller
-            self._event_translators[session_id] = PvpEventTranslator()
+            self._event_translators[session_id] = PvpEventTranslator(
+                session.initiator_id, session.opponent_id
+            )
             if on_event is not None:
                 self._event_handlers[session_id] = on_event
             if on_finished is not None:
@@ -382,6 +385,11 @@ class PvpApplicationService:
         action: PvpAction,
     ) -> bool:
         session = self.registry.get(session_id)
+        if (
+            session_id in self._finalizing_sessions
+            or session_id in self._finished_sessions
+        ):
+            return False
         async with session.lock:
             key = (session_id, trainer_id)
             legal = self._legal_actions.get(key)
@@ -437,6 +445,15 @@ class PvpApplicationService:
     async def handle_protocol(
         self, session_id: UUID, messages: list[list[str]]
     ) -> None:
+        if (
+            session_id in self._finalizing_sessions
+            or session_id in self._finished_sessions
+        ):
+            logger.info(
+                "Ignoring PvP protocol after finalization session_id=%s",
+                session_id,
+            )
+            return
         # Raw protocol is deliberately not rendered as history. The callback receives
         # only the current compact event and the board layer replaces the old one.
         translator = self._event_translators.setdefault(
@@ -450,9 +467,13 @@ class PvpApplicationService:
                 await handler(step)
 
     async def finish_from_controller(self, session_id: UUID, battle: object) -> None:
-        if session_id in self._finished_sessions:
+        if (
+            session_id in self._finished_sessions
+            or session_id in self._finalizing_sessions
+        ):
             return
         self._finished_sessions.add(session_id)
+        self._finalizing_sessions.add(session_id)
         handler = self._finish_handlers.get(session_id)
         try:
             try:
@@ -465,15 +486,35 @@ class PvpApplicationService:
             except (AttributeError, TypeError, ValueError):
                 final_snapshot = None
             if final_snapshot is not None:
-                await self.handle_snapshot(session_id, final_snapshot)
+                await self.handle_snapshot(session_id, final_snapshot, allow_final=True)
             if handler is not None:
                 await handler(battle)
         finally:
             await self.cleanup(session_id)
 
     async def handle_snapshot(
-        self, session_id: UUID, snapshot: PvpBattleSnapshot
+        self,
+        session_id: UUID,
+        snapshot: PvpBattleSnapshot,
+        *,
+        allow_final: bool = False,
     ) -> None:
+        if session_id in self._finished_sessions and not allow_final:
+            logger.info(
+                "Ignoring stale PvP snapshot session_id=%s phase=finished "
+                "incoming_turn=%s reason=stale_delivery_ignored",
+                session_id,
+                snapshot.turn,
+            )
+            return
+        if session_id in self._finalizing_sessions and not allow_final:
+            logger.info(
+                "Ignoring stale PvP snapshot session_id=%s phase=finalizing "
+                "incoming_turn=%s reason=stale_delivery_ignored",
+                session_id,
+                snapshot.turn,
+            )
+            return
         translator = self._event_translators.get(session_id)
         if translator is not None:
             translator.observe_snapshot(snapshot)
@@ -531,7 +572,7 @@ class PvpApplicationService:
         self._snapshot_handlers.pop(session_id, None)
         self._event_translators.pop(session_id, None)
         self.registry.remove(session_id)
-        self._finished_sessions.discard(session_id)
+        self._finalizing_sessions.discard(session_id)
 
     def _automatic_action(self, legal: PvpLegalActions) -> PvpAction:
         candidates = legal.moves if not legal.forced_switch else legal.switches

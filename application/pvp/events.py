@@ -13,20 +13,40 @@ logger = logging.getLogger(__name__)
 class PvpEventTranslator:
     """Translates Showdown protocol messages into readable turn summaries."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self, player_id: int | None = None, opponent_id: int | None = None
+    ) -> None:
         self._last_hp: dict[str, tuple[int, int]] = {}
         self._weather: str | None = None
+        self._player_id = player_id
+        self._opponent_id = opponent_id
+        self._active_ids: dict[str, str] = {}
 
     def observe_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
-        for prefix, pokemon in (
-            ("p1a", snapshot.player_active),
-            ("p2a", snapshot.opponent_active),
-        ):
+        if self._player_id is not None and snapshot.player_id != self._player_id:
+            active_pairs = (
+                ("p1a", snapshot.opponent_active),
+                ("p2a", snapshot.player_active),
+            )
+        else:
+            active_pairs = (
+                ("p1a", snapshot.player_active),
+                ("p2a", snapshot.opponent_active),
+            )
+        for prefix, pokemon in (*active_pairs,):
             if pokemon is not None and pokemon.current_hp is not None:
-                self._last_hp[_protocol_id(f"{prefix}: {pokemon.species_name}")] = (
-                    pokemon.current_hp,
-                    pokemon.max_hp or 0,
-                )
+                key = _protocol_id(f"{prefix}: {pokemon.species_name}")
+                if self._active_ids.get(prefix) != key:
+                    self._active_ids[prefix] = key
+                    self._last_hp[key] = (
+                        pokemon.current_hp,
+                        pokemon.max_hp or 0,
+                    )
+                else:
+                    self._last_hp.setdefault(
+                        key,
+                        (pokemon.current_hp, pokemon.max_hp or 0),
+                    )
 
     def translate(self, messages: list[list[str]]) -> tuple[PvpPresentationStep, ...]:
         steps: list[PvpPresentationStep] = []

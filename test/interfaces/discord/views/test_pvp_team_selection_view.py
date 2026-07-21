@@ -10,9 +10,11 @@ from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
 from core.pvp.session import PvpPhase, PvpSessionRegistry
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
 from interfaces.discord.views.pvp_challenge_view import (
+    PvpActionView,
     PvpBoardView,
     PvpChallengeView,
     PvpTeamSelectionView,
+    _action_description,
 )
 
 
@@ -333,6 +335,38 @@ def test_private_action_details_include_move_and_switch_information():
     assert actions.moves[0].detail == "PP 15/15"
     assert actions.switches[0].hp_current == 140
     assert actions.switches[0].status == "PAR"
+
+
+def test_private_panel_keeps_details_only_in_select_options():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Rival"},
+    )
+    board = PvpBoardView(source)
+    move = PvpAction(
+        PvpActionKind.MOVE,
+        "move:moonblast",
+        "moonblast",
+        detail="PP 24/24",
+        move_type="Fairy",
+        category="Special",
+        power=95,
+        accuracy=100,
+    )
+    actions = PvpLegalActions(moves=(move,))
+    embed = board._build_action_embed(1, actions)
+    view = PvpActionView(board, 1, actions)
+
+    assert not embed.fields
+    assert view.select.options[0].label == "Moonblast"
+    assert _action_description(move) == "Fairy · Special · 95 BP · PP 24/24 · 100% Acc"
+    assert "moonblast" not in _action_description(move)
 
 
 def test_pending_challenge_owns_accept_and_decline_only():

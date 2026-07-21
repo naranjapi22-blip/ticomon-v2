@@ -51,11 +51,11 @@ class PvpChallengeView(discord.ui.View):
     async def accept(self, interaction: discord.Interaction, button) -> None:
         try:
             session = self.core.pvp_application_service.registry.get(self.session_id)
+            if session.phase is not PvpPhase.CHALLENGE:
+                raise ValueError("This PvP challenge is no longer pending.")
             session.phase = PvpPhase.TEAM_SELECTION
-        except ValueError:
-            await interaction.response.send_message(
-                "This PvP challenge is no longer active.", ephemeral=True
-            )
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
             return
 
         view = PvpTeamSelectionView(self.core, session, self.display_names)
@@ -79,6 +79,18 @@ class PvpChallengeView(discord.ui.View):
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.secondary)
     async def decline(self, interaction: discord.Interaction, button) -> None:
+        try:
+            session = self.core.pvp_application_service.registry.get(self.session_id)
+            if session.phase is not PvpPhase.CHALLENGE:
+                await interaction.response.send_message(
+                    "This PvP challenge is no longer pending.", ephemeral=True
+                )
+                return
+        except ValueError:
+            await interaction.response.send_message(
+                "This PvP challenge is no longer active.", ephemeral=True
+            )
+            return
         await self.core.pvp_application_service.decline(self.session_id)
         for child in self.children:
             child.disabled = True
@@ -91,6 +103,15 @@ class PvpChallengeView(discord.ui.View):
         await self.core.pvp_application_service.cleanup(self.session_id)
         for child in self.children:
             child.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=None)
+            except discord.HTTPException:
+                logger.debug(
+                    "Unable to remove expired PvP challenge controls session_id=%s",
+                    self.session_id,
+                    exc_info=True,
+                )
         if self.message is not None:
             try:
                 await self.message.edit(view=self)
@@ -217,6 +238,15 @@ class PvpTeamSelectionView(discord.ui.View):
         await self.core.pvp_application_service.cleanup(self.session_id)
         for child in self.children:
             child.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=None)
+            except discord.HTTPException:
+                logger.debug(
+                    "Unable to remove expired PvP team controls session_id=%s",
+                    self.session_id,
+                    exc_info=True,
+                )
 
 
 class PvpBoardView(discord.ui.View):
@@ -232,6 +262,7 @@ class PvpBoardView(discord.ui.View):
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
         self._snapshots: dict[int, PvpBattleSnapshot] = {}
+        self._snapshot_turns: dict[int, int] = {}
         self._pending_edit: tuple[str, tuple] | None = None
         self._edit_task: asyncio.Task | None = None
         self._last_edit_at = 0.0
@@ -378,6 +409,8 @@ class PvpBoardView(discord.ui.View):
         return "Waiting for both players"
 
     async def set_event(self, step: PvpPresentationStep | str) -> None:
+        if self._terminal:
+            return
         message = step.message if isinstance(step, PvpPresentationStep) else str(step)
         if (
             message.endswith(" won the battle.")
@@ -392,6 +425,28 @@ class PvpBoardView(discord.ui.View):
         await self._edit_message()
 
     async def set_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
+        if self._terminal:
+            logger.info(
+                "Ignoring stale PvP snapshot session_id=%s current_phase=finished "
+                "incoming_turn=%s source_player=%s reason=stale_delivery_ignored",
+                self.session_id,
+                snapshot.turn,
+                snapshot.player_id,
+            )
+            return
+        previous_turn = self._snapshot_turns.get(snapshot.player_id)
+        if previous_turn is not None and snapshot.turn < previous_turn:
+            logger.info(
+                "Ignoring stale PvP snapshot session_id=%s current_phase=active "
+                "current_turn=%s incoming_turn=%s source_player=%s "
+                "reason=stale_delivery_ignored",
+                self.session_id,
+                previous_turn,
+                snapshot.turn,
+                snapshot.player_id,
+            )
+            return
+        self._snapshot_turns[snapshot.player_id] = snapshot.turn
         self._snapshots[snapshot.player_id] = snapshot
         self.snapshot = snapshot
         self._visual_version += 1
@@ -446,6 +501,8 @@ class PvpBoardView(discord.ui.View):
             if state == self._last_render:
                 continue
             content, _ = state
+            if self._terminal and content != self.render():
+                content = self.render()
             visual_state = self._visual_state()
             visual_bytes = self._last_visual_bytes
             renderer = getattr(self.core, "battle_presentation_renderer", None)
@@ -574,7 +631,8 @@ class PvpBoardView(discord.ui.View):
             if own is not None:
                 status = f" · {own.status}" if own.status else ""
                 description = (
-                    f"{own.species_name} · {own.current_hp}/{own.max_hp} HP{status}"
+                    f"{display_species_name(own.species_name)} · "
+                    f"{own.current_hp}/{own.max_hp} HP{status}"
                 )
                 creature = next(
                     (
@@ -585,36 +643,13 @@ class PvpBoardView(discord.ui.View):
                     None,
                 )
                 if creature is not None and getattr(creature, "ability_id", None):
-                    description += f"\nAbility: {creature.ability_id}"
+                    description += (
+                        f"\nAbility: {_display_ability_name(creature.ability_id)}"
+                    )
         except ValueError:
             pass
 
         embed = discord.Embed(title=title, description=description)
-        moves = [action for action in actions.moves]
-        switches = [action for action in actions.switches]
-        if moves:
-            embed.add_field(
-                name="Moves",
-                value="\n".join(_action_detail(action) for action in moves)[:1024],
-                inline=False,
-            )
-        if switches:
-            switch_lines = []
-            for action in switches:
-                state = "Fainted" if action.fainted else "Healthy"
-                hp = (
-                    f"{action.hp_current}/{action.hp_max} HP"
-                    if action.hp_current is not None and action.hp_max is not None
-                    else "HP unavailable"
-                )
-                switch_lines.append(f"{action.label} · {hp} · {state}")
-            embed.add_field(
-                name=(
-                    "Switches" if not actions.forced_switch else "Choose a replacement"
-                ),
-                value="\n".join(switch_lines)[:1024],
-                inline=False,
-            )
         return embed
 
     @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.danger)
@@ -629,6 +664,15 @@ class PvpBoardView(discord.ui.View):
     async def on_timeout(self) -> None:
         if self._edit_task is not None and not self._edit_task.done():
             self._edit_task.cancel()
+        if self.message is not None:
+            try:
+                await self.message.edit(view=None)
+            except discord.HTTPException:
+                logger.debug(
+                    "Unable to remove expired PvP board controls session_id=%s",
+                    self.session_id,
+                    exc_info=True,
+                )
         await self.core.pvp_application_service.cleanup(self.session_id)
 
 
@@ -646,7 +690,7 @@ class PvpActionView(discord.ui.View):
             ),
             options=[
                 discord.SelectOption(
-                    label=action.label[:100],
+                    label=_display_action_name(action)[:100],
                     value=action.identifier,
                     description=_action_description(action),
                 )
@@ -655,6 +699,15 @@ class PvpActionView(discord.ui.View):
         )
         self.select.callback = self._select_callback
         self.add_item(self.select)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.trainer_id:
+            await interaction.response.send_message(
+                "This private action panel belongs to another trainer.",
+                ephemeral=True,
+            )
+            return False
+        return True
 
     async def _select_callback(self, interaction: discord.Interaction) -> None:
         identifier = self.select.values[0]
@@ -687,13 +740,10 @@ class PvpActionView(discord.ui.View):
 def _action_detail(action: PvpAction) -> str:
     move_type = action.move_type or "—"
     category = action.category or "—"
-    power = str(action.power) if action.power is not None else "—"
-    accuracy = f"{action.accuracy}%" if action.accuracy is not None else "—"
-    detail = action.detail or "PP unavailable"
-    return (
-        f"{action.label} · {move_type} · {category} · {power} BP · "
-        f"{detail} · Accuracy {accuracy}"
-    )
+    power = f"{action.power} BP" if action.power is not None else "—"
+    accuracy = f"{action.accuracy}% Acc" if action.accuracy is not None else "—"
+    detail = action.detail or "PP —"
+    return f"{move_type} · {category} · {power} · {detail} · {accuracy}"
 
 
 def _action_description(action: PvpAction) -> str:
@@ -704,4 +754,35 @@ def _action_description(action: PvpAction) -> str:
         if action.hp_current is not None and action.hp_max is not None
         else "HP unavailable"
     )
-    return f"{hp} · {'Fainted' if action.fainted else 'Ready'}"[:100]
+    return f"{hp} · {'Fainted' if action.fainted else 'Healthy'}"[:100]
+
+
+_DISPLAY_NAME_OVERRIDES = {
+    "dazzlinggleam": "Dazzling Gleam",
+    "hyperbeam": "Hyper Beam",
+    "intrepidsword": "Intrepid Sword",
+    "kommoo": "Kommo-o",
+    "moonblast": "Moonblast",
+    "playrough": "Play Rough",
+    "walkingwake": "Walking Wake",
+    "ironthorns": "Iron Thorns",
+    "zacian": "Zacian",
+}
+
+
+def _display_ability_name(value: object) -> str:
+    return _display_name(value)
+
+
+def _display_action_name(action: PvpAction) -> str:
+    if action.kind is PvpActionKind.MOVE:
+        return _display_name(action.label)
+    return f"Switch to {_display_name(action.label)}"
+
+
+def _display_name(value: object) -> str:
+    text = str(value).replace("_", "-").strip()
+    key = "".join(character for character in text.casefold() if character.isalnum())
+    if key in _DISPLAY_NAME_OVERRIDES:
+        return _DISPLAY_NAME_OVERRIDES[key]
+    return text.replace("-", " ").title()
