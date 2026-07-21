@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import infrastructure.battle.poke_env.pvp_controller as controller_module
 from application.pvp.pvp_application_service import PvpApplicationService
 from core.pvp.session import PvpSessionRegistry
 from core.team.team_slot import TeamSlot
@@ -175,13 +176,13 @@ async def test_simultaneous_confirmations_start_one_controller():
 
 
 @pytest.mark.asyncio
-async def test_start_failure_cleans_session_and_releases_trainers():
+async def test_start_failure_cleans_session_and_releases_trainers(caplog):
     creatures = _creatures()
     closed = 0
 
     class FailingController:
         async def start(self, teams, callbacks):
-            raise TimeoutError("login timeout")
+            raise TimeoutError("login timeout token=secret-value")
 
         async def close(self):
             nonlocal closed
@@ -207,6 +208,19 @@ async def test_start_failure_cleans_session_and_releases_trainers():
     assert not service.registry.is_occupied(1)
     assert not service.registry.is_occupied(2)
     assert closed == 1
+    startup_records = [
+        record
+        for record in caplog.records
+        if record.message.startswith("PvP startup failed")
+    ]
+    assert len(startup_records) == 1
+    assert str(session.id) in startup_records[0].message
+    assert "phase=starting" in startup_records[0].message
+    assert "TimeoutError" in startup_records[0].message
+    assert "login timeout" in startup_records[0].message
+    assert "secret-value" not in startup_records[0].message
+    assert "token=[REDACTED]" in startup_records[0].message
+    assert startup_records[0].exc_info is not None
 
 
 class FakePlayer:
@@ -215,6 +229,7 @@ class FakePlayer:
     def __init__(self, trainer_id, team, username, callback_tasks, **kwargs):
         self.trainer_id = trainer_id
         self.username = username
+        self.server_configuration = kwargs["server_configuration"]
         self.ps_client = SimpleNamespace(
             logged_in=asyncio.Event(),
             stop_listening=self._stop_listening,
@@ -232,8 +247,18 @@ class FakePlayer:
 
 
 @pytest.mark.asyncio
-async def test_showdown_usernames_are_unique_valid_and_side_specific():
+async def test_showdown_usernames_are_unique_valid_and_side_specific(monkeypatch):
     FakePlayer.created = []
+    monkeypatch.setattr(
+        controller_module,
+        "SHOWDOWN_WEBSOCKET_URL",
+        "ws://showdown.internal/showdown/websocket",
+    )
+    monkeypatch.setattr(
+        controller_module,
+        "SHOWDOWN_AUTHENTICATION_URL",
+        "http://showdown.internal/action.php?",
+    )
     controller = PokeEnvPvpController(
         player_factory=FakePlayer, session_token="0123456789abcdef"
     )
@@ -254,10 +279,46 @@ async def test_showdown_usernames_are_unique_valid_and_side_specific():
 
 
 @pytest.mark.asyncio
-async def test_showdown_login_retry_is_limited(monkeypatch):
-    import infrastructure.battle.poke_env.pvp_controller as controller_module
-
+async def test_railway_showdown_url_reaches_server_configuration(monkeypatch):
+    railway_url = "ws://pokemon-showdown.railway.internal:8080/showdown/websocket"
     FakePlayer.created = []
+    monkeypatch.setenv("SHOWDOWN_WEBSOCKET_URL", railway_url)
+    monkeypatch.delenv("SHOWDOWN_AUTHENTICATION_URL", raising=False)
+    controller = PokeEnvPvpController(player_factory=FakePlayer)
+    controller._pack_team = lambda team: ""
+    callbacks = PvpControllerCallbacks(
+        on_actions=lambda *_: asyncio.sleep(0),
+        on_protocol=lambda *_: asyncio.sleep(0),
+        on_finished=lambda *_: asyncio.sleep(0),
+    )
+
+    await controller.start({1: (), 2: ()}, callbacks)
+
+    assert len(FakePlayer.created) == 2
+    assert all(
+        player.server_configuration.websocket_url == railway_url
+        for player in FakePlayer.created
+    )
+    assert all(
+        player.server_configuration.authentication_url == ""
+        for player in FakePlayer.created
+    )
+    await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_showdown_login_retry_is_limited(monkeypatch):
+    FakePlayer.created = []
+    monkeypatch.setattr(
+        controller_module,
+        "SHOWDOWN_WEBSOCKET_URL",
+        "ws://showdown.internal/showdown/websocket",
+    )
+    monkeypatch.setattr(
+        controller_module,
+        "SHOWDOWN_AUTHENTICATION_URL",
+        "http://showdown.internal/action.php?",
+    )
     monkeypatch.setattr(controller_module, "SHOWDOWN_CONNECTION_TIMEOUT_SECONDS", 0.001)
     for player in FakePlayer.created:
         player.ps_client.logged_in.clear()
@@ -280,6 +341,67 @@ async def test_showdown_login_retry_is_limited(monkeypatch):
         await controller.start({1: (), 2: ()}, callbacks)
 
     assert len(FakePlayer.created) == 6
+
+
+def test_implicit_local_showdown_defaults_are_rejected(monkeypatch):
+    monkeypatch.delenv("SHOWDOWN_WEBSOCKET_URL", raising=False)
+    monkeypatch.delenv("SHOWDOWN_AUTHENTICATION_URL", raising=False)
+    monkeypatch.setattr(
+        controller_module,
+        "SHOWDOWN_WEBSOCKET_URL",
+        controller_module.DEFAULT_SHOWDOWN_WEBSOCKET_URL,
+    )
+    monkeypatch.setattr(
+        controller_module,
+        "SHOWDOWN_AUTHENTICATION_URL",
+        "",
+    )
+
+    with pytest.raises(RuntimeError, match="default localhost URLs"):
+        controller_module.validate_showdown_configuration()
+
+
+def test_explicit_localhost_is_accepted_for_development(monkeypatch):
+    monkeypatch.setenv(
+        "SHOWDOWN_WEBSOCKET_URL", "ws://localhost:8000/showdown/websocket"
+    )
+    monkeypatch.delenv("SHOWDOWN_AUTHENTICATION_URL", raising=False)
+
+    assert controller_module.validate_showdown_configuration() == (
+        "ws://localhost:8000/showdown/websocket",
+        "",
+    )
+
+
+def test_explicit_showdown_urls_are_accepted(monkeypatch):
+    monkeypatch.setenv(
+        "SHOWDOWN_WEBSOCKET_URL", "wss://showdown.internal/showdown/websocket"
+    )
+    monkeypatch.setenv(
+        "SHOWDOWN_AUTHENTICATION_URL", "https://showdown.internal/action.php?"
+    )
+
+    assert controller_module.validate_showdown_configuration() == (
+        "wss://showdown.internal/showdown/websocket",
+        "https://showdown.internal/action.php?",
+    )
+
+
+@pytest.mark.parametrize(
+    "websocket_url,expected",
+    [
+        ("http://showdown.internal/showdown/websocket", "must use ws or wss"),
+        ("ws:///showdown/websocket", "must include a hostname"),
+    ],
+)
+def test_invalid_showdown_websocket_urls_are_rejected(
+    monkeypatch, websocket_url, expected
+):
+    monkeypatch.setenv("SHOWDOWN_WEBSOCKET_URL", websocket_url)
+    monkeypatch.delenv("SHOWDOWN_AUTHENTICATION_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match=expected):
+        controller_module.validate_showdown_configuration()
 
 
 @pytest.mark.asyncio

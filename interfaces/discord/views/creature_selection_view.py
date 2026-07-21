@@ -72,17 +72,25 @@ class CreatureSelectionView(discord.ui.View):
             return
         try:
             result = await self._on_selected(selected)
-        except Exception as error:
+        except ValueError as error:
             await self._followup(interaction, f"{self._error_prefix}{error}")
             return
+        followup_kwargs = {}
+        if self._success_view is not None:
+            success_view = self._success_view(result)
+            if success_view is not None:
+                if not isinstance(success_view, discord.ui.View):
+                    raise TypeError("success_view must return a discord.ui.View")
+                followup_kwargs["view"] = success_view
         await self._followup(
             interaction,
             self._success_message(result),
-            view=self._success_view(result) if self._success_view else None,
+            **followup_kwargs,
         )
         self.stop()
 
     async def _followup(self, interaction, content: str, **kwargs) -> None:
+        kwargs = {key: value for key, value in kwargs.items() if value is not None}
         try:
             await interaction.followup.send(content, ephemeral=True, **kwargs)
         except (discord.NotFound, discord.HTTPException):

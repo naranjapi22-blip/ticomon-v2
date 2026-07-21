@@ -17,9 +17,7 @@ from infrastructure.battle.poke_env.pvp_controller import PVP_BATTLE_FORMAT
 SHOWDOWN_WEBSOCKET_URL = os.getenv(
     "SHOWDOWN_WEBSOCKET_URL", "ws://localhost:8000/showdown/websocket"
 )
-SHOWDOWN_AUTHENTICATION_URL = os.getenv(
-    "SHOWDOWN_AUTHENTICATION_URL", "http://localhost:8000/action.php?"
-)
+SHOWDOWN_AUTHENTICATION_URL = os.getenv("SHOWDOWN_AUTHENTICATION_URL", "")
 
 
 def _team() -> str:

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
+import re
 import time
 from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
@@ -26,6 +28,30 @@ from infrastructure.battle.poke_env.pvp_controller import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_exception_message(error: BaseException) -> str:
+    message = str(error).replace("\r", " ").replace("\n", " ").strip()
+    for secret_name in (
+        "DISCORD_TOKEN",
+        "NEON_DATABASE_URL",
+        "SHOWDOWN_WEBSOCKET_URL",
+        "SHOWDOWN_AUTHENTICATION_URL",
+    ):
+        secret = os.getenv(secret_name)
+        if secret:
+            message = message.replace(secret, "[REDACTED]")
+    message = re.sub(
+        r"(?i)(authorization|password|secret|token)(\s*[:=]\s*)\S+",
+        r"\1\2[REDACTED]",
+        message,
+    )
+    message = re.sub(
+        r"(?i)(https?://)([^/\s:@]+):([^@\s]+)@",
+        r"\1[REDACTED]@",
+        message,
+    )
+    return message[:500] or "<no exception message>"
 
 
 class PvpApplicationService:
@@ -213,12 +239,12 @@ class PvpApplicationService:
             raise
         except Exception as error:
             logger.warning(
-                "PvP startup failed",
-                extra={
-                    "session_id": str(session_id),
-                    "session_state": session.phase.value,
-                    "error_type": type(error).__name__,
-                },
+                "PvP startup failed session_id=%s phase=%s error_type=%s error=%s",
+                session_id,
+                session.phase.value,
+                type(error).__name__,
+                _safe_exception_message(error),
+                exc_info=True,
             )
             handler = self._event_handlers.get(session_id)
             try:
@@ -232,11 +258,12 @@ class PvpApplicationService:
         self, session_id: UUID, error: BaseException
     ) -> None:
         logger.warning(
-            "PvP controller task failed",
-            extra={
-                "session_id": str(session_id),
-                "error_type": type(error).__name__,
-            },
+            "PvP controller task failed session_id=%s phase=%s error_type=%s error=%s",
+            session_id,
+            self._session_phase(session_id),
+            type(error).__name__,
+            _safe_exception_message(error),
+            exc_info=(type(error), error, error.__traceback__),
         )
         handler = self._event_handlers.get(session_id)
         if handler is not None:
@@ -245,6 +272,12 @@ class PvpApplicationService:
             except Exception:
                 logger.debug("Unable to publish PvP controller failure", exc_info=True)
         await self.cleanup(session_id)
+
+    def _session_phase(self, session_id: UUID) -> str:
+        try:
+            return self.registry.get(session_id).phase.value
+        except ValueError:
+            return "unknown"
 
     @staticmethod
     def _consume_start_task(task: asyncio.Task) -> None:

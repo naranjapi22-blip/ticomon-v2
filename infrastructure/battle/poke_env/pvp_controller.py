@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 from poke_env.battle import AbstractBattle
 from poke_env.exceptions import ShowdownException
@@ -35,9 +37,77 @@ SHOWDOWN_MESSAGE_CLOSE_TIMEOUT_SECONDS = 1
 SHOWDOWN_WEBSOCKET_URL = os.getenv(
     "SHOWDOWN_WEBSOCKET_URL", "ws://localhost:8000/showdown/websocket"
 )
-SHOWDOWN_AUTHENTICATION_URL = os.getenv(
-    "SHOWDOWN_AUTHENTICATION_URL", "http://localhost:8000/action.php?"
-)
+SHOWDOWN_AUTHENTICATION_URL = os.getenv("SHOWDOWN_AUTHENTICATION_URL", "")
+DEFAULT_SHOWDOWN_WEBSOCKET_URL = "ws://localhost:8000/showdown/websocket"
+
+
+def _safe_exception_message(error: BaseException) -> str:
+    message = str(error).replace("\r", " ").replace("\n", " ").strip()
+    for secret_name in (
+        "DISCORD_TOKEN",
+        "NEON_DATABASE_URL",
+        "SHOWDOWN_WEBSOCKET_URL",
+        "SHOWDOWN_AUTHENTICATION_URL",
+    ):
+        secret = os.getenv(secret_name)
+        if secret:
+            message = message.replace(secret, "[REDACTED]")
+    message = re.sub(
+        r"(?i)(authorization|password|secret|token)(\s*[:=]\s*)\S+",
+        r"\1\2[REDACTED]",
+        message,
+    )
+    message = re.sub(
+        r"(?i)(https?://)([^/\s:@]+):([^@\s]+)@",
+        r"\1[REDACTED]@",
+        message,
+    )
+    return message[:500] or "<no exception message>"
+
+
+def _showdown_urls() -> tuple[str, str]:
+    return (
+        os.getenv("SHOWDOWN_WEBSOCKET_URL", SHOWDOWN_WEBSOCKET_URL),
+        os.getenv("SHOWDOWN_AUTHENTICATION_URL", SHOWDOWN_AUTHENTICATION_URL),
+    )
+
+
+def _validate_url(url: str, *, schemes: set[str], setting_name: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in schemes:
+        expected = " or ".join(sorted(schemes))
+        raise RuntimeError(f"{setting_name} must use {expected}.")
+    if not parsed.hostname:
+        raise RuntimeError(f"{setting_name} must include a hostname.")
+
+
+def validate_showdown_configuration() -> tuple[str, str]:
+    websocket_url, authentication_url = _showdown_urls()
+    if not websocket_url:
+        raise RuntimeError(
+            "PvP Showdown is not configured: set SHOWDOWN_WEBSOCKET_URL."
+        )
+    if (
+        not os.getenv("SHOWDOWN_WEBSOCKET_URL")
+        and websocket_url == DEFAULT_SHOWDOWN_WEBSOCKET_URL
+    ):
+        raise RuntimeError(
+            "PvP Showdown is not configured: set SHOWDOWN_WEBSOCKET_URL. The default "
+            "localhost URLs are only valid when a local Showdown server is "
+            "running."
+        )
+    _validate_url(
+        websocket_url,
+        schemes={"ws", "wss"},
+        setting_name="SHOWDOWN_WEBSOCKET_URL",
+    )
+    if authentication_url:
+        _validate_url(
+            authentication_url,
+            schemes={"http", "https"},
+            setting_name="SHOWDOWN_AUTHENTICATION_URL",
+        )
+    return websocket_url, authentication_url
 
 
 @dataclass(frozen=True)
@@ -195,6 +265,7 @@ class PokeEnvPvpController:
         callbacks: PvpControllerCallbacks,
     ) -> None:
         self._callbacks = callbacks
+        websocket_url, authentication_url = validate_showdown_configuration()
         player_ids = tuple(teams)
         if len(player_ids) != 2:
             raise ValueError("A PvP battle requires two teams.")
@@ -205,8 +276,8 @@ class PokeEnvPvpController:
             "callbacks": callbacks,
             "loop": asyncio.get_running_loop(),
             "server_configuration": ServerConfiguration(
-                websocket_url=SHOWDOWN_WEBSOCKET_URL,
-                authentication_url=SHOWDOWN_AUTHENTICATION_URL,
+                websocket_url=websocket_url,
+                authentication_url=authentication_url,
             ),
         }
         last_error = None
@@ -230,9 +301,12 @@ class PokeEnvPvpController:
                 return
             except Exception as error:
                 last_error = error
-                logger.info(
-                    "Retrying PvP Showdown login",
-                    extra={"attempt": attempt, "error_type": type(error).__name__},
+                logger.warning(
+                    "Retrying PvP Showdown login attempt=%s error_type=%s error=%s",
+                    attempt,
+                    type(error).__name__,
+                    _safe_exception_message(error),
+                    exc_info=(type(error), error, error.__traceback__),
                 )
                 await self.close()
         raise TimeoutError(
@@ -246,6 +320,13 @@ class PokeEnvPvpController:
         if error is None or self._callbacks is None or self._callbacks.on_error is None:
             _consume_task_exception(task)
             return
+        logger.warning(
+            "PvP Showdown battle task failed attempt=%s error_type=%s error=%s",
+            self._attempt,
+            type(error).__name__,
+            _safe_exception_message(error),
+            exc_info=(type(error), error, error.__traceback__),
+        )
         callback_task = asyncio.create_task(self._callbacks.on_error(error))
         self._callback_tasks.add(callback_task)
         callback_task.add_done_callback(self._callback_tasks.discard)

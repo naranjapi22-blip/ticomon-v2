@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import discord
 import pytest
 
 from core.pvp.session import PvpPhase, PvpSessionRegistry
@@ -89,10 +90,64 @@ async def test_shared_picker_saves_after_defer_and_uses_one_followup():
 
     interaction.response.defer.assert_awaited_once_with(ephemeral=True)
     saved.assert_awaited_once_with([1, 2, 3])
-    interaction.followup.send.assert_awaited_once_with(
-        "team", view=None, ephemeral=True
-    )
+    interaction.followup.send.assert_awaited_once_with("team", ephemeral=True)
     interaction.response.send_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_shared_picker_includes_a_valid_success_view():
+    success_view = discord.ui.View()
+    picker = CreatureSelectionView(
+        owner_id=1,
+        required_count=3,
+        options=[(1, "One"), (2, "Two"), (3, "Three")],
+        on_selected=AsyncMock(return_value="team"),
+        success_message=lambda value: value,
+        success_view=lambda _: success_view,
+    )
+    interaction = _interaction()
+
+    await picker.on_select(interaction)
+
+    interaction.followup.send.assert_awaited_once_with(
+        "team", ephemeral=True, view=success_view
+    )
+
+
+@pytest.mark.asyncio
+async def test_shared_picker_reports_functional_selection_errors():
+    picker = CreatureSelectionView(
+        owner_id=1,
+        required_count=3,
+        options=[(1, "One"), (2, "Two"), (3, "Three")],
+        on_selected=AsyncMock(side_effect=ValueError("team is no longer valid")),
+        success_message=lambda value: value,
+    )
+    interaction = _interaction()
+
+    await picker.on_select(interaction)
+
+    interaction.followup.send.assert_awaited_once()
+    message = interaction.followup.send.await_args.args[0]
+    assert message.endswith("Could not save team: team is no longer valid")
+    assert interaction.followup.send.await_args.kwargs == {"ephemeral": True}
+
+
+@pytest.mark.asyncio
+async def test_shared_picker_does_not_hide_programming_type_errors():
+    picker = CreatureSelectionView(
+        owner_id=1,
+        required_count=3,
+        options=[(1, "One"), (2, "Two"), (3, "Three")],
+        on_selected=AsyncMock(side_effect=TypeError("programming error")),
+        success_message=lambda value: value,
+    )
+    interaction = _interaction()
+
+    with pytest.raises(TypeError, match="programming error"):
+        await picker.on_select(interaction)
+
+    interaction.followup.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio

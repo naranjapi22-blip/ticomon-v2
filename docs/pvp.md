@@ -28,12 +28,29 @@ helpers. It does not retain a permanent event history.
 The controller uses two human-controlled `poke-env` players connected to a
 reachable Pokemon Showdown server over WebSocket. `poke-env` is the client and
 protocol adapter; Showdown owns PP, battle effects, and live battle state.
-The default endpoints are:
+Local development can use these endpoints when a Showdown server is running
+in the same machine:
 
 ```text
 SHOWDOWN_WEBSOCKET_URL=ws://localhost:8000/showdown/websocket
-SHOWDOWN_AUTHENTICATION_URL=http://localhost:8000/action.php?
+# Optional for a private server with passwordless accounts.
+SHOWDOWN_AUTHENTICATION_URL=
 ```
+
+The controller rejects these implicit localhost defaults at startup. Production
+must set `SHOWDOWN_WEBSOCKET_URL` explicitly to the reachable Showdown service
+URL. The current Railway worker example uses the private network:
+
+```text
+SHOWDOWN_WEBSOCKET_URL=ws://pokemon-showdown.railway.internal:8080/showdown/websocket
+```
+
+TicoMon does not create or start the Showdown worker. Do not replace the
+private hostname with a public URL when the Railway services can communicate
+over the private network. `SHOWDOWN_AUTHENTICATION_URL` is optional for the
+current passwordless private-server flow. Set it to an `http://` or `https://`
+authentication endpoint only when the configured Showdown authentication flow
+requires one.
 
 The technical format is Gen 9 custom game at level 50, with zero EVs,
 persisted IVs, effective nature, persisted ability, four equipped moves, and
@@ -77,9 +94,9 @@ npm install
 node pokemon-showdown start --no-security
 ```
 
-The expected endpoint is `ws://localhost:8000/showdown/websocket`. Override it
-only for another local test server with `SHOWDOWN_WEBSOCKET_URL`; the
-authentication endpoint can be changed with `SHOWDOWN_AUTHENTICATION_URL`.
+The expected local endpoint is `ws://localhost:8000/showdown/websocket`.
+`localhost` is accepted only when it is explicitly configured for local
+development; it is not an implicit production fallback.
 
 Run the non-Discord diagnostic with:
 
