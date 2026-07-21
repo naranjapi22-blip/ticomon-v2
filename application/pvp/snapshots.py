@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from rendering.battle.pvp_sprite_urls import showdown_sprite_identifier
+
 
 @dataclass(frozen=True)
 class PvpPokemonSnapshot:
@@ -12,6 +14,8 @@ class PvpPokemonSnapshot:
     hp_fraction: float
     status: str | None
     fainted: bool
+    sprite_identifier: str = "missingno"
+    shiny: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,4 +88,9 @@ def _pokemon_snapshot(pokemon) -> PvpPokemonSnapshot | None:
         hp_fraction=float(getattr(pokemon, "current_hp_fraction", 0.0) or 0.0),
         status=status_name,
         fainted=bool(getattr(pokemon, "fainted", False)),
+        sprite_identifier=showdown_sprite_identifier(
+            str(getattr(pokemon, "species", None) or pokemon.name),
+            getattr(pokemon, "forme", None),
+        ),
+        shiny=bool(getattr(pokemon, "is_shiny", False)),
     )

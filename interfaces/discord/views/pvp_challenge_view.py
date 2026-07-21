@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import io
+import logging
 import time
 from dataclasses import replace
 
 import discord
 
 from application.pvp.models import PvpAction, PvpActionKind
+from application.pvp.presentation_adapter import pvp_presentation_state
 from application.pvp.snapshots import PvpBattleSnapshot
 from core.pvp.session import PvpPhase
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
+
+logger = logging.getLogger(__name__)
 
 
 class PvpChallengeView(discord.ui.View):
@@ -186,10 +191,9 @@ class PvpTeamSelectionView(discord.ui.View):
     async def _on_finished(self, battle: object) -> None:
         if self.message is None:
             return
-        try:
-            await self.message.edit(content="PvP finished.", view=None)
-        except discord.HTTPException:
-            pass
+        board = await self._get_board()
+        board.current_event = "Battle finished."
+        await board.finish()
 
     async def on_timeout(self) -> None:
         await self.core.pvp_application_service.cleanup(self.session_id)
@@ -213,6 +217,10 @@ class PvpBoardView(discord.ui.View):
         self._last_edit_at = 0.0
         self._last_render: tuple[str, tuple] | None = None
         self._edit_interval = 0.5
+        self._visual_version = 0
+        self._last_visual_version = -1
+        self._last_visual_bytes: bytes | None = None
+        self._terminal = False
 
     @classmethod
     async def from_selection(cls, source: PvpTeamSelectionView) -> "PvpBoardView":
@@ -229,14 +237,16 @@ class PvpBoardView(discord.ui.View):
         ready = ", ".join(f"<@{player_id}>" for player_id in self.ready) or "none"
         active_lines = self._render_players(session)
         turn = self.snapshot.turn if self.snapshot is not None else session.turn_number
-        return (
+        result = (
             f"⚔️ PvP — Turn {turn}\n"
             f"<@{session.initiator_id}> vs <@{session.opponent_id}>\n\n"
             + "\n".join(active_lines)
             + "\n\n"
-            f"{self.current_event}\n"
-            f"Ready: {ready}"
+            f"{self.current_event}"
         )
+        if getattr(self.core, "battle_presentation_renderer", None) is None:
+            result += f"\nReady: {ready}"
+        return result
 
     def _render_players(self, session) -> list[str]:
         if self.snapshot is None:
@@ -303,13 +313,24 @@ class PvpBoardView(discord.ui.View):
     async def set_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
         self._snapshots[snapshot.player_id] = snapshot
         self.snapshot = snapshot
+        self._visual_version += 1
         await self._edit_message()
 
-    async def _edit_message(self) -> None:
+    async def finish(self, snapshot: PvpBattleSnapshot | None = None) -> None:
+        if snapshot is not None:
+            self._snapshots[snapshot.player_id] = snapshot
+            self.snapshot = snapshot
+        self._terminal = True
+        self._visual_version += 1
+        await self._edit_message(force=True)
+        if self._edit_task is not None:
+            await self._edit_task
+
+    async def _edit_message(self, *, force: bool = False) -> None:
         if self.message is None:
             return
         state = (self.render(), self._component_signature())
-        if state == self._last_render or state == self._pending_edit:
+        if not force and (state == self._last_render or state == self._pending_edit):
             return
         self._pending_edit = state
         if self._edit_task is None or self._edit_task.done():
@@ -335,16 +356,98 @@ class PvpBoardView(discord.ui.View):
             if state == self._last_render:
                 continue
             content, _ = state
+            visual_state = self._visual_state()
+            visual_bytes = self._last_visual_bytes
+            renderer = getattr(self.core, "battle_presentation_renderer", None)
+            visual_version = self._visual_version
+            image_updated = False
+            if renderer is not None and visual_state is not None:
+                try:
+                    if visual_version != self._last_visual_version:
+                        visual_bytes = await asyncio.to_thread(
+                            renderer.render_to_bytes, visual_state
+                        )
+                        if (
+                            visual_version != self._visual_version
+                            and not self._terminal
+                        ):
+                            await self._edit_message()
+                            continue
+                        self._last_visual_bytes = visual_bytes
+                        self._last_visual_version = visual_version
+                        image_updated = True
+                except Exception:
+                    logger.exception(
+                        "PvP presentation render failed session_id=%s",
+                        self.session_id,
+                    )
+                    visual_bytes = self._last_visual_bytes
             try:
-                await self.message.edit(content=content, view=self)
+                edit_kwargs: dict[str, object] = {
+                    "content": content,
+                    "view": None if self._terminal else self,
+                }
+                if visual_bytes is not None:
+                    edit_kwargs["embed"] = self._build_embed(visual_state)
+                if image_updated and visual_bytes is not None:
+                    edit_kwargs["attachments"] = [
+                        discord.File(
+                            io.BytesIO(visual_bytes), filename="pvp-battle.gif"
+                        )
+                    ]
+                await self.message.edit(**edit_kwargs)
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 self._pending_edit = None
-                asyncio.create_task(
-                    self.core.pvp_application_service.cleanup(self.session_id)
-                )
+                try:
+                    await self.core.pvp_application_service.cleanup(self.session_id)
+                except Exception:
+                    logger.exception(
+                        "PvP board cleanup failed session_id=%s", self.session_id
+                    )
                 return
             self._last_render = state
             self._last_edit_at = time.monotonic()
+
+    def _visual_state(self):
+        if self.snapshot is None:
+            return None
+        try:
+            session = self.core.pvp_application_service.registry.get(self.session_id)
+        except ValueError:
+            return None
+        snapshot = self._display_snapshot()
+        state = pvp_presentation_state(
+            snapshot,
+            player_name=self._visible_name(session.initiator_id),
+            opponent_name=self._visible_name(session.opponent_id),
+            last_event=self.current_event,
+        )
+        if self._terminal and not state.terminal:
+            return replace(state, terminal=True)
+        return state
+
+    @staticmethod
+    def _visible_name(player_id: int) -> str:
+        return f"Trainer {player_id}" if not player_id else f"@{player_id}"
+
+    def _build_embed(self, visual_state) -> discord.Embed:
+        if visual_state is not None and visual_state.terminal:
+            if visual_state.draw:
+                description = "The battle ended in a draw."
+            else:
+                winner = visual_state.winner_id
+                description = (
+                    f"{self._visible_name(winner)} wins the battle!"
+                    if winner
+                    else "The battle ended."
+                )
+            title = "🏆 PvP Battle Complete"
+        else:
+            description = self.current_event
+            title = "⚔️ PvP Battle"
+        embed = discord.Embed(title=title, description=description)
+        embed.set_image(url="attachment://pvp-battle.gif")
+        return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         try:

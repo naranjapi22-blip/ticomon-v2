@@ -169,6 +169,7 @@ from infrastructure.spawn.in_memory_spawn_session_repository import (
 from infrastructure.species.neon_species_repository import (
     NeonSpeciesRepository,
 )
+from rendering.battle.presentation_renderer import BattlePresentationRenderer
 from rendering.battle.renderer import BattleRenderer
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,7 @@ class CoreServices:
     battle_display_service: BattleDisplayService
     battle_replay_service: BattleReplayService
     battle_renderer: BattleRenderer
+    battle_presentation_renderer: BattlePresentationRenderer
     creature_info_service: CreatureInfoService
     creature_collection_service: CreatureCollectionService
     species_info_service: SpeciesInfoService
@@ -447,6 +449,7 @@ def build_core(
     battle_display_service = BattleDisplayService()
     battle_replay_service = BattleReplayService()
     battle_renderer = BattleRenderer()
+    battle_presentation_renderer = BattlePresentationRenderer()
 
     selector = SpeciesSelector(
         repository=species_repository,
@@ -538,6 +541,7 @@ def build_core(
         battle_display_service=battle_display_service,
         battle_replay_service=battle_replay_service,
         battle_renderer=battle_renderer,
+        battle_presentation_renderer=battle_presentation_renderer,
         creature_info_service=creature_info_service,
         creature_collection_service=creature_collection_service,
         species_info_service=species_info_service,
