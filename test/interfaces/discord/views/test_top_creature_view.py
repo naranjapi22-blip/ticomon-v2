@@ -164,7 +164,8 @@ def test_top_entry_is_one_line_and_contains_only_ranking_summary() -> None:
 
     assert entry.count("\n") == 0
     assert entry.startswith("#1")
-    assert "Collection #76" in entry
+    assert "· #76 ·" in entry
+    assert "Collection #" not in entry
     assert "Total Stats: 600" in entry
     assert "IVs: 100%" in entry
     assert "HP 100" not in entry

@@ -25,7 +25,7 @@ def format_ranked_creature_entry(
     if current_form is not None:
         name = f"{name} ({current_form.name.title()})"
     return (
-        f"#{position} · {shiny}{name} · Collection #{creature.collection_number} · "
+        f"#{position} · {shiny}{name} · #{creature.collection_number} · "
         f"{ranking.metric.label}: {ranking.score} · IVs: {creature.iv_percentage}%"
     )
 
