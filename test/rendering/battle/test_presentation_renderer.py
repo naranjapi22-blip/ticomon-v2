@@ -5,6 +5,7 @@ import logging
 import pytest
 from PIL import Image
 
+import rendering.battle.presentation_renderer as presentation_renderer_module
 from rendering.battle.gif_assets import GifSequence
 from rendering.battle.presentation_renderer import BattlePresentationRenderer
 from rendering.battle.presentation_state import (
@@ -298,3 +299,39 @@ def test_presentation_renderer_falls_back_when_sprite_is_missing():
     result = renderer.render_to_bytes(state)
 
     assert result.startswith(b"GIF")
+
+
+def test_presentation_renderer_hud_contains_only_visual_battle_data(monkeypatch):
+    class RecordingDraw:
+        def __init__(self):
+            self.texts = []
+
+        def text(self, xy, text, **kwargs):
+            self.texts.append(str(text))
+
+        def rectangle(self, *args, **kwargs):
+            return None
+
+    renderer = BattlePresentationRenderer(gif_loader=RecordingLoader())
+    draw = RecordingDraw()
+    monkeypatch.setattr(presentation_renderer_module.ImageDraw, "Draw", lambda _: draw)
+    renderer._draw_hud(
+        draw,
+        BattlePresentationState(
+            top=_side("Rival", "Tyranitar"),
+            bottom=_side("Player", "Iron Thorns"),
+            turn=8,
+            last_event="Tyranitar used Dark Pulse.",
+            waiting_text="Waiting for Player",
+        ),
+    )
+
+    rendered_text = " ".join(draw.texts)
+    assert "Rival" not in rendered_text
+    assert "Player" not in rendered_text
+    assert "Turn" not in rendered_text
+    assert "Waiting" not in rendered_text
+    assert "Dark Pulse" not in rendered_text
+    assert "remaining" not in rendered_text
+    assert "Tyranitar" in rendered_text
+    assert "Iron Thorns" in rendered_text

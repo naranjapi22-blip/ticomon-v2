@@ -174,7 +174,7 @@ async def test_board_coalesces_rapid_public_edits():
 
     assert source.message.edit.await_count == 1
     content = source.message.edit.await_args.kwargs["content"]
-    assert content.endswith("Last turn: latest")
+    assert content.endswith("latest")
     assert "Waiting for both players" in content
 
 
@@ -203,6 +203,14 @@ def test_pvp_board_uses_sanitized_discord_display_names_and_canonical_orientatio
     assert state.top.active_name == "Tsareena"
     assert state.bottom.active_name == "Hydrapple"
     assert "11310031531417600" not in state.top.display_name
+
+    content = board.render()
+    assert content.count("Jorroco") == 1
+    assert content.count("Orange") == 1
+    assert content.count("Turn 1") == 1
+    assert "Recent turns" not in content
+    assert "Last turn:" not in content
+    assert "Tyranitar" not in content
 
 
 def test_pvp_board_falls_back_to_trainer_without_full_id():

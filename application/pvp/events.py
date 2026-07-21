@@ -15,6 +15,7 @@ class PvpEventTranslator:
 
     def __init__(self) -> None:
         self._last_hp: dict[str, tuple[int, int]] = {}
+        self._weather: str | None = None
 
     def observe_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
         for prefix, pokemon in (
@@ -40,7 +41,7 @@ class PvpEventTranslator:
                 if event == "move" and len(values) >= 2:
                     if summary:
                         steps.append(self._step(summary, structured))
-                    summary = [f"{_pokemon_name(values[0])} used {values[1]}."]
+                    summary = [f"{display_species_name(values[0])} used {values[1]}."]
                     structured = PvpEvent(
                         actor=_pokemon_name(values[0]),
                         move_name=_safe_protocol_text(values[1]),
@@ -51,7 +52,7 @@ class PvpEventTranslator:
                 if event == "-damage" and len(values) >= 2:
                     previous = self._last_hp.get(_protocol_id(values[0]))
                     current, _ = _parse_hp(values[1])
-                    text = self._damage_text(values[0], values[1])
+                    text = self._damage_text(values[0], values[1], values[2:])
                     if structured is not None:
                         structured = replace(
                             structured,
@@ -106,7 +107,10 @@ class PvpEventTranslator:
         summary: list[str],
         structured: PvpEvent | None,
     ) -> PvpPresentationStep:
-        return PvpPresentationStep(message=" ".join(summary), event=structured)
+        return PvpPresentationStep(
+            message=_compact_summary(summary),
+            event=structured,
+        )
 
     @staticmethod
     def _update_structured(
@@ -133,40 +137,50 @@ class PvpEventTranslator:
 
     def _translate_event(self, event: str, values: list[str]) -> str | None:
         if event == "-damage" and len(values) >= 2:
-            return self._damage_text(values[0], values[1])
+            return self._damage_text(values[0], values[1], values[2:])
         if event == "-heal" and len(values) >= 2:
-            return f"{_pokemon_name(values[0])} recovered HP."
+            return f"{display_species_name(values[0])} recovered HP."
         if event == "-status" and len(values) >= 2:
-            return f"{_pokemon_name(values[0])} was afflicted with {values[1].upper()}."
+            return (
+                f"{display_species_name(values[0])} was afflicted with "
+                f"{values[1].upper()}."
+            )
         if event == "-curestatus" and len(values) >= 2:
-            return f"{_pokemon_name(values[0])} was cured of {values[1].upper()}."
+            return (
+                f"{display_species_name(values[0])} was cured of {values[1].upper()}."
+            )
         if event == "-crit" and values:
-            return f"A critical hit landed on {_pokemon_name(values[0])}."
+            return f"A critical hit landed on {display_species_name(values[0])}."
         if event == "-supereffective":
             return "It was super effective."
         if event == "-resisted":
             return "It was not very effective."
         if event == "-immune" and values:
-            return f"{_pokemon_name(values[0])} was immune."
+            return f"{display_species_name(values[0])} was immune."
         if event == "-fail" and values:
-            return f"{_pokemon_name(values[0])}'s move failed."
+            return f"{display_species_name(values[0])}'s move failed."
         if event == "-miss" and values:
-            return f"{_pokemon_name(values[0])}'s move missed."
+            return f"{display_species_name(values[0])}'s move missed."
         if event == "-protect" and values:
-            return f"{_pokemon_name(values[0])} protected itself."
+            return f"{display_species_name(values[0])} protected itself."
         if event == "-ability" and len(values) >= 2:
-            return f"{_pokemon_name(values[0])}'s {values[1]} activated."
+            return f"{display_species_name(values[0])}'s {values[1]} activated."
         if event in {"-boost", "-unboost"} and len(values) >= 2:
             verb = "rose" if event == "-boost" else "fell"
-            return f"{_pokemon_name(values[0])}'s {values[1]} {verb}."
+            return f"{display_species_name(values[0])}'s {values[1]} {verb}."
         if event == "switch" and len(values) >= 2:
-            return (
-                f"{_pokemon_name(values[0])} sent out {_safe_protocol_text(values[1])}."
-            )
+            return f"{display_species_name(values[0])} entered the battle."
         if event == "faint" and values:
-            return f"{_pokemon_name(values[0])} fainted."
+            return f"{display_species_name(values[0])} was knocked out."
         if event == "-weather" and values:
-            return f"The weather changed to {values[0]}."
+            weather = display_species_name(values[0])
+            if weather.casefold() == "none":
+                self._weather = None
+                return "The weather ended."
+            if weather.casefold() == (self._weather or "").casefold():
+                return None
+            self._weather = weather
+            return f"{weather} started."
         if event == "-fieldstart" and values:
             return f"The field changed: {values[-1]}."
         if event == "win" and values:
@@ -175,16 +189,21 @@ class PvpEventTranslator:
             return "The battle ended in a tie."
         return None
 
-    def _damage_text(self, target: str, hp_value: str) -> str:
-        name = _pokemon_name(target)
+    def _damage_text(
+        self, target: str, hp_value: str, details: list[str] | None = None
+    ) -> str:
+        name = display_species_name(target)
         current, maximum = _parse_hp(hp_value)
         key = _protocol_id(target)
         previous = self._last_hp.get(key)
         self._last_hp[key] = (current, maximum)
         if previous is not None and previous[0] >= current:
             damage = previous[0] - current
-            return f"{name} took {damage} damage ({current}/{maximum} HP remaining)."
-        return f"{name} is at {current}/{maximum} HP."
+            if details and any("weather" in item.casefold() for item in details):
+                weather = self._weather or "Weather"
+                return f"{weather} dealt {damage} damage to {name}."
+            return f"{name} took {damage} damage."
+        return f"{name} took damage."
 
 
 def _parse_hp(value: str) -> tuple[int, int]:
@@ -210,3 +229,59 @@ def _protocol_id(value: str) -> str:
 
 def _safe_protocol_text(value: str) -> str:
     return _pokemon_name(value).replace("\r", " ").replace("\n", " ").strip()
+
+
+_COMPOUND_SPECIES_NAMES = {
+    "brutebonnet": "Brute Bonnet",
+    "fluttermane": "Flutter Mane",
+    "gougingfire": "Gouging Fire",
+    "greattusk": "Great Tusk",
+    "ironboulder": "Iron Boulder",
+    "ironcrown": "Iron Crown",
+    "ironhands": "Iron Hands",
+    "ironleaves": "Iron Leaves",
+    "ironmoth": "Iron Moth",
+    "ironthorns": "Iron Thorns",
+    "irontreads": "Iron Treads",
+    "ironvaliant": "Iron Valiant",
+    "kommoo": "Kommo-o",
+    "ragingbolt": "Raging Bolt",
+    "roaringmoon": "Roaring Moon",
+    "sandyshocks": "Sandy Shocks",
+    "screamtail": "Scream Tail",
+    "slitherwing": "Slither Wing",
+    "walkingwake": "Walking Wake",
+}
+
+
+def display_species_name(value: str) -> str:
+    text = _safe_protocol_text(value).split(",", 1)[0].strip()
+    key = re.sub(r"[^a-z0-9]+", "", text.lower())
+    return _COMPOUND_SPECIES_NAMES.get(key, text.replace("-", " ").title())
+
+
+def _compact_summary(summary: list[str]) -> str:
+    entries: list[str] = []
+    output: list[str] = []
+
+    def flush_entries() -> None:
+        if not entries:
+            return
+        if len(entries) == 1:
+            output.append(f"{entries[0]} entered the battle.")
+        elif len(entries) == 2:
+            output.append(f"{entries[0]} and {entries[1]} entered the battle.")
+        else:
+            output.append(
+                f"{', '.join(entries[:-1])}, and {entries[-1]} entered the battle."
+            )
+        entries.clear()
+
+    for item in summary:
+        if item.endswith(" entered the battle."):
+            entries.append(item.removesuffix(" entered the battle."))
+            continue
+        flush_entries()
+        output.append(item)
+    flush_entries()
+    return " ".join(output)

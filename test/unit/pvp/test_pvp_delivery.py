@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import application.pvp.pvp_application_service as pvp_service_module
-from application.pvp.events import PvpEventTranslator
+from application.pvp.events import PvpEventTranslator, display_species_name
 from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
 from application.pvp.pvp_application_service import PvpApplicationService
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
@@ -205,8 +205,8 @@ def test_event_translator_ignores_unknown_protocol_events():
     )
 
     assert [step.message for step in steps] == [
-        "Pikachu used Thunderbolt. Gyarados took 36 damage (64/100 HP remaining). "
-        "Gyarados fainted."
+        "Pikachu used Thunderbolt. Gyarados took 36 damage. "
+        "Gyarados was knocked out."
     ]
     assert steps[0].event is not None
     assert steps[0].event.actor == "Pikachu"
@@ -214,3 +214,50 @@ def test_event_translator_ignores_unknown_protocol_events():
     assert steps[0].event.damage == 36
     assert "p1a:" not in steps[0].message
     assert "p2a:" not in steps[0].message
+
+
+def test_event_translator_compacts_initial_entries_and_weather():
+    translator = PvpEventTranslator()
+
+    steps = translator.translate(
+        [
+            ["battle", "switch", "p1a: tyranitar", "Tyranitar, L50"],
+            ["battle", "switch", "p2a: ironthorns", "Iron Thorns, L50"],
+            ["battle", "-weather", "Sandstorm"],
+        ]
+    )
+
+    assert [step.message for step in steps] == [
+        "Tyranitar and Iron Thorns entered the battle. Sandstorm started."
+    ]
+    assert "L50" not in steps[0].message
+    assert "sent out Tyranitar" not in steps[0].message
+
+    assert translator.translate([["battle", "-weather", "Sandstorm"]]) == ()
+
+
+def test_event_translator_uses_damage_without_repeating_hp_and_normalizes_names():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            1,
+            1,
+            2,
+            PvpPokemonSnapshot("tyranitar", None, 201, 201, 1.0, None, False),
+            PvpPokemonSnapshot("kommoo", None, 167, 167, 1.0, None, False),
+            3,
+            1,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    steps = translator.translate([["battle", "-damage", "p2a: kommoo", "157/167"]])
+
+    assert steps[0].message == "Kommo-o took 10 damage."
+    assert "/167" not in steps[0].message
+    assert display_species_name("ironthorns") == "Iron Thorns"
+    assert display_species_name("kommoo") == "Kommo-o"

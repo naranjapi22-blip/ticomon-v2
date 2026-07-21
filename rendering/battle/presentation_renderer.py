@@ -136,46 +136,13 @@ class BattlePresentationRenderer:
             align="right",
             fonts=fonts,
         )
-        phase = "Battle finished" if state.terminal else state.waiting_text
-        turn_text = f"Turn {state.turn}"
-        if phase:
-            turn_text = f"{turn_text} · {phase}"
-        draw.text(
-            (WIDTH // 2, 28),
-            _short_text(turn_text, 64),
-            fill=(255, 255, 255, 255),
-            font=fonts.hp_text,
-            anchor="mt",
-            stroke_width=2,
-            stroke_fill=(0, 0, 0, 255),
-        )
-        event = state.last_event or state.waiting_text or ""
-        if event:
-            draw.text(
-                (WIDTH // 2, HEIGHT - 32),
-                _short_text(event, 120),
-                fill=(255, 255, 255, 255),
-                font=fonts.hp_text,
-                anchor="ms",
-                stroke_width=2,
-                stroke_fill=(0, 0, 0, 255),
-            )
 
     @staticmethod
     def _draw_side(draw, side, *, x, y, align, fonts) -> None:
         anchor = "lt" if align == "left" else "rt"
-        draw.text(
-            (x, y),
-            _short_text(side.display_name, 24),
-            fill=(255, 255, 255, 255),
-            font=fonts.trainer,
-            anchor=anchor,
-            stroke_width=2,
-            stroke_fill=(0, 0, 0, 255),
-        )
-        pokemon_y = y + 36
+        pokemon_y = y
         status = f" · {side.status}" if side.status else ""
-        active_name = side.active_name or "Waiting for Pokémon"
+        active_name = side.active_name or ""
         name = f"{active_name}{status}{' (KO)' if side.fainted else ''}"
         draw.text(
             (x, pokemon_y),
@@ -201,7 +168,7 @@ class BattlePresentationRenderer:
                 (bar_x, bar_y, bar_x + int(240 * fraction), bar_y + 16),
                 fill=(255, 204, 0, 255),
             )
-        hp = f"{side.hp_current}/{side.hp_max} · {side.remaining} remaining"
+        hp = f"{side.hp_current}/{side.hp_max}"
         draw.text(
             (bar_x + 248 if align == "left" else bar_x - 8, bar_y - 2),
             hp,

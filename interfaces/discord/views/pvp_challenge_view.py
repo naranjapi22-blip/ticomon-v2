@@ -8,6 +8,7 @@ from dataclasses import replace
 
 import discord
 
+from application.pvp.events import display_species_name
 from application.pvp.models import PvpAction, PvpActionKind, PvpPresentationStep
 from application.pvp.presentation_adapter import pvp_presentation_state
 from application.pvp.snapshots import PvpBattleSnapshot
@@ -226,7 +227,7 @@ class PvpBoardView(discord.ui.View):
         self.message = source.message
         self.source = source
         self.display_names = dict(getattr(source, "display_names", {}))
-        self.current_event = "Waiting for the first actions."
+        self.current_event = ""
         self.recent_events: list[str] = []
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
@@ -258,12 +259,15 @@ class PvpBoardView(discord.ui.View):
         initiator_name = self._visible_name(session.initiator_id)
         opponent_name = self._visible_name(session.opponent_id)
         waiting = self._waiting_status(session)
-        result = (
-            f"{initiator_name} vs {opponent_name}\n"
-            f"Turn {turn} · {waiting}\n\n" + "\n".join(active_lines) + "\n\n"
-            f"Last turn: {self.current_event}"
-        )
-        return result
+        lines = [
+            f"{initiator_name} vs {opponent_name}",
+            f"Turn {turn} · {waiting}",
+            "",
+            *active_lines,
+        ]
+        if self.current_event:
+            lines.extend(("", self.current_event))
+        return "\n".join(lines)
 
     def _render_players(self, session) -> list[str]:
         if self.snapshot is None:
@@ -281,18 +285,8 @@ class PvpBoardView(discord.ui.View):
         player = snapshot.player_active
         opponent = snapshot.opponent_active
         return [
-            self._format_snapshot_player(
-                snapshot.player_id,
-                self._visible_name(snapshot.player_id),
-                player,
-                snapshot.player_remaining,
-            ),
-            self._format_snapshot_player(
-                snapshot.opponent_id,
-                self._visible_name(snapshot.opponent_id),
-                opponent,
-                snapshot.opponent_remaining,
-            ),
+            self._format_snapshot_player(player, snapshot.player_remaining),
+            self._format_snapshot_player(opponent, snapshot.opponent_remaining),
         ]
 
     def _display_snapshot(self) -> PvpBattleSnapshot:
@@ -325,14 +319,9 @@ class PvpBoardView(discord.ui.View):
         )
 
     @staticmethod
-    def _format_snapshot_player(
-        player_id,
-        display_name,
-        pokemon,
-        remaining: int,
-    ) -> str:
+    def _format_snapshot_player(pokemon, remaining: int) -> str:
         if pokemon is None:
-            return f"{display_name}: waiting for Pokémon — {remaining} remaining"
+            return f"Waiting for Pokémon · {remaining} remaining"
         current_hp = (
             pokemon.current_hp
             if pokemon.current_hp is not None
@@ -342,7 +331,7 @@ class PvpBoardView(discord.ui.View):
         hp = f"{current_hp}/{max_hp} HP"
         status = f" · {pokemon.status}" if pokemon.status else ""
         return (
-            f"{display_name}: {pokemon.species_name} — {hp}{status} — "
+            f"{display_species_name(pokemon.species_name)} · {hp}{status} · "
             f"{remaining} remaining"
         )
 
@@ -525,55 +514,7 @@ class PvpBoardView(discord.ui.View):
         return _safe_display_name(self.display_names.get(player_id))
 
     def _build_embed(self, visual_state) -> discord.Embed:
-        try:
-            session = self.core.pvp_application_service.registry.get(self.session_id)
-            turn = (
-                self.snapshot.turn if self.snapshot is not None else session.turn_number
-            )
-            title = (
-                f"{self._visible_name(session.initiator_id)} vs "
-                f"{self._visible_name(session.opponent_id)} · Turn {turn}"
-            )
-            waiting = self._waiting_status(session)
-        except ValueError:
-            turn = self.snapshot.turn if self.snapshot is not None else 0
-            title = f"PvP Battle · Turn {turn}"
-            waiting = "Battle finished"
-
-        if visual_state is not None and visual_state.terminal:
-            if visual_state.draw:
-                description = "The battle ended in a draw."
-            else:
-                winner = visual_state.winner_id
-                description = (
-                    f"{self._visible_name(winner)} won the battle."
-                    if winner
-                    else "The battle ended."
-                )
-        else:
-            description = f"{waiting}\n\nLast turn: {self.current_event}"
-        embed = discord.Embed(title=title, description=description)
-        if visual_state is not None:
-            for side in (visual_state.top, visual_state.bottom):
-                status = f" · {side.status}" if side.status else ""
-                active = side.active_name or "Waiting for Pokémon"
-                embed.add_field(
-                    name=side.display_name,
-                    value=(
-                        f"{active}{status}\n"
-                        f"HP {side.hp_current}/{side.hp_max} · "
-                        f"{side.remaining} remaining"
-                    ),
-                    inline=True,
-                )
-        if self.recent_events and not (
-            visual_state is not None and visual_state.terminal
-        ):
-            embed.add_field(
-                name="Recent turns",
-                value="\n".join(self.recent_events)[-1024:],
-                inline=False,
-            )
+        embed = discord.Embed()
         embed.set_image(url="attachment://pvp-battle.gif")
         return embed
 
