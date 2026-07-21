@@ -19,6 +19,10 @@ from core.evolution.evolution_policy import (
 from core.evolution.evolution_service import (
     EvolutionService,
 )
+from core.evolution.evolution_unit_of_work import (
+    EvolutionTransaction,
+    EvolutionUnitOfWork,
+)
 from test.builders.creature_builder import (
     CreatureBuilder,
 )
@@ -47,6 +51,131 @@ from test.fakes.fake_evolution_repository import (
 from test.fakes.fake_species_repository import (
     FakeSpeciesRepository,
 )
+
+
+class _AtomicEvolutionTransaction(EvolutionTransaction):
+    def __init__(self, creature, inventory, *, fail_on_save=False):
+        self.creature = creature
+        self.inventory = inventory
+        self.fail_on_save = fail_on_save
+        self.updated = False
+        self.saved = False
+
+    async def get_creature(self, trainer_id, collection_number):
+        return self.creature
+
+    async def get_candy_inventory(self, trainer_id):
+        return self.inventory
+
+    async def update_creature(self, creature):
+        self.updated = True
+        return creature
+
+    async def save_candy_inventory(self, trainer_id, inventory):
+        if self.fail_on_save:
+            raise RuntimeError("candy persistence failed")
+        self.saved = True
+
+
+class _AtomicEvolutionUnitOfWork(EvolutionUnitOfWork):
+    def __init__(self, transaction):
+        self.transaction_value = transaction
+
+    class _Context:
+        def __init__(self, transaction):
+            self.transaction = transaction
+            self.before_species = None
+            self.before_candies = None
+
+        async def __aenter__(self):
+            self.before_species = self.transaction.creature.species
+            self.before_candies = dict(self.transaction.inventory._candies)
+            return self.transaction
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            if exc_type is not None:
+                self.transaction.creature.species = self.before_species
+                self.transaction.inventory._candies = self.before_candies
+            return False
+
+    def transaction(self):
+        return self._Context(self.transaction_value)
+
+
+@pytest.mark.asyncio
+async def test_evolution_unit_of_work_persists_creature_and_candies_together():
+    first = SpeciesBuilder().with_id(1).build()
+    second = SpeciesBuilder().with_id(2).build()
+    creature = (
+        CreatureBuilder()
+        .with_id(7)
+        .with_collection_number(1)
+        .with_species(first)
+        .build()
+    )
+    inventory = CandyInventory()
+    inventory.add(CandyBundle.from_amounts(CandyAmount(CandyType.FIRE, 10)))
+    transaction = _AtomicEvolutionTransaction(creature, inventory)
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(1)
+        .with_to_species(2)
+        .with_candy_type(CandyType.FIRE)
+        .with_tier("basic")
+        .build()
+    )
+    service = EvolutionApplicationService(
+        EvolutionService(
+            policy=EvolutionPolicy(cost_policy=EvolutionCostPolicy()),
+            species_repository=FakeSpeciesRepository(first, second),
+        ),
+        evolution_repository=FakeEvolutionRepository(rule),
+        creature_repository=FakeCreatureRepository(creature),
+        candy_repository=FakeCandyRepository(inventory),
+        evolution_unit_of_work=_AtomicEvolutionUnitOfWork(transaction),
+    )
+
+    result = await service.evolve(1, 1, rule)
+
+    assert result.success
+    assert transaction.updated
+    assert transaction.saved
+
+
+@pytest.mark.asyncio
+async def test_evolution_unit_of_work_propagates_candy_failure_before_commit():
+    first = SpeciesBuilder().with_id(1).build()
+    second = SpeciesBuilder().with_id(2).build()
+    creature = CreatureBuilder().with_id(7).with_species(first).build()
+    inventory = CandyInventory()
+    inventory.add(CandyBundle.from_amounts(CandyAmount(CandyType.FIRE, 10)))
+    transaction = _AtomicEvolutionTransaction(creature, inventory, fail_on_save=True)
+    rule = (
+        EvolutionRuleBuilder()
+        .with_from_species(1)
+        .with_to_species(2)
+        .with_candy_type(CandyType.FIRE)
+        .with_tier("basic")
+        .build()
+    )
+    service = EvolutionApplicationService(
+        EvolutionService(
+            policy=EvolutionPolicy(cost_policy=EvolutionCostPolicy()),
+            species_repository=FakeSpeciesRepository(first, second),
+        ),
+        evolution_repository=FakeEvolutionRepository(rule),
+        creature_repository=FakeCreatureRepository(creature),
+        candy_repository=FakeCandyRepository(inventory),
+        evolution_unit_of_work=_AtomicEvolutionUnitOfWork(transaction),
+    )
+
+    with pytest.raises(RuntimeError, match="candy persistence failed"):
+        await service.evolve(1, 1, rule)
+
+    assert transaction.updated
+    assert not transaction.saved
+    assert creature.species is first
+    assert inventory.get_amount(CandyType.FIRE) == 10
 
 
 @pytest.mark.asyncio

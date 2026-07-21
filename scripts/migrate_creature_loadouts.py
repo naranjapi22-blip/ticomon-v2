@@ -58,8 +58,20 @@ async def migrate(dry_run: bool = False, batch_size: int = 250) -> dict[str, int
                             valid = {ability.id for ability in abilities}
                             ability_id = row["ability_id"]
                             moves = tuple(row["equipped_moves"] or ())
-                            if ability_id in valid and moves:
-                                continue
+                            legal_move_ids = {
+                                move.id for move in catalog.moves_for(species)
+                            }
+                            legal_moves_list = []
+                            for move in moves:
+                                if (
+                                    move in legal_move_ids
+                                    and move not in legal_moves_list
+                                ):
+                                    legal_moves_list.append(move)
+                            legal_moves = tuple(legal_moves_list[:4])
+                            if ability_id in valid and legal_moves:
+                                if legal_moves == moves:
+                                    continue
                             if not abilities:
                                 summary["skipped"] += 1
                                 logger.warning(
@@ -69,9 +81,12 @@ async def migrate(dry_run: bool = False, batch_size: int = 250) -> dict[str, int
                             ability_id = (
                                 ability_id if ability_id in valid else abilities[0].id
                             )
-                            moves = moves or catalog.initial_moves(
+                            moves = legal_moves or catalog.initial_moves(
                                 species, seed=row["id"]
                             )
+                            if not moves:
+                                summary["skipped"] += 1
+                                continue
                             if not dry_run:
                                 await connection.execute(
                                     """

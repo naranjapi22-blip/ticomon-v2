@@ -27,6 +27,7 @@ class EvolutionApplicationService:
         achievement_activity_repository=None,
         achievement_award_service=None,
         collection_history_repository=None,
+        evolution_unit_of_work=None,
     ) -> None:
         self._evolution_service = evolution_service
         self._evolution_repository = evolution_repository
@@ -35,6 +36,7 @@ class EvolutionApplicationService:
         self._achievement_activity_repository = achievement_activity_repository
         self._achievement_award_service = achievement_award_service
         self._collection_history_repository = collection_history_repository
+        self._evolution_unit_of_work = evolution_unit_of_work
 
     async def get_options(
         self,
@@ -57,32 +59,40 @@ class EvolutionApplicationService:
         rule,
     ) -> EvolutionApplicationResult:
 
+        if self._evolution_unit_of_work is None:
+            return await self._evolve_without_unit_of_work(
+                trainer_id, collection_number, rule
+            )
+        async with self._evolution_unit_of_work.transaction() as transaction:
+            creature = await transaction.get_creature(trainer_id, collection_number)
+            inventory = await transaction.get_candy_inventory(trainer_id)
+            result = await self._evolution_service.evolve(
+                creature=creature, inventory=inventory, rule=rule
+            )
+            if result.success:
+                creature = await transaction.update_creature(creature)
+                await transaction.save_candy_inventory(trainer_id, inventory)
+            return await self._finish_result(trainer_id, creature, result)
+
+    async def _evolve_without_unit_of_work(
+        self, trainer_id: int, collection_number: int, rule
+    ) -> EvolutionApplicationResult:
         creature = await self._creature_repository.get_by_collection_number(
-            trainer_id,
-            collection_number,
+            trainer_id, collection_number
         )
-
-        inventory = await self._candy_repository.get(
-            trainer_id,
-        )
-
+        inventory = await self._candy_repository.get(trainer_id)
         result = await self._evolution_service.evolve(
-            creature=creature,
-            inventory=inventory,
-            rule=rule,
+            creature=creature, inventory=inventory, rule=rule
         )
+        if result.success:
+            creature = await self._creature_repository.update(creature)
+            await self._candy_repository.save(trainer_id, inventory)
+        return await self._finish_result(trainer_id, creature, result)
+
+    async def _finish_result(self, trainer_id, creature, result):
 
         achievements = ()
         if result.success:
-
-            creature = await self._creature_repository.update(
-                creature,
-            )
-
-            await self._candy_repository.save(
-                trainer_id,
-                inventory,
-            )
 
             if self._collection_history_repository is not None:
                 try:

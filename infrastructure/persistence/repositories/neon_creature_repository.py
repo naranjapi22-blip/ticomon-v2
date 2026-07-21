@@ -20,19 +20,7 @@ class NeonCreatureRepository(CreatureRepository):
         self._loadout_catalog = PokeEnvLoadoutCatalog()
 
     def _ensure_loadout(self, creature: Creature) -> Creature:
-        abilities = self._loadout_catalog.abilities_for(creature.species)
-        if not abilities and not creature.ability_id:
-            raise ValueError(
-                f"No ability catalog is available for species {creature.species.id}."
-            )
-        ability_id = creature.ability_id
-        valid_abilities = {ability.id for ability in abilities}
-        if ability_id not in valid_abilities:
-            ability_id = abilities[0].id if abilities else None
-        moves = creature.moves or self._loadout_catalog.initial_moves(
-            creature.species,
-            seed=creature.id or creature.collection_number or creature.species.id,
-        )
+        ability_id, moves = self._loadout_catalog.normalize_loadout(creature)
         return CreatureMapper.from_row(
             {
                 "id": creature.id,

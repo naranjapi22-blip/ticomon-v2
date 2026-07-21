@@ -130,6 +130,9 @@ from infrastructure.persistence.repositories.neon_collection_history_repository 
 from infrastructure.persistence.repositories.neon_creature_repository import (
     NeonCreatureRepository,
 )
+from infrastructure.persistence.repositories.neon_evolution_unit_of_work import (
+    NeonEvolutionUnitOfWork,
+)
 from infrastructure.persistence.repositories.neon_nature_mint_repository import (
     NeonNatureMintRepository,
 )
@@ -406,6 +409,7 @@ def build_core(
         achievement_activity_repository=achievement_activity_repository,
         achievement_award_service=capture_achievement_award_service,
         collection_history_repository=collection_history_repository,
+        evolution_unit_of_work=NeonEvolutionUnitOfWork(),
     )
     release_application = ReleaseApplicationService(
         creature_repository=creature_repository,

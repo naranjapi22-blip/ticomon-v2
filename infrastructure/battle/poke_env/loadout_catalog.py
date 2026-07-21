@@ -53,6 +53,31 @@ class PokeEnvLoadoutCatalog:
             species_name=species.name,
         )
 
+    def normalize_loadout(self, creature) -> tuple[str | None, tuple[str, ...]]:
+        abilities = self.abilities_for(creature.species)
+        if not abilities and not creature.ability_id:
+            raise ValueError(
+                f"No ability catalog is available for species {creature.species.id}."
+            )
+        valid_abilities = {ability.id for ability in abilities}
+        ability_id = (
+            creature.ability_id
+            if creature.ability_id in valid_abilities
+            else abilities[0].id if abilities else None
+        )
+        legal_move_ids = {move.id for move in self.moves_for(creature.species)}
+        moves_list = []
+        for move in creature.moves:
+            if move in legal_move_ids and move not in moves_list:
+                moves_list.append(move)
+        moves = tuple(moves_list[:4])
+        if not moves:
+            moves = self.initial_moves(
+                creature.species,
+                seed=creature.id or creature.collection_number or creature.species.id,
+            )
+        return ability_id, moves
+
     def abilities_for(self, species) -> tuple[Ability, ...]:
         entry = _gen9_data().pokedex.get(self._showdown_id(species), {})
         raw = entry.get("abilities", {})
