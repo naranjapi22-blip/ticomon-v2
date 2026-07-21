@@ -155,6 +155,7 @@ class ManualPvpPlayer(Player):
         self._closing = False
         self.background_errors: list[BaseException] = []
         self._pending_finished_battles: list[AbstractBattle] = []
+        self._finished_battle_ids: set[int] = set()
         super().__init__(
             account_configuration=AccountConfiguration(username, None),
             battle_format=PVP_BATTLE_FORMAT,
@@ -213,8 +214,10 @@ class ManualPvpPlayer(Player):
                         capture_sprite_urls=self._capture_sprite_urls,
                     )
                 )
-            if battle.finished and battle in self._pending_finished_battles:
-                self._pending_finished_battles.remove(battle)
+            if battle.finished and id(battle) not in self._finished_battle_ids:
+                self._finished_battle_ids.add(id(battle))
+                if battle in self._pending_finished_battles:
+                    self._pending_finished_battles.remove(battle)
                 self._schedule_callback(self._callbacks.on_finished(battle))
 
     def _battle_finished_callback(self, battle: AbstractBattle) -> None:
@@ -325,6 +328,7 @@ class PokeEnvPvpController:
         self._callback_tasks: set[asyncio.Task] = set()
         self._callbacks: PvpControllerCallbacks | None = None
         self._attempt = 0
+        self._player_usernames: dict[str, int] = {}
 
     async def start(
         self,
@@ -405,6 +409,7 @@ class PokeEnvPvpController:
 
     def _make_player(self, trainer_id, team, player_kwargs, side):
         username = f"tm{self._session_token[:10]}a{self._attempt}p{side}"
+        self._player_usernames[username.casefold()] = trainer_id
         return self._player_factory(
             trainer_id,
             team,
@@ -412,6 +417,11 @@ class PokeEnvPvpController:
             callback_tasks=self._callback_tasks,
             **player_kwargs,
         )
+
+    def resolve_winner(self, username: str | None) -> int | None:
+        if not username:
+            return None
+        return self._player_usernames.get(str(username).strip().casefold())
 
     async def _wait_for_login(self, first, second) -> None:
         while not (
@@ -496,6 +506,7 @@ class PokeEnvPvpController:
         self._players = None
         self._attempt = 0
         self._callbacks = None
+        self._player_usernames.clear()
 
     def _pack_team(self, team: tuple[Creature, ...]) -> str:
         sets = []

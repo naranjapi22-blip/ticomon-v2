@@ -37,6 +37,7 @@ class PvpChallengeView(discord.ui.View):
         self.opponent_id = session.opponent_id
         self.display_names = dict(display_names or {})
         self.message: discord.Message | None = None
+        self.superseded = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.opponent_id:
@@ -49,6 +50,8 @@ class PvpChallengeView(discord.ui.View):
 
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button) -> None:
+        if self.superseded:
+            return
         try:
             session = self.core.pvp_application_service.registry.get(self.session_id)
             if session.phase is not PvpPhase.CHALLENGE:
@@ -62,6 +65,8 @@ class PvpChallengeView(discord.ui.View):
         view.message = self.message
         for child in self.children:
             child.disabled = True
+        self.superseded = True
+        self.stop()
         await interaction.response.edit_message(
             content=(
                 "PvP challenge accepted. Each trainer must privately select "
@@ -100,9 +105,19 @@ class PvpChallengeView(discord.ui.View):
         )
 
     async def on_timeout(self) -> None:
+        if self.superseded:
+            return
+        try:
+            session = self.core.pvp_application_service.registry.get(self.session_id)
+        except ValueError:
+            return
+        if session.phase is not PvpPhase.CHALLENGE:
+            return
         await self.core.pvp_application_service.cleanup(self.session_id)
         for child in self.children:
             child.disabled = True
+        self.superseded = True
+        self.stop()
         if self.message is not None:
             try:
                 await self.message.edit(view=None)
@@ -112,11 +127,6 @@ class PvpChallengeView(discord.ui.View):
                     self.session_id,
                     exc_info=True,
                 )
-        if self.message is not None:
-            try:
-                await self.message.edit(view=self)
-            except discord.HTTPException:
-                pass
 
 
 class PvpTeamConfirmView(discord.ui.View):
@@ -156,6 +166,7 @@ class PvpTeamSelectionView(discord.ui.View):
         self.player_ids = session.player_ids
         self.display_names = dict(display_names or {})
         self.message: discord.Message | None = None
+        self.superseded = False
         self.board: PvpBoardView | None = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -275,6 +286,8 @@ class PvpBoardView(discord.ui.View):
 
     @classmethod
     async def from_selection(cls, source: PvpTeamSelectionView) -> "PvpBoardView":
+        source.superseded = True
+        source.stop()
         board = cls(source)
         if source.message is not None:
             await board._edit_message()
@@ -344,6 +357,11 @@ class PvpBoardView(discord.ui.View):
         return replace(
             canonical,
             force_switch_opponent=opponent.force_switch_player,
+            # Each poke-env client has the complete team for its own trainer,
+            # while the opponent team may contain only revealed creatures.
+            # Use each client's own-team count for the canonical public sides.
+            player_remaining=canonical.player_remaining,
+            opponent_remaining=opponent.player_remaining,
             finished=canonical.finished or opponent.finished,
             winner_id=canonical.winner_id or opponent.winner_id,
             tie=canonical.tie and opponent.tie,
@@ -363,11 +381,14 @@ class PvpBoardView(discord.ui.View):
         status = f" · {pokemon.status}" if pokemon.status else ""
         return (
             f"{display_species_name(pokemon.species_name)} · {hp}{status} · "
-            f"{remaining} remaining"
+            f"{remaining} Pokémon left"
         )
 
     def _waiting_status(self, session) -> str:
-        if self._terminal or session.phase is PvpPhase.FINISHED:
+        if self._terminal or session.phase in {
+            PvpPhase.FINALIZING,
+            PvpPhase.FINISHED,
+        }:
             return "Battle finished"
         if session.phase is PvpPhase.STARTING:
             return "Starting"
@@ -464,12 +485,23 @@ class PvpBoardView(discord.ui.View):
             await self._edit_task
 
     def _result_text(self) -> str:
+        try:
+            session = self.core.pvp_application_service.registry.get(self.session_id)
+        except ValueError:
+            session = None
         snapshot = self._display_snapshot()
-        if snapshot.tie:
+        if (session is not None and session.final_tie) or snapshot.tie:
             return "The battle ended in a draw."
-        if snapshot.winner_id is not None:
-            return f"{self._visible_name(snapshot.winner_id)} won the battle."
-        return "The battle ended."
+        winner_id = (
+            session.final_winner_id
+            if session is not None and session.final_winner_id is not None
+            else snapshot.winner_id
+        )
+        if winner_id is not None:
+            return f"{self._visible_name(winner_id)} won the battle."
+        if session is not None and session.final_winner_name:
+            return "Battle finished. Winner could not be resolved."
+        return "Battle finished."
 
     async def _edit_message(self, *, force: bool = False) -> None:
         if self.message is None:

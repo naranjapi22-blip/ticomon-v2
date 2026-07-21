@@ -269,8 +269,58 @@ def test_pvp_board_uses_real_waiting_phase_and_public_battle_data():
     assert "Waiting for Jorroco" in content
     assert "Gardevoir" in content and "156/156 HP" in content
     assert "Hydrapple" in content and "42/181 HP · PAR" in content
-    assert "3 remaining" in content and "2 remaining" in content
+    assert "3 Pokémon left" in content and "2 Pokémon left" in content
     assert "p1a:" not in content and "p2a:" not in content
+
+
+def test_pvp_board_uses_both_clients_complete_team_counts():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    initiator = PvpBattleSnapshot(
+        5,
+        1,
+        2,
+        PvpPokemonSnapshot("Zacian", None, 88, 198, 88 / 198, None, False),
+        PvpPokemonSnapshot("Seismitoad", None, 210, 210, 1.0, None, False),
+        3,
+        1,
+        False,
+        False,
+        False,
+        None,
+        False,
+    )
+    opponent = PvpBattleSnapshot(
+        5,
+        2,
+        1,
+        PvpPokemonSnapshot("Seismitoad", None, 210, 210, 1.0, None, False),
+        PvpPokemonSnapshot("Zacian", None, 88, 198, 88 / 198, None, False),
+        3,
+        1,
+        False,
+        False,
+        False,
+        None,
+        False,
+    )
+    board._snapshots = {1: initiator, 2: opponent}
+    board.snapshot = opponent
+
+    canonical = board._display_snapshot()
+
+    assert canonical.player_remaining == 3
+    assert canonical.opponent_remaining == 3
+    assert "3 Pokémon left" in board.render()
 
 
 def test_pvp_board_shows_resolving_and_forced_replacement_phases():
@@ -293,6 +343,9 @@ def test_pvp_board_shows_resolving_and_forced_replacement_phases():
     session.register_action_request(1, "replacement-1")
     assert "Choose a replacement" in board.render()
     assert "Orange" in board.render()
+
+    session.phase = PvpPhase.FINALIZING
+    assert "Battle finished" in board.render()
 
     board.snapshot = PvpBattleSnapshot(
         5,
@@ -438,3 +491,24 @@ async def test_finished_board_replaces_previous_components_and_announces_winner(
     assert kwargs["view"] is None
     assert "Orange won the battle." in kwargs["content"]
     assert board._terminal
+
+
+@pytest.mark.asyncio
+async def test_superseded_challenge_timeout_cannot_restore_components():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    session.phase = PvpPhase.TEAM_SELECTION
+    message = SimpleNamespace(edit=AsyncMock())
+    service = SimpleNamespace(registry=registry, cleanup=AsyncMock())
+    view = PvpChallengeView(
+        SimpleNamespace(pvp_application_service=service),
+        session,
+        {1: "Orange", 2: "Jorroco"},
+    )
+    view.message = message
+    view.superseded = True
+
+    await view.on_timeout()
+
+    message.edit.assert_not_awaited()
+    service.cleanup.assert_not_awaited()

@@ -131,6 +131,61 @@ async def _record(calls):
 
 
 @pytest.mark.asyncio
+async def test_terminal_protocol_resolves_generated_username_and_finishes_once():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    calls = []
+    session.battle_controller = SimpleNamespace(
+        resolve_winner=lambda username: (
+            1 if username.casefold() == "tmabc123a1p1" else None
+        ),
+        close=AsyncMock(),
+    )
+    service._finish_handlers[session.id] = lambda _battle: _record(calls)
+
+    await service.handle_protocol(session.id, [["battle", "win", "tmABC123a1p1"]])
+    await service.handle_protocol(session.id, [["battle", "win", "tmABC123a1p1"]])
+
+    assert calls == ["finished"]
+    session.battle_controller.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_terminal_protocol_with_unknown_username_still_finishes():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    calls = []
+    session.battle_controller = SimpleNamespace(
+        resolve_winner=lambda _username: None,
+        close=AsyncMock(),
+    )
+    service._finish_handlers[session.id] = lambda _battle: _record(calls)
+
+    await service.handle_protocol(
+        session.id, [["battle", "win", "unknown-showdown-user"]]
+    )
+
+    assert calls == ["finished"]
+    session.battle_controller.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_forfeit_uses_the_same_finalization_path():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    controller = SimpleNamespace(forfeit=AsyncMock(), close=AsyncMock())
+    session.battle_controller = controller
+    calls = []
+    service._finish_handlers[session.id] = lambda _battle: _record(calls)
+
+    await service.forfeit(session.id, 1)
+
+    assert calls == ["finished"]
+    controller.forfeit.assert_awaited_once_with(1)
+    controller.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_obsolete_request_does_not_replace_new_request(monkeypatch):
     monkeypatch.setattr(pvp_service_module, "ACTION_TIMEOUT_SECONDS", 0.01)
     service = PvpApplicationService(registry=PvpSessionRegistry())

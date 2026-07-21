@@ -83,6 +83,7 @@ class PvpApplicationService:
         self._finished_sessions: set[UUID] = set()
         self._finalizing_sessions: set[UUID] = set()
         self._event_translators: dict[UUID, PvpEventTranslator] = {}
+        self._latest_snapshots: dict[UUID, dict[int, PvpBattleSnapshot]] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
@@ -286,7 +287,7 @@ class PvpApplicationService:
                 await handler("PvP ended unexpectedly and was cleaned up.")
             except Exception:
                 logger.debug("Unable to publish PvP controller failure", exc_info=True)
-        await self.cleanup(session_id)
+        await self.finish_from_controller(session_id, None)
 
     def _session_phase(self, session_id: UUID) -> str:
         try:
@@ -440,7 +441,15 @@ class PvpApplicationService:
         controller = session.battle_controller
         if controller is not None:
             await controller.forfeit(trainer_id)
-        await self.cleanup(session_id)
+        winner_id = next(
+            player_id for player_id in session.player_ids if player_id != trainer_id
+        )
+        await self.finish_from_controller(
+            session_id,
+            None,
+            winner_id=winner_id,
+            winner_name=None,
+        )
 
     async def handle_protocol(
         self, session_id: UUID, messages: list[list[str]]
@@ -452,6 +461,35 @@ class PvpApplicationService:
             logger.info(
                 "Ignoring PvP protocol after finalization session_id=%s",
                 session_id,
+            )
+            return
+        session = self.registry.get(session_id)
+        for message in messages:
+            if len(message) < 2 or message[1] not in {"win", "tie"}:
+                continue
+            winner_name = message[2] if len(message) > 2 else None
+            winner_id = None
+            resolver = getattr(session.battle_controller, "resolve_winner", None)
+            if winner_name and resolver is not None:
+                winner_id = resolver(winner_name)
+            session.final_winner_name = winner_name
+            session.final_winner_id = winner_id
+            session.final_tie = message[1] == "tie"
+            logger.info(
+                "PvP terminal protocol received session_id=%s phase=%s turn=%s "
+                "winner_name=%s winner_id=%s",
+                session_id,
+                session.phase.value,
+                session.turn_number,
+                winner_name,
+                winner_id,
+            )
+            await self.finish_from_controller(
+                session_id,
+                None,
+                winner_id=winner_id,
+                winner_name=winner_name,
+                tie=message[1] == "tie",
             )
             return
         # Raw protocol is deliberately not rendered as history. The callback receives
@@ -466,7 +504,15 @@ class PvpApplicationService:
             for step in steps:
                 await handler(step)
 
-    async def finish_from_controller(self, session_id: UUID, battle: object) -> None:
+    async def finish_from_controller(
+        self,
+        session_id: UUID,
+        battle: object | None,
+        *,
+        winner_id: int | None = None,
+        winner_name: str | None = None,
+        tie: bool = False,
+    ) -> None:
         if (
             session_id in self._finished_sessions
             or session_id in self._finalizing_sessions
@@ -476,19 +522,56 @@ class PvpApplicationService:
         self._finalizing_sessions.add(session_id)
         handler = self._finish_handlers.get(session_id)
         try:
+            session = self.registry.get(session_id)
+            session.phase = PvpPhase.FINALIZING
+            session.final_winner_id = winner_id or session.final_winner_id
+            session.final_winner_name = winner_name or session.final_winner_name
+            session.final_tie = tie or session.final_tie
             try:
-                session = self.registry.get(session_id)
                 final_snapshot = snapshot_battle(
                     battle,
                     player_id=session.initiator_id,
                     opponent_id=session.opponent_id,
                 )
             except (AttributeError, TypeError, ValueError):
-                final_snapshot = None
+                final_snapshot = self._latest_snapshots.get(session_id, {}).get(
+                    session.initiator_id
+                )
             if final_snapshot is not None:
+                logger.info(
+                    "PvP final snapshot ready session_id=%s phase=%s turn=%s "
+                    "source_player_id=%s winner_id=%s",
+                    session_id,
+                    session.phase.value,
+                    final_snapshot.turn,
+                    final_snapshot.player_id,
+                    session.final_winner_id or final_snapshot.winner_id,
+                )
                 await self.handle_snapshot(session_id, final_snapshot, allow_final=True)
             if handler is not None:
                 await handler(battle)
+            session.phase = PvpPhase.FINISHED
+            logger.info(
+                "PvP final delivery completed session_id=%s phase=%s turn=%s "
+                "winner_id=%s winner_name=%s",
+                session_id,
+                session.phase.value,
+                session.turn_number,
+                session.final_winner_id,
+                session.final_winner_name,
+            )
+        except Exception as error:
+            logger.error(
+                "PvP final delivery failed session_id=%s phase=%s turn=%s "
+                "winner_id=%s error_type=%s error=%s",
+                session_id,
+                self._session_phase(session_id),
+                getattr(session, "turn_number", None),
+                winner_id,
+                type(error).__name__,
+                _safe_exception_message(error),
+                exc_info=True,
+            )
         finally:
             await self.cleanup(session_id)
 
@@ -518,6 +601,7 @@ class PvpApplicationService:
         translator = self._event_translators.get(session_id)
         if translator is not None:
             translator.observe_snapshot(snapshot)
+        self._latest_snapshots.setdefault(session_id, {})[snapshot.player_id] = snapshot
         handler = self._snapshot_handlers.get(session_id)
         if handler is not None:
             await handler(snapshot)
@@ -566,11 +650,13 @@ class PvpApplicationService:
         controller = session.battle_controller
         if controller is not None:
             await controller.close()
-        session.cancel()
+        if session.phase is not PvpPhase.FINISHED:
+            session.cancel()
         self._event_handlers.pop(session_id, None)
         self._finish_handlers.pop(session_id, None)
         self._snapshot_handlers.pop(session_id, None)
         self._event_translators.pop(session_id, None)
+        self._latest_snapshots.pop(session_id, None)
         self.registry.remove(session_id)
         self._finalizing_sessions.discard(session_id)
 

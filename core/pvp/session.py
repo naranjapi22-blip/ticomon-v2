@@ -19,6 +19,7 @@ class PvpPhase(str, Enum):
     WAITING_FOR_ACTIONS = "waiting_for_actions"
     RESOLVING = "resolving"
     FORCED_SWITCH = "forced_switch"
+    FINALIZING = "finalizing"
     FINISHED = "finished"
     CANCELLED = "cancelled"
 
@@ -42,6 +43,9 @@ class PvpSession:
     startup_claimed: bool = field(default=False, repr=False)
     startup_task: asyncio.Task | None = field(default=None, repr=False)
     started_monotonic: float | None = field(default=None, repr=False)
+    final_winner_id: int | None = field(default=None, repr=False)
+    final_winner_name: str | None = field(default=None, repr=False)
+    final_tie: bool = field(default=False, repr=False)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     @property
