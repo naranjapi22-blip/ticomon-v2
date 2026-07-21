@@ -33,6 +33,8 @@ class PvpBattleSnapshot:
     finished: bool
     winner_id: int | None
     tie: bool
+    player_team: tuple[PvpPokemonSnapshot, ...] = ()
+    opponent_team: tuple[PvpPokemonSnapshot, ...] = ()
 
 
 def snapshot_battle(
@@ -70,6 +72,20 @@ def snapshot_battle(
         tie=bool(getattr(battle, "finished", False))
         and not bool(getattr(battle, "won", False))
         and not bool(getattr(battle, "lost", False)),
+        player_team=tuple(
+            _pokemon_snapshot(
+                pokemon,
+                capture_sprite_urls=capture_sprite_urls,
+            )
+            for pokemon in player_team
+        ),
+        opponent_team=tuple(
+            _pokemon_snapshot(
+                pokemon,
+                capture_sprite_urls=capture_sprite_urls,
+            )
+            for pokemon in opponent_team
+        ),
     )
 
 

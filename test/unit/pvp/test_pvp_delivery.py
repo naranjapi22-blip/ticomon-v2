@@ -10,6 +10,7 @@ import application.pvp.pvp_application_service as pvp_service_module
 from application.pvp.events import PvpEventTranslator
 from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
 from application.pvp.pvp_application_service import PvpApplicationService
+from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
 from core.pvp.session import PvpPhase, PvpSessionRegistry
 
 
@@ -173,7 +174,28 @@ def test_forced_switch_policy_uses_only_legal_switches():
 
 
 def test_event_translator_ignores_unknown_protocol_events():
-    steps = PvpEventTranslator().translate(
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            turn=1,
+            player_id=1,
+            opponent_id=2,
+            player_active=PvpPokemonSnapshot(
+                "Pikachu", None, 100, 100, 1.0, None, False
+            ),
+            opponent_active=PvpPokemonSnapshot(
+                "Gyarados", None, 100, 100, 1.0, None, False
+            ),
+            player_remaining=3,
+            opponent_remaining=3,
+            force_switch_player=False,
+            force_switch_opponent=False,
+            finished=False,
+            winner_id=None,
+            tie=False,
+        )
+    )
+    steps = translator.translate(
         [
             ["battle-gen9customgame-1", "move", "p1a: Pikachu", "Thunderbolt"],
             ["battle-gen9customgame-1", "-damage", "p2a: Gyarados", "64/100"],
@@ -183,7 +205,12 @@ def test_event_translator_ignores_unknown_protocol_events():
     )
 
     assert [step.message for step in steps] == [
-        "Pikachu used Thunderbolt.",
-        "Gyarados lost 64/100 HP.",
-        "Gyarados fainted.",
+        "Pikachu used Thunderbolt. Gyarados took 36 damage (64/100 HP remaining). "
+        "Gyarados fainted."
     ]
+    assert steps[0].event is not None
+    assert steps[0].event.actor == "Pikachu"
+    assert steps[0].event.target == "Gyarados"
+    assert steps[0].event.damage == 36
+    assert "p1a:" not in steps[0].message
+    assert "p2a:" not in steps[0].message

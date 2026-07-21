@@ -136,11 +136,24 @@ class BattlePresentationRenderer:
             align="right",
             fonts=fonts,
         )
+        phase = "Battle finished" if state.terminal else state.waiting_text
+        turn_text = f"Turn {state.turn}"
+        if phase:
+            turn_text = f"{turn_text} · {phase}"
+        draw.text(
+            (WIDTH // 2, 28),
+            _short_text(turn_text, 64),
+            fill=(255, 255, 255, 255),
+            font=fonts.hp_text,
+            anchor="mt",
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 255),
+        )
         event = state.last_event or state.waiting_text or ""
         if event:
             draw.text(
                 (WIDTH // 2, HEIGHT - 32),
-                event[:120],
+                _short_text(event, 120),
                 fill=(255, 255, 255, 255),
                 font=fonts.hp_text,
                 anchor="ms",
@@ -153,7 +166,7 @@ class BattlePresentationRenderer:
         anchor = "lt" if align == "left" else "rt"
         draw.text(
             (x, y),
-            side.display_name,
+            _short_text(side.display_name, 24),
             fill=(255, 255, 255, 255),
             font=fonts.trainer,
             anchor=anchor,
@@ -166,7 +179,7 @@ class BattlePresentationRenderer:
         name = f"{active_name}{status}{' (KO)' if side.fainted else ''}"
         draw.text(
             (x, pokemon_y),
-            name,
+            _short_text(name, 28),
             fill=(255, 255, 255, 255),
             font=fonts.pokemon,
             anchor=anchor,
@@ -198,3 +211,10 @@ class BattlePresentationRenderer:
             stroke_width=2,
             stroke_fill=(0, 0, 0, 255),
         )
+
+
+def _short_text(value: object, limit: int) -> str:
+    text = str(value).replace("\r", " ").replace("\n", " ").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[: max(1, limit - 1)].rstrip()}…"

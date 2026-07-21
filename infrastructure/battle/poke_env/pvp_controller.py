@@ -240,6 +240,10 @@ class ManualPvpPlayer(Player):
                     identifier=identifier,
                     label=getattr(move, "name", move.id),
                     detail=f"PP {pp}/{max_pp}",
+                    move_type=_display_value(getattr(move, "type", None)),
+                    category=_display_value(getattr(move, "category", None)),
+                    power=_numeric_value(getattr(move, "base_power", None)),
+                    accuracy=_numeric_value(getattr(move, "accuracy", None)),
                 )
                 moves.append(action)
                 orders[identifier] = order
@@ -249,6 +253,10 @@ class ManualPvpPlayer(Player):
                     kind=PvpActionKind.SWITCH,
                     identifier=identifier,
                     label=order.order.name,
+                    hp_current=getattr(order.order, "current_hp", None),
+                    hp_max=getattr(order.order, "max_hp", None),
+                    status=_display_value(getattr(order.order, "status", None)),
+                    fainted=bool(getattr(order.order, "fainted", False)),
                 )
                 switches.append(action)
                 orders[identifier] = order
@@ -260,6 +268,21 @@ class ManualPvpPlayer(Player):
             forced_switch=forced_switch,
         )
         return legal, orders
+
+
+def _display_value(value) -> str | None:
+    if value is None:
+        return None
+    return str(getattr(value, "name", value)).replace("_", " ").title()
+
+
+def _numeric_value(value) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class PokeEnvPvpController:

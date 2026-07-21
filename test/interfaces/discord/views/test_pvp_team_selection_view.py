@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
+from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
 from core.pvp.session import PvpPhase, PvpSessionRegistry
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
@@ -172,9 +173,9 @@ async def test_board_coalesces_rapid_public_edits():
     await asyncio.sleep(0.01)
 
     assert source.message.edit.await_count == 1
-    assert source.message.edit.await_args.kwargs["content"].endswith(
-        "latest\nReady: none"
-    )
+    content = source.message.edit.await_args.kwargs["content"]
+    assert content.endswith("Last turn: latest")
+    assert "Waiting for both players" in content
 
 
 def test_pvp_board_uses_sanitized_discord_display_names_and_canonical_orientation():
@@ -219,6 +220,95 @@ def test_pvp_board_falls_back_to_trainer_without_full_id():
 
     assert board._visible_name(session.initiator_id) == "Trainer"
     assert board._visible_name(session.opponent_id) == "A" * 24
+
+
+def test_pvp_board_uses_real_waiting_phase_and_public_battle_data():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    session.phase = PvpPhase.WAITING_FOR_ACTIONS
+    session.turn_number = 6
+    session.register_action_request(2, "request-2")
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    board.snapshot = PvpBattleSnapshot(
+        6,
+        1,
+        2,
+        PvpPokemonSnapshot("Gardevoir", None, 156, 156, 1.0, None, False),
+        PvpPokemonSnapshot("Hydrapple", None, 42, 181, 42 / 181, "PAR", False),
+        3,
+        2,
+        False,
+        False,
+        False,
+        None,
+        False,
+    )
+
+    content = board.render()
+
+    assert "Orange vs Jorroco" in content
+    assert "Turn 6" in content
+    assert "Waiting for Jorroco" in content
+    assert "Gardevoir" in content and "156/156 HP" in content
+    assert "Hydrapple" in content and "42/181 HP · PAR" in content
+    assert "3 remaining" in content and "2 remaining" in content
+    assert "p1a:" not in content and "p2a:" not in content
+
+
+def test_pvp_board_shows_resolving_and_forced_replacement_phases():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+
+    session.phase = PvpPhase.RESOLVING
+    assert "Resolving turn" in board.render()
+
+    session.phase = PvpPhase.FORCED_SWITCH
+    session.register_action_request(1, "replacement-1")
+    assert "Choose a replacement" in board.render()
+    assert "Orange" in board.render()
+
+
+def test_private_action_details_include_move_and_switch_information():
+    move = PvpAction(
+        PvpActionKind.MOVE,
+        "move:moonblast",
+        "Moonblast",
+        detail="PP 15/15",
+        move_type="Fairy",
+        category="Special",
+        power=95,
+        accuracy=100,
+    )
+    switch = PvpAction(
+        PvpActionKind.SWITCH,
+        "switch:bellibolt",
+        "Bellibolt",
+        hp_current=140,
+        hp_max=214,
+        status="PAR",
+    )
+    actions = PvpLegalActions(moves=(move,), switches=(switch,))
+
+    assert actions.moves[0].detail == "PP 15/15"
+    assert actions.switches[0].hp_current == 140
+    assert actions.switches[0].status == "PAR"
 
 
 def test_pending_challenge_owns_accept_and_decline_only():

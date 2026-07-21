@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import discord
 
-from application.pvp.models import PvpAction, PvpActionKind
+from application.pvp.models import PvpAction, PvpActionKind, PvpPresentationStep
 from application.pvp.presentation_adapter import pvp_presentation_state
 from application.pvp.snapshots import PvpBattleSnapshot
 from core.pvp.session import PvpPhase
@@ -189,11 +189,11 @@ class PvpTeamSelectionView(discord.ui.View):
             on_snapshot=self._on_snapshot,
         )
 
-    async def _on_event(self, message: str) -> None:
+    async def _on_event(self, step: PvpPresentationStep | str) -> None:
         if self.message is None:
             return
         board = await self._get_board()
-        await board.set_event(message)
+        await board.set_event(step)
 
     async def _on_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
         if self.message is None:
@@ -226,7 +226,8 @@ class PvpBoardView(discord.ui.View):
         self.message = source.message
         self.source = source
         self.display_names = dict(getattr(source, "display_names", {}))
-        self.current_event = "Choose an action."
+        self.current_event = "Waiting for the first actions."
+        self.recent_events: list[str] = []
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
         self._snapshots: dict[int, PvpBattleSnapshot] = {}
@@ -252,32 +253,28 @@ class PvpBoardView(discord.ui.View):
             session = self.core.pvp_application_service.registry.get(self.session_id)
         except ValueError:
             return "PvP session finished."
-        ready = ", ".join(f"<@{player_id}>" for player_id in self.ready) or "none"
         active_lines = self._render_players(session)
         turn = self.snapshot.turn if self.snapshot is not None else session.turn_number
+        initiator_name = self._visible_name(session.initiator_id)
+        opponent_name = self._visible_name(session.opponent_id)
+        waiting = self._waiting_status(session)
         result = (
-            f"⚔️ PvP — Turn {turn}\n"
-            f"<@{session.initiator_id}> vs <@{session.opponent_id}>\n\n"
-            + "\n".join(active_lines)
-            + "\n\n"
-            f"{self.current_event}"
+            f"{initiator_name} vs {opponent_name}\n"
+            f"Turn {turn} · {waiting}\n\n" + "\n".join(active_lines) + "\n\n"
+            f"Last turn: {self.current_event}"
         )
-        if getattr(self.core, "battle_presentation_renderer", None) is None:
-            result += f"\nReady: {ready}"
         return result
 
     def _render_players(self, session) -> list[str]:
         if self.snapshot is None:
             lines = []
-            for player_id in session.player_ids:
+            for player_id in (session.initiator_id, session.opponent_id):
                 team = session.selected_creatures.get(player_id, ())
                 if team:
-                    lines.append(
-                        f"<@{player_id}>: {team[0].species.name} — 100% HP — "
-                        f"{len(team)} remaining"
-                    )
+                    lines.append(f"{self._visible_name(player_id)}:")
+                    lines.extend(f"  {creature.species.name}" for creature in team[:3])
                 else:
-                    lines.append(f"<@{player_id}>: team pending")
+                    lines.append(f"{self._visible_name(player_id)}: team pending")
             return lines
 
         snapshot = self._display_snapshot()
@@ -286,11 +283,13 @@ class PvpBoardView(discord.ui.View):
         return [
             self._format_snapshot_player(
                 snapshot.player_id,
+                self._visible_name(snapshot.player_id),
                 player,
                 snapshot.player_remaining,
             ),
             self._format_snapshot_player(
                 snapshot.opponent_id,
+                self._visible_name(snapshot.opponent_id),
                 opponent,
                 snapshot.opponent_remaining,
             ),
@@ -311,6 +310,8 @@ class PvpBoardView(discord.ui.View):
                 opponent_remaining=canonical.player_remaining,
                 force_switch_player=canonical.force_switch_opponent,
                 force_switch_opponent=canonical.force_switch_player,
+                player_team=canonical.opponent_team,
+                opponent_team=canonical.player_team,
             )
         opponent = self._snapshots.get(session.opponent_id)
         if opponent is None:
@@ -324,19 +325,73 @@ class PvpBoardView(discord.ui.View):
         )
 
     @staticmethod
-    def _format_snapshot_player(player_id, pokemon, remaining: int) -> str:
+    def _format_snapshot_player(
+        player_id,
+        display_name,
+        pokemon,
+        remaining: int,
+    ) -> str:
         if pokemon is None:
-            return f"<@{player_id}>: waiting for Pokémon — {remaining} remaining"
-            return f"<@{player_id}>: waiting for Pokémon — {remaining} remaining"
-        hp = f"{pokemon.hp_fraction:.0%} HP"
+            return f"{display_name}: waiting for Pokémon — {remaining} remaining"
+        current_hp = (
+            pokemon.current_hp
+            if pokemon.current_hp is not None
+            else round(pokemon.hp_fraction * 100)
+        )
+        max_hp = pokemon.max_hp or 100
+        hp = f"{current_hp}/{max_hp} HP"
         status = f" · {pokemon.status}" if pokemon.status else ""
         return (
-            f"<@{player_id}>: {pokemon.species_name} — {hp}{status} — "
+            f"{display_name}: {pokemon.species_name} — {hp}{status} — "
             f"{remaining} remaining"
         )
 
-    async def set_event(self, message: str) -> None:
+    def _waiting_status(self, session) -> str:
+        if self._terminal or session.phase is PvpPhase.FINISHED:
+            return "Battle finished"
+        if session.phase is PvpPhase.STARTING:
+            return "Starting"
+        if session.phase is PvpPhase.FORCED_SWITCH:
+            waiting = tuple(
+                player_id
+                for player_id in (session.initiator_id, session.opponent_id)
+                if player_id in session.active_action_requests
+            )
+            if waiting:
+                return f"Choose a replacement ({self._visible_name(waiting[0])})"
+            return "Choose a replacement"
+        if session.phase is PvpPhase.RESOLVING:
+            return "Resolving turn"
+        waiting = tuple(
+            player_id
+            for player_id in (session.initiator_id, session.opponent_id)
+            if player_id in session.active_action_requests
+        )
+        if waiting:
+            names = " and ".join(self._visible_name(player_id) for player_id in waiting)
+            return f"Waiting for {names}"
+        if self.snapshot is not None:
+            if self.snapshot.force_switch_player:
+                return (
+                    f"Waiting for {self._visible_name(session.initiator_id)} to switch"
+                )
+            if self.snapshot.force_switch_opponent:
+                return (
+                    f"Waiting for {self._visible_name(session.opponent_id)} to switch"
+                )
+        return "Waiting for both players"
+
+    async def set_event(self, step: PvpPresentationStep | str) -> None:
+        message = step.message if isinstance(step, PvpPresentationStep) else str(step)
+        if (
+            message.endswith(" won the battle.")
+            or message == "The battle ended in a tie."
+        ):
+            return
         self.current_event = message
+        turn = self.snapshot.turn if self.snapshot is not None else 0
+        self.recent_events.append(f"Turn {turn} · {message}"[:240])
+        self.recent_events = self.recent_events[-3:]
         self.ready.clear()
         await self._edit_message()
 
@@ -460,6 +515,7 @@ class PvpBoardView(discord.ui.View):
             player_name=self._visible_name(session.initiator_id),
             opponent_name=self._visible_name(session.opponent_id),
             last_event=self.current_event,
+            waiting_text=self._waiting_status(session),
         )
         if self._terminal and not state.terminal:
             return replace(state, terminal=True)
@@ -469,21 +525,55 @@ class PvpBoardView(discord.ui.View):
         return _safe_display_name(self.display_names.get(player_id))
 
     def _build_embed(self, visual_state) -> discord.Embed:
+        try:
+            session = self.core.pvp_application_service.registry.get(self.session_id)
+            turn = (
+                self.snapshot.turn if self.snapshot is not None else session.turn_number
+            )
+            title = (
+                f"{self._visible_name(session.initiator_id)} vs "
+                f"{self._visible_name(session.opponent_id)} · Turn {turn}"
+            )
+            waiting = self._waiting_status(session)
+        except ValueError:
+            turn = self.snapshot.turn if self.snapshot is not None else 0
+            title = f"PvP Battle · Turn {turn}"
+            waiting = "Battle finished"
+
         if visual_state is not None and visual_state.terminal:
             if visual_state.draw:
                 description = "The battle ended in a draw."
             else:
                 winner = visual_state.winner_id
                 description = (
-                    f"{self._visible_name(winner)} wins the battle!"
+                    f"{self._visible_name(winner)} won the battle."
                     if winner
                     else "The battle ended."
                 )
-            title = "🏆 PvP Battle Complete"
         else:
-            description = self.current_event
-            title = "⚔️ PvP Battle"
+            description = f"{waiting}\n\nLast turn: {self.current_event}"
         embed = discord.Embed(title=title, description=description)
+        if visual_state is not None:
+            for side in (visual_state.top, visual_state.bottom):
+                status = f" · {side.status}" if side.status else ""
+                active = side.active_name or "Waiting for Pokémon"
+                embed.add_field(
+                    name=side.display_name,
+                    value=(
+                        f"{active}{status}\n"
+                        f"HP {side.hp_current}/{side.hp_max} · "
+                        f"{side.remaining} remaining"
+                    ),
+                    inline=True,
+                )
+        if self.recent_events and not (
+            visual_state is not None and visual_state.terminal
+        ):
+            embed.add_field(
+                name="Recent turns",
+                value="\n".join(self.recent_events)[-1024:],
+                inline=False,
+            )
         embed.set_image(url="attachment://pvp-battle.gif")
         return embed
 
@@ -512,10 +602,72 @@ class PvpBoardView(discord.ui.View):
             await interaction.response.send_message(str(error), ephemeral=True)
             return
         await interaction.response.send_message(
-            "Choose a legal action:",
-            view=PvpActionView(self, actions),
+            embed=self._build_action_embed(interaction.user.id, actions),
+            view=PvpActionView(self, interaction.user.id, actions),
             ephemeral=True,
         )
+
+    def _build_action_embed(self, trainer_id: int, actions) -> discord.Embed:
+        title = "Choose an action"
+        description = "Actions are private and must be selected for the current turn."
+        try:
+            session = self.core.pvp_application_service.registry.get(self.session_id)
+            turn = (
+                self.snapshot.turn if self.snapshot is not None else session.turn_number
+            )
+            title = f"Turn {turn} · Choose an action"
+            snapshot = self._display_snapshot() if self.snapshot is not None else None
+            own = None
+            if snapshot is not None:
+                if trainer_id == snapshot.player_id:
+                    own = snapshot.player_active
+                else:
+                    own = snapshot.opponent_active
+            if own is not None:
+                status = f" · {own.status}" if own.status else ""
+                description = (
+                    f"{own.species_name} · {own.current_hp}/{own.max_hp} HP{status}"
+                )
+                creature = next(
+                    (
+                        item
+                        for item in session.selected_creatures.get(trainer_id, ())
+                        if item.species.name.lower() == own.species_name.lower()
+                    ),
+                    None,
+                )
+                if creature is not None and getattr(creature, "ability_id", None):
+                    description += f"\nAbility: {creature.ability_id}"
+        except ValueError:
+            pass
+
+        embed = discord.Embed(title=title, description=description)
+        moves = [action for action in actions.moves]
+        switches = [action for action in actions.switches]
+        if moves:
+            embed.add_field(
+                name="Moves",
+                value="\n".join(_action_detail(action) for action in moves)[:1024],
+                inline=False,
+            )
+        if switches:
+            switch_lines = []
+            for action in switches:
+                state = "Fainted" if action.fainted else "Healthy"
+                hp = (
+                    f"{action.hp_current}/{action.hp_max} HP"
+                    if action.hp_current is not None and action.hp_max is not None
+                    else "HP unavailable"
+                )
+                switch_lines.append(f"{action.label} · {hp} · {state}")
+            embed.add_field(
+                name=(
+                    "Switches" if not actions.forced_switch else "Choose a replacement"
+                ),
+                value="\n".join(switch_lines)[:1024],
+                inline=False,
+            )
+        return embed
 
     @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.danger)
     async def forfeit(self, interaction: discord.Interaction, button) -> None:
@@ -533,44 +685,75 @@ class PvpBoardView(discord.ui.View):
 
 
 class PvpActionView(discord.ui.View):
-    def __init__(self, board: PvpBoardView, actions) -> None:
+    def __init__(self, board: PvpBoardView, trainer_id: int, actions) -> None:
         super().__init__(timeout=30)
         self.board = board
+        self.trainer_id = trainer_id
         self.actions = {action.identifier: action for action in actions.all_actions}
-        for action in self.actions.values():
-            button = discord.ui.Button(
-                label=action.label[:80],
-                style=(
-                    discord.ButtonStyle.secondary
-                    if action.kind is PvpActionKind.SWITCH
-                    else discord.ButtonStyle.primary
-                ),
-                custom_id=f"pvp-action:{board.session_id}:{action.identifier}",
-            )
-            button.callback = self._callback(action)
-            self.add_item(button)
-
-    def _callback(self, action: PvpAction):
-        async def callback(interaction: discord.Interaction) -> None:
-            try:
-                accepted = await self.board.core.pvp_application_service.submit_action(
-                    self.board.session_id,
-                    interaction.user.id,
-                    action,
+        self.select = discord.ui.Select(
+            placeholder=(
+                "Choose a replacement"
+                if actions.forced_switch
+                else "Choose a move or switch"
+            ),
+            options=[
+                discord.SelectOption(
+                    label=action.label[:100],
+                    value=action.identifier,
+                    description=_action_description(action),
                 )
-            except ValueError as error:
-                await interaction.response.send_message(str(error), ephemeral=True)
-                return
-            if not accepted:
-                await interaction.response.send_message(
-                    "That action window has already been resolved.", ephemeral=True
-                )
-                return
-            self.board.ready.add(interaction.user.id)
-            await interaction.response.edit_message(
-                content="Action selected.", view=None
-            )
-            if self.board.message is not None:
-                await self.board._edit_message()
+                for action in self.actions.values()
+            ][:25],
+        )
+        self.select.callback = self._select_callback
+        self.add_item(self.select)
 
-        return callback
+    async def _select_callback(self, interaction: discord.Interaction) -> None:
+        identifier = self.select.values[0]
+        action = self.actions[identifier]
+        try:
+            accepted = await self.board.core.pvp_application_service.submit_action(
+                self.board.session_id,
+                interaction.user.id,
+                action,
+            )
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        if not accepted:
+            await interaction.response.send_message(
+                "That action window has already been resolved.", ephemeral=True
+            )
+            return
+        self.select.disabled = True
+        self.board.ready.add(interaction.user.id)
+        await interaction.response.edit_message(
+            content="Action selected. Waiting for the other player.",
+            embed=None,
+            view=None,
+        )
+        if self.board.message is not None:
+            await self.board._edit_message()
+
+
+def _action_detail(action: PvpAction) -> str:
+    move_type = action.move_type or "—"
+    category = action.category or "—"
+    power = str(action.power) if action.power is not None else "—"
+    accuracy = f"{action.accuracy}%" if action.accuracy is not None else "—"
+    detail = action.detail or "PP unavailable"
+    return (
+        f"{action.label} · {move_type} · {category} · {power} BP · "
+        f"{detail} · Accuracy {accuracy}"
+    )
+
+
+def _action_description(action: PvpAction) -> str:
+    if action.kind is PvpActionKind.MOVE:
+        return _action_detail(action)[:100]
+    hp = (
+        f"{action.hp_current}/{action.hp_max} HP"
+        if action.hp_current is not None and action.hp_max is not None
+        else "HP unavailable"
+    )
+    return f"{hp} · {'Fainted' if action.fainted else 'Ready'}"[:100]

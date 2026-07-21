@@ -17,6 +17,14 @@ class PvpAction:
     label: str
     detail: str = ""
     automatic: bool = False
+    move_type: str | None = None
+    category: str | None = None
+    power: int | None = None
+    accuracy: int | None = None
+    hp_current: int | None = None
+    hp_max: int | None = None
+    status: str | None = None
+    fainted: bool = False
 
 
 @dataclass(frozen=True)
@@ -53,10 +61,26 @@ class PvpBoardState:
 
 
 @dataclass(frozen=True)
+class PvpEvent:
+    actor: str | None = None
+    target: str | None = None
+    move_name: str | None = None
+    damage: int | None = None
+    effectiveness: str | None = None
+    critical: bool = False
+    status: str | None = None
+    stat_changes: tuple[str, ...] = ()
+    healing: int | None = None
+    fainted: bool = False
+    switch: str | None = None
+
+
+@dataclass(frozen=True)
 class PvpPresentationStep:
     message: str
     board_state: PvpBoardState | None = None
     delay_seconds: float = 0.0
+    event: PvpEvent | None = None
 
 
 @dataclass

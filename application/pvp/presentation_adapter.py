@@ -13,6 +13,7 @@ def pvp_presentation_state(
     player_name: str,
     opponent_name: str,
     last_event: str,
+    waiting_text: str | None = None,
 ) -> BattlePresentationState:
     return BattlePresentationState(
         top=_side(
@@ -32,7 +33,8 @@ def pvp_presentation_state(
         terminal=snapshot.finished,
         winner_id=snapshot.winner_id,
         draw=snapshot.tie,
-        waiting_text="Forced switch required" if snapshot.force_switch_player else None,
+        waiting_text=waiting_text
+        or ("Forced switch required" if snapshot.force_switch_player else None),
     )
 
 

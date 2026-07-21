@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from application.pvp.events import PvpEventTranslator
 from application.pvp.models import PvpAction, PvpLegalActions
-from application.pvp.snapshots import PvpBattleSnapshot
+from application.pvp.snapshots import PvpBattleSnapshot, snapshot_battle
 from application.pvp.team_validator import PvpTeamValidator
 from core.pvp.session import (
     ACTION_TIMEOUT_SECONDS,
@@ -81,6 +81,7 @@ class PvpApplicationService:
             UUID, Callable[[PvpBattleSnapshot], Awaitable[None]]
         ] = {}
         self._finished_sessions: set[UUID] = set()
+        self._event_translators: dict[UUID, PvpEventTranslator] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
@@ -213,6 +214,7 @@ class PvpApplicationService:
                 self.registry.remove(session_id)
                 raise
             session.battle_controller = controller
+            self._event_translators[session_id] = PvpEventTranslator()
             if on_event is not None:
                 self._event_handlers[session_id] = on_event
             if on_finished is not None:
@@ -437,12 +439,15 @@ class PvpApplicationService:
     ) -> None:
         # Raw protocol is deliberately not rendered as history. The callback receives
         # only the current compact event and the board layer replaces the old one.
-        translator = PvpEventTranslator()
+        translator = self._event_translators.setdefault(
+            session_id,
+            PvpEventTranslator(),
+        )
         steps = translator.translate(messages)
         handler = self._event_handlers.get(session_id)
         if handler is not None:
             for step in steps:
-                await handler(step.message)
+                await handler(step)
 
     async def finish_from_controller(self, session_id: UUID, battle: object) -> None:
         if session_id in self._finished_sessions:
@@ -450,6 +455,17 @@ class PvpApplicationService:
         self._finished_sessions.add(session_id)
         handler = self._finish_handlers.get(session_id)
         try:
+            try:
+                session = self.registry.get(session_id)
+                final_snapshot = snapshot_battle(
+                    battle,
+                    player_id=session.initiator_id,
+                    opponent_id=session.opponent_id,
+                )
+            except (AttributeError, TypeError, ValueError):
+                final_snapshot = None
+            if final_snapshot is not None:
+                await self.handle_snapshot(session_id, final_snapshot)
             if handler is not None:
                 await handler(battle)
         finally:
@@ -458,6 +474,9 @@ class PvpApplicationService:
     async def handle_snapshot(
         self, session_id: UUID, snapshot: PvpBattleSnapshot
     ) -> None:
+        translator = self._event_translators.get(session_id)
+        if translator is not None:
+            translator.observe_snapshot(snapshot)
         handler = self._snapshot_handlers.get(session_id)
         if handler is not None:
             await handler(snapshot)
@@ -510,6 +529,7 @@ class PvpApplicationService:
         self._event_handlers.pop(session_id, None)
         self._finish_handlers.pop(session_id, None)
         self._snapshot_handlers.pop(session_id, None)
+        self._event_translators.pop(session_id, None)
         self.registry.remove(session_id)
         self._finished_sessions.discard(session_id)
 
