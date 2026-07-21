@@ -1,17 +1,49 @@
 from __future__ import annotations
 
+import logging
+
 import discord
 
 from application.creature.creature_loadout_service import CreatureLoadout
 
-PAGE_SIZE = 24  # Keep one option available for the empty slot.
+logger = logging.getLogger(__name__)
+
+PAGE_SIZE = 23  # Leave room for an empty slot and a selected off-page move.
 EMPTY_MOVE = "__empty__"
 
 
 def _validate_select_values(select: discord.ui.Select) -> None:
+    if not 1 <= len(select.options) <= 25:
+        raise ValueError("Move editor generated too many Discord select options.")
+    if select.placeholder is not None and not 1 <= len(select.placeholder) <= 150:
+        raise ValueError("Move editor generated an invalid Discord placeholder.")
+    if not 1 <= len(select.custom_id) <= 100:
+        raise ValueError("Move editor generated an invalid Discord custom ID.")
+    default_count = 0
     for option in select.options:
+        if not isinstance(option.label, str) or not 1 <= len(option.label) <= 100:
+            raise ValueError("Move editor generated an invalid Discord option label.")
         if not isinstance(option.value, str) or not 1 <= len(option.value) <= 100:
             raise ValueError("Move editor generated an invalid Discord select value.")
+        if option.description is not None and not 1 <= len(option.description) <= 100:
+            raise ValueError(
+                "Move editor generated an invalid Discord option description."
+            )
+        default_count += option.default
+    if default_count != 1:
+        raise ValueError("Move editor must have exactly one default option per select.")
+
+
+def _loadout_context(loadout: CreatureLoadout, owner_id: int) -> dict[str, object]:
+    creature = loadout.creature
+    species = creature.species
+    return {
+        "creature_id": getattr(creature, "id", None),
+        "species_id": getattr(species, "id", None),
+        "collection_number": getattr(creature, "collection_number", None),
+        "owner_id": owner_id,
+        "legal_move_count": len(loadout.legal_moves),
+    }
 
 
 async def _send_ephemeral_once(interaction, content: str) -> None:
@@ -77,7 +109,11 @@ class MoveLoadoutView(discord.ui.View):
                 content=render_loadout(self.loadout) + "\n\nSelect 1 to 4 moves.",
                 view=editor,
             )
-        except (discord.HTTPException, ValueError):
+        except Exception:
+            logger.exception(
+                "move editor failed to open context=%s",
+                _loadout_context(self.loadout, self.owner_id),
+            )
             await _send_ephemeral_once(
                 interaction,
                 "I could not open the moves editor. Please try again later.",
@@ -170,6 +206,12 @@ class MoveEditorView(discord.ui.View):
             select = MoveSlotSelect(self, slot_index, options, placeholder=placeholder)
             _validate_select_values(select)
             self.add_item(select)
+        self._validate_component_rows()
+
+    def _validate_component_rows(self) -> None:
+        components = self.to_components()
+        if len(components) > 5:
+            raise ValueError("Move editor generated more than five component rows.")
 
     async def _handle_move_selection(self, interaction, slot_index, select) -> None:
         value = select.values[0]

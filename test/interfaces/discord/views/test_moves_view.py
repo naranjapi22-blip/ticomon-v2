@@ -48,6 +48,25 @@ def four_move_loadout():
     return CreatureLoadout(creature, ability, moves, legal_moves)
 
 
+def minun_loadout():
+    selected_ids = ("endure", "entrainment", "fake-tears", "fling")
+    filler_ids = tuple(f"minun-move-{index:02d}" for index in range(27))
+    legal_moves = tuple(
+        CreatureMove(move_id, move_id.title(), "normal", "Status", None, None, 10)
+        for move_id in filler_ids + selected_ids
+    )
+    selected_moves = tuple(move for move in legal_moves if move.id in selected_ids)
+    creature = SimpleNamespace(
+        id=77,
+        collection_number=2,
+        species=SimpleNamespace(id=312, name="Minun"),
+        ability_id="minus",
+        moves=selected_ids,
+    )
+    ability = SimpleNamespace(display_name="Minus")
+    return CreatureLoadout(creature, ability, selected_moves, legal_moves)
+
+
 def test_render_shows_ability_and_dash_for_missing_move_values():
     text = render_loadout(loadout())
     assert "Ability: Swift Swim" in text
@@ -201,6 +220,46 @@ async def test_navigation_preserves_defaults_for_all_slots():
         [option.value for option in select.options if option.default][0]
         for select in selects
     ] == ["endure", "entrainment", "fake-tears", "fling"]
+
+
+@pytest.mark.asyncio
+async def test_minun_view_serializes_with_discord_component_limits():
+    view = MoveEditorView(SimpleNamespace(), minun_loadout(), owner_id=123)
+
+    components = view.to_components()
+    selects = sorted(
+        (item for item in view.children if isinstance(item, discord.ui.Select)),
+        key=lambda item: item.slot_index,
+    )
+    assert len(components) <= 5
+    assert all(1 <= len(select.options) <= 25 for select in selects)
+    assert all(
+        1 <= len(option.label) <= 100
+        and 1 <= len(option.value) <= 100
+        and (option.description is None or 1 <= len(option.description) <= 100)
+        for select in selects
+        for option in select.options
+    )
+    assert all(
+        1 <= len(select.custom_id) <= 100
+        and sum(option.default for option in select.options) == 1
+        for select in selects
+    )
+    assert [
+        [option.value for option in select.options if option.default][0]
+        for select in selects
+    ] == ["endure", "entrainment", "fake-tears", "fling"]
+
+    await view.next.callback(
+        SimpleNamespace(response=SimpleNamespace(edit_message=AsyncMock()))
+    )
+    selects = sorted(
+        (item for item in view.children if isinstance(item, discord.ui.Select)),
+        key=lambda item: item.slot_index,
+    )
+    assert all(
+        sum(option.default for option in select.options) == 1 for select in selects
+    )
 
 
 @pytest.mark.asyncio
