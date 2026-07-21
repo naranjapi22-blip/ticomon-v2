@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 import application.pvp.pvp_application_service as pvp_service_module
-from application.pvp.events import PvpEventTranslator, display_species_name
+from application.pvp.events import (
+    PvpEventTranslator,
+    display_species_name,
+    display_stat_name,
+)
 from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
 from application.pvp.pvp_application_service import PvpApplicationService
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
@@ -313,6 +317,108 @@ def test_event_translator_uses_damage_without_repeating_hp_and_normalizes_names(
     steps = translator.translate([["battle", "-damage", "p2a: kommoo", "157/167"]])
 
     assert steps[0].message == "Kommo-o took 10 damage."
+
+
+@pytest.mark.parametrize(
+    ("stat", "expected"),
+    [("spa", "Sp. Atk"), ("spd", "Sp. Def"), ("atk", "Attack"), ("spe", "Speed")],
+)
+def test_showdown_stat_names_are_user_facing(stat, expected):
+    assert display_stat_name(stat) == expected
+
+
+@pytest.mark.parametrize(
+    ("event", "amount", "expected"),
+    [
+        ("-unboost", "1", "Hydreigon's Sp. Atk fell."),
+        ("-unboost", "2", "Hydreigon's Sp. Atk fell sharply."),
+        ("-boost", "1", "Hydreigon's Sp. Atk rose."),
+        ("-boost", "2", "Hydreigon's Sp. Atk rose sharply."),
+    ],
+)
+def test_stat_change_magnitude_is_preserved(event, amount, expected):
+    translator = PvpEventTranslator()
+
+    steps = translator.translate([["battle", event, "p1a: Hydreigon", "spa", amount]])
+
+    assert steps[0].message == expected
+    assert "spa" not in steps[0].message
+
+
+def test_move_direct_damage_is_separate_from_secondary_damage_and_stat_changes():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            6,
+            1,
+            2,
+            PvpPokemonSnapshot("Hydreigon", None, 24, 199, 24 / 199, None, False),
+            PvpPokemonSnapshot("Iron Moth", None, 106, 185, 106 / 185, None, False),
+            2,
+            2,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    steps = translator.translate(
+        [
+            ["battle", "move", "p1a: Hydreigon", "Draco Meteor", "p2a: Iron Moth"],
+            ["battle", "-damage", "p2a: Iron Moth", "95/185"],
+            ["battle", "-unboost", "p1a: Hydreigon", "spa", "2"],
+            ["battle", "-damage", "p1a: Hydreigon", "12/199", "[from] Sandstorm"],
+        ]
+    )
+
+    message = steps[0].message
+    assert "Hydreigon used Draco Meteor." in message
+    assert "Iron Moth took 11 damage." in message
+    assert "Hydreigon's Sp. Atk fell sharply." in message
+    assert "Sandstorm dealt 12 damage to Hydreigon." in message
+    assert "Hydreigon took 12 damage" not in message
+    assert "spa" not in message
+    assert steps[0].event is not None
+    assert steps[0].event.direct_damage == 11
+    assert steps[0].event.damage_source == "direct"
+
+
+@pytest.mark.parametrize(
+    ("tag", "expected"),
+    [
+        ("[from] Recoil", "Hydreigon took 12 recoil damage."),
+        ("[from] psn", "Hydreigon took 12 poison damage."),
+        ("[from] brn", "Hydreigon took 12 burn damage."),
+        ("[from] Life Orb", "Hydreigon took 12 item damage."),
+        ("[from] unknown effect", "Hydreigon took 12 indirect damage."),
+    ],
+)
+def test_secondary_damage_keeps_its_cause(tag, expected):
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            1,
+            1,
+            2,
+            PvpPokemonSnapshot("Hydreigon", None, 24, 199, 24 / 199, None, False),
+            PvpPokemonSnapshot("Iron Moth", None, 100, 185, 100 / 185, None, False),
+            2,
+            2,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    steps = translator.translate(
+        [["battle", "-damage", "p1a: Hydreigon", "12/199", tag]]
+    )
+
+    assert steps[0].message == expected
     assert "/167" not in steps[0].message
     assert display_species_name("ironthorns") == "Iron Thorns"
     assert display_species_name("kommoo") == "Kommo-o"

@@ -66,6 +66,8 @@ class PvpEvent:
     target: str | None = None
     move_name: str | None = None
     damage: int | None = None
+    direct_damage: int | None = None
+    damage_source: str | None = None
     effectiveness: str | None = None
     critical: bool = False
     status: str | None = None

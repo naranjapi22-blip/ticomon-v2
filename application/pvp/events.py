@@ -10,6 +10,60 @@ from application.pvp.snapshots import PvpBattleSnapshot
 logger = logging.getLogger(__name__)
 
 
+_STAT_DISPLAY_NAMES = {
+    "atk": "Attack",
+    "def": "Defense",
+    "spa": "Sp. Atk",
+    "spd": "Sp. Def",
+    "spe": "Speed",
+    "accuracy": "Accuracy",
+    "evasion": "Evasion",
+}
+
+
+def display_stat_name(value: str) -> str:
+    text = str(value).strip().casefold()
+    return _STAT_DISPLAY_NAMES.get(text, text.replace("_", " ").title())
+
+
+def _stat_change_text(target: str, stat: str, direction: str, amount: int) -> str:
+    if amount >= 3:
+        qualifier = " drastically"
+    elif amount == 2:
+        qualifier = " sharply"
+    else:
+        qualifier = ""
+    verb = "rose" if direction == "boost" else "fell"
+    return (
+        f"{display_species_name(target)}'s {display_stat_name(stat)} {verb}{qualifier}."
+    )
+
+
+def _classify_damage(details: list[str]) -> str:
+    text = " ".join(str(item) for item in details).casefold()
+    if "weather" in text or "sandstorm" in text or "hail" in text or "snow" in text:
+        return "weather"
+    if "poison" in text or "psn" in text or "tox" in text:
+        return "poison"
+    if "burn" in text or "brn" in text:
+        return "burn"
+    if "recoil" in text:
+        return "recoil"
+    if "stealth rock" in text or "spikes" in text or "hazard" in text:
+        return "hazard"
+    if "leech seed" in text:
+        return "leech seed"
+    if "confusion" in text:
+        return "confusion"
+    if "life orb" in text or "item:" in text:
+        return "item"
+    if "ability:" in text:
+        return "ability"
+    if "[from]" in text or "[of]" in text:
+        return "unknown indirect"
+    return "direct"
+
+
 class PvpEventTranslator:
     """Translates Showdown protocol messages into readable turn summaries."""
 
@@ -70,18 +124,17 @@ class PvpEventTranslator:
                     continue
 
                 if event == "-damage" and len(values) >= 2:
-                    previous = self._last_hp.get(_protocol_id(values[0]))
-                    current, _ = _parse_hp(values[1])
-                    text = self._damage_text(values[0], values[1], values[2:])
-                    if structured is not None:
+                    damage, source = self._damage_info(values[0], values[1], values[2:])
+                    text = self._damage_text(
+                        values[0], values[1], values[2:], damage=damage, source=source
+                    )
+                    if structured is not None and source == "direct":
                         structured = replace(
                             structured,
                             target=_pokemon_name(values[0]),
-                            damage=(
-                                previous[0] - current
-                                if previous is not None and previous[0] > current
-                                else None
-                            ),
+                            damage=damage,
+                            direct_damage=damage,
+                            damage_source=source,
                         )
                 elif event == "-heal" and len(values) >= 2:
                     previous = self._last_hp.get(_protocol_id(values[0]))
@@ -157,13 +210,22 @@ class PvpEventTranslator:
         if event == "faint":
             return replace(event_data, fainted=True)
         if event in {"-boost", "-unboost"} and len(values) >= 2:
-            change = f"{values[1]} {'rose' if event == '-boost' else 'fell'}"
+            amount = _parse_change_amount(values[2] if len(values) >= 3 else "1")
+            change = _stat_change_text(
+                values[0],
+                values[1],
+                "boost" if event == "-boost" else "unboost",
+                amount,
+            ).removesuffix(".")
             return replace(event_data, stat_changes=(*event_data.stat_changes, change))
         return event_data
 
     def _translate_event(self, event: str, values: list[str]) -> str | None:
         if event == "-damage" and len(values) >= 2:
-            return self._damage_text(values[0], values[1], values[2:])
+            damage, source = self._damage_info(values[0], values[1], values[2:])
+            return self._damage_text(
+                values[0], values[1], values[2:], damage=damage, source=source
+            )
         if event == "-heal" and len(values) >= 2:
             return f"{display_species_name(values[0])} recovered HP."
         if event == "-status" and len(values) >= 2:
@@ -192,8 +254,13 @@ class PvpEventTranslator:
         if event == "-ability" and len(values) >= 2:
             return f"{display_species_name(values[0])}'s {values[1]} activated."
         if event in {"-boost", "-unboost"} and len(values) >= 2:
-            verb = "rose" if event == "-boost" else "fell"
-            return f"{display_species_name(values[0])}'s {values[1]} {verb}."
+            amount = _parse_change_amount(values[2] if len(values) >= 3 else "1")
+            return _stat_change_text(
+                values[0],
+                values[1],
+                "boost" if event == "-boost" else "unboost",
+                amount,
+            )
         if event == "switch" and len(values) >= 2:
             return f"{display_species_name(values[0])} entered the battle."
         if event == "faint" and values:
@@ -215,23 +282,48 @@ class PvpEventTranslator:
             return "The battle ended in a tie."
         return None
 
-    def _damage_text(
+    def _damage_info(
         self, target: str, hp_value: str, details: list[str] | None = None
-    ) -> str | None:
-        name = display_species_name(target)
+    ) -> tuple[int | None, str]:
         current, maximum = _parse_hp(hp_value)
         key = _protocol_id(target)
         previous = self._last_hp.get(key)
         self._last_hp[key] = (current, maximum)
-        if previous is not None and previous[0] > current:
+        damage = None
+        if previous is not None and previous[0] >= current:
             damage = previous[0] - current
-            if details and any("weather" in item.casefold() for item in details):
-                weather = self._weather or "Weather"
-                return f"{weather} dealt {damage} damage to {name}."
+        return damage, _classify_damage(details or [])
+
+    def _damage_text(
+        self,
+        target: str,
+        hp_value: str,
+        details: list[str] | None = None,
+        *,
+        damage: int | None = None,
+        source: str | None = None,
+    ) -> str | None:
+        name = display_species_name(target)
+        source = source or _classify_damage(details or [])
+        if damage is None:
+            return None
+        if source == "direct":
             return f"{name} took {damage} damage."
-        if previous is not None and previous[0] == current:
-            return f"{name} took 0 damage."
-        return None
+        if source == "weather":
+            weather = self._weather or _source_label(details or []) or "Weather"
+            return f"{weather} dealt {damage} damage to {name}."
+        if source == "recoil":
+            return f"{name} took {damage} recoil damage."
+        if source == "unknown indirect":
+            logger.debug(
+                "Unclassified PvP secondary damage target=%s damage=%s "
+                "classification=unknown_indirect_damage source_tags=%s",
+                name,
+                damage,
+                _safe_source_tags(details or []),
+            )
+            return f"{name} took {damage} indirect damage."
+        return f"{name} took {damage} {source} damage."
 
 
 def _parse_hp(value: str) -> tuple[int, int]:
@@ -239,6 +331,29 @@ def _parse_hp(value: str) -> tuple[int, int]:
     if match is None:
         return 0, 0
     return int(match.group(1)), int(match.group(2))
+
+
+def _parse_change_amount(value: str) -> int:
+    try:
+        return max(1, int(str(value).strip()))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _source_label(details: list[str]) -> str | None:
+    for detail in details:
+        text = str(detail).strip()
+        if text.startswith("[from]"):
+            label = text.removeprefix("[from]").strip()
+            if label and not label.casefold().startswith(("ability:", "item:")):
+                return display_species_name(label)
+    return None
+
+
+def _safe_source_tags(details: list[str]) -> tuple[str, ...]:
+    return tuple(
+        str(item).replace("\r", " ").replace("\n", " ")[:80] for item in details
+    )
 
 
 def _pokemon_name(value: str) -> str:
