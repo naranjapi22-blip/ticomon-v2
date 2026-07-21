@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
+from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
 from core.pvp.session import PvpPhase, PvpSessionRegistry
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
 from interfaces.discord.views.pvp_challenge_view import (
@@ -173,6 +174,50 @@ async def test_board_coalesces_rapid_public_edits():
     assert source.message.edit.await_args.kwargs["content"].endswith(
         "latest\nReady: none"
     )
+
+
+def test_pvp_board_uses_sanitized_discord_display_names_and_canonical_orientation():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange\n", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    initiator = PvpPokemonSnapshot("Hydrapple", None, 80, 100, 0.8, None, False)
+    opponent = PvpPokemonSnapshot("Tsareena", None, 70, 100, 0.7, None, False)
+    board.snapshot = PvpBattleSnapshot(
+        1, 2, 1, opponent, initiator, 2, 3, False, False, False, None, False
+    )
+
+    state = board._visual_state()
+
+    assert state.top.display_name == "Jorroco"
+    assert state.bottom.display_name == "Orange"
+    assert state.top.active_name == "Tsareena"
+    assert state.bottom.active_name == "Hydrapple"
+    assert "11310031531417600" not in state.top.display_name
+
+
+def test_pvp_board_falls_back_to_trainer_without_full_id():
+    registry = PvpSessionRegistry()
+    session = registry.create(11310031531417600, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={2: "A" * 100},
+    )
+    board = PvpBoardView(source)
+
+    assert board._visible_name(session.initiator_id) == "Trainer"
+    assert board._visible_name(session.opponent_id) == "A" * 24
 
 
 @pytest.mark.asyncio

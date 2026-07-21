@@ -172,12 +172,21 @@ class PvpApplicationService:
                 refreshed = await self._creature_repository.get_many(
                     [creature.id for creature in team]
                 )
-                if len(refreshed) != len(team) or any(
-                    creature.trainer_id != player_id for creature in refreshed
+                original_ids = [creature.id for creature in team]
+                refreshed_by_id = {creature.id: creature for creature in refreshed}
+                if (
+                    len(original_ids) != len(set(original_ids))
+                    or len(refreshed_by_id) != len(refreshed)
+                    or len(refreshed) != len(team)
+                    or set(refreshed_by_id) != set(original_ids)
+                    or any(creature.trainer_id != player_id for creature in refreshed)
                 ):
                     raise ValueError("A selected creature is no longer owned by you.")
-                self._team_validator.validate(refreshed)
-                session.selected_creatures[player_id] = tuple(refreshed)
+                ordered_refreshed = tuple(
+                    refreshed_by_id[creature_id] for creature_id in original_ids
+                )
+                self._team_validator.validate(ordered_refreshed)
+                session.selected_creatures[player_id] = ordered_refreshed
             teams = {
                 player_id: session.selected_creatures[player_id]
                 for player_id in session.player_ids

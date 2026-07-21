@@ -144,6 +144,42 @@ async def test_confirmation_revalidates_creatures_removed_from_team():
 
 
 @pytest.mark.asyncio
+async def test_confirmation_preserves_selected_order_when_repository_reorders_rows():
+    creatures = _creatures()
+
+    class ReorderingRepository(CreatureRepository):
+        async def get_many(self, creature_ids):
+            rows = await super().get_many(creature_ids)
+            return list(reversed(rows))
+
+    captured = {}
+
+    class Controller:
+        async def start(self, teams, callbacks):
+            captured.update(teams)
+
+        async def close(self):
+            return
+
+    service = PvpApplicationService(
+        registry=PvpSessionRegistry(),
+        creature_repository=ReorderingRepository(creatures),
+        team_repository=TeamRepository(creatures),
+        team_validator=Validator(),
+        controller_factory=Controller,
+    )
+    session = service.challenge(1, 2)
+    await service.select_team(session.id, 1, [3, 1, 2])
+    await service.select_team(session.id, 2, [11, 12, 13])
+    assert not await service.confirm_team(session.id, 1)
+    assert await service.confirm_team(session.id, 2)
+    await asyncio.sleep(0)
+
+    assert [creature.id for creature in captured[1]] == [3, 1, 2]
+    await service.cleanup(session.id)
+
+
+@pytest.mark.asyncio
 async def test_simultaneous_confirmations_start_one_controller():
     creatures = _creatures()
     starts = 0

@@ -162,7 +162,7 @@ def test_event_translator_ignores_unknown_protocol_events():
     )
 
     assert [step.message for step in steps] == [
-        "p1a: Pikachu used Thunderbolt.",
-        "p2a: Gyarados lost 64/100 HP.",
-        "p2a: Gyarados fainted.",
+        "Pikachu used Thunderbolt.",
+        "Gyarados lost 64/100 HP.",
+        "Gyarados fainted.",
     ]

@@ -285,6 +285,8 @@ class PokeEnvPvpController:
             second = self._make_player(
                 player_ids[1], packed_teams[player_ids[1]], player_kwargs, 2
             )
+            first.opponent_id = player_ids[1]
+            second.opponent_id = player_ids[0]
             self._players = first, second
             try:
                 await asyncio.wait_for(

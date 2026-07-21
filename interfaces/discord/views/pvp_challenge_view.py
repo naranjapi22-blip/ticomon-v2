@@ -17,12 +17,24 @@ from interfaces.discord.views.creature_selection_view import CreatureSelectionVi
 logger = logging.getLogger(__name__)
 
 
+def _safe_display_name(name: object) -> str:
+    if name is None:
+        return "Trainer"
+    value = str(name).replace("\r", " ").replace("\n", " ").strip()
+    if not value:
+        return "Trainer"
+    return value[:24]
+
+
 class PvpChallengeView(discord.ui.View):
-    def __init__(self, core, session) -> None:
+    def __init__(
+        self, core, session, display_names: dict[int, str] | None = None
+    ) -> None:
         super().__init__(timeout=180)
         self.core = core
         self.session_id = session.id
         self.opponent_id = session.opponent_id
+        self.display_names = dict(display_names or {})
         self.message: discord.Message | None = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -45,7 +57,7 @@ class PvpChallengeView(discord.ui.View):
             )
             return
 
-        view = PvpTeamSelectionView(self.core, session)
+        view = PvpTeamSelectionView(self.core, session, self.display_names)
         view.message = self.message
         for child in self.children:
             child.disabled = True
@@ -110,11 +122,14 @@ class PvpTeamConfirmView(discord.ui.View):
 
 
 class PvpTeamSelectionView(discord.ui.View):
-    def __init__(self, core, session) -> None:
+    def __init__(
+        self, core, session, display_names: dict[int, str] | None = None
+    ) -> None:
         super().__init__(timeout=600)
         self.core = core
         self.session_id = session.id
         self.player_ids = session.player_ids
+        self.display_names = dict(display_names or {})
         self.message: discord.Message | None = None
         self.board: PvpBoardView | None = None
 
@@ -208,6 +223,7 @@ class PvpBoardView(discord.ui.View):
         self.session_id = source.session_id
         self.message = source.message
         self.source = source
+        self.display_names = dict(getattr(source, "display_names", {}))
         self.current_event = "Choose an action."
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
@@ -282,6 +298,18 @@ class PvpBoardView(discord.ui.View):
         assert self.snapshot is not None
         session = self.core.pvp_application_service.registry.get(self.session_id)
         canonical = self._snapshots.get(session.initiator_id, self.snapshot)
+        if canonical.player_id == session.opponent_id:
+            canonical = replace(
+                canonical,
+                player_id=session.initiator_id,
+                opponent_id=session.opponent_id,
+                player_active=canonical.opponent_active,
+                opponent_active=canonical.player_active,
+                player_remaining=canonical.opponent_remaining,
+                opponent_remaining=canonical.player_remaining,
+                force_switch_player=canonical.force_switch_opponent,
+                force_switch_opponent=canonical.force_switch_player,
+            )
         opponent = self._snapshots.get(session.opponent_id)
         if opponent is None:
             return canonical
@@ -426,9 +454,8 @@ class PvpBoardView(discord.ui.View):
             return replace(state, terminal=True)
         return state
 
-    @staticmethod
-    def _visible_name(player_id: int) -> str:
-        return f"Trainer {player_id}" if not player_id else f"@{player_id}"
+    def _visible_name(self, player_id: int) -> str:
+        return _safe_display_name(self.display_names.get(player_id))
 
     def _build_embed(self, visual_state) -> discord.Embed:
         if visual_state is not None and visual_state.terminal:
