@@ -39,6 +39,8 @@ class PvpSession:
     battle_controller: object | None = field(default=None, repr=False)
     timeout_tasks: set[asyncio.Task] = field(default_factory=set, repr=False)
     active_action_requests: dict[int, str] = field(default_factory=dict, repr=False)
+    startup_claimed: bool = field(default=False, repr=False)
+    startup_task: asyncio.Task | None = field(default=None, repr=False)
     started_monotonic: float | None = field(default=None, repr=False)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 

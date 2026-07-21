@@ -90,7 +90,7 @@ class PvpTeamConfirmView(discord.ui.View):
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             ready = await self.team_view.confirm(interaction.user.id)
-        except ValueError as error:
+        except Exception as error:
             await interaction.followup.send(str(error), ephemeral=True)
             return
         if not ready:
@@ -135,7 +135,7 @@ class PvpTeamSelectionView(discord.ui.View):
             return
         if len(options) < 3:
             await interaction.followup.send(
-                "❌ You need at least 3 creatures to choose a PvP team.",
+                "❌ Configure at least 3 eligible creatures in your team first.",
                 ephemeral=True,
             )
             return

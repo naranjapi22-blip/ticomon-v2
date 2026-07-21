@@ -37,12 +37,14 @@ class PvpApplicationService:
         creature_repository=None,
         controller_factory: Callable[[], object] | None = None,
         team_validator: PvpTeamValidator | None = None,
+        team_repository=None,
         random_source: random.Random | None = None,
     ) -> None:
         self.registry = registry or PvpSessionRegistry()
         self._creature_repository = creature_repository
         self._controller_factory = controller_factory or PokeEnvPvpController
         self._team_validator = team_validator or PvpTeamValidator()
+        self._team_repository = team_repository
         self._random = random_source or random.Random()
         self._action_waiters: dict[tuple[UUID, int], asyncio.Future[PvpAction]] = {}
         self._legal_actions: dict[tuple[UUID, int], PvpLegalActions] = {}
@@ -59,9 +61,22 @@ class PvpApplicationService:
     async def get_team_selector(self, trainer_id: int) -> list[tuple[int, str]]:
         if self._creature_repository is None:
             raise RuntimeError("PvP creature repository is not configured.")
-        creatures = await self._creature_repository.get_by_trainer(trainer_id)
+        if self._team_repository is None:
+            raise RuntimeError("PvP team repository is not configured.")
+        team_slots = await self._team_repository.get_by_trainer(trainer_id)
+        creatures = await self._creature_repository.get_many(
+            [slot.creature_id for slot in team_slots]
+        )
+        creatures_by_id = {creature.id: creature for creature in creatures}
         options = []
-        for creature in creatures:
+        for slot in team_slots:
+            creature = creatures_by_id.get(slot.creature_id)
+            if creature is None:
+                continue
+            try:
+                self._team_validator.validate_creature(creature)
+            except ValueError:
+                continue
             if creature.collection_number is None:
                 continue
             label = creature.species.name.title()
@@ -81,6 +96,10 @@ class PvpApplicationService:
         session = self.registry.get(session_id)
         if self._creature_repository is None:
             raise RuntimeError("PvP creature repository is not configured.")
+        if self._team_repository is None:
+            raise RuntimeError("PvP team repository is not configured.")
+        team_slots = await self._team_repository.get_by_trainer(trainer_id)
+        configured_ids = {slot.creature_id for slot in team_slots}
         creatures = []
         for collection_number in collection_numbers:
             creature = await self._creature_repository.get_by_collection_number(
@@ -88,6 +107,8 @@ class PvpApplicationService:
             )
             if creature.trainer_id != trainer_id:
                 raise ValueError("You can only select your own creatures.")
+            if creature.id not in configured_ids:
+                raise ValueError("Every selected creature must belong to your team.")
             creatures.append(creature)
         team = self._team_validator.validate(creatures)
         async with session.lock:
@@ -106,11 +127,35 @@ class PvpApplicationService:
     ) -> bool:
         session = self.registry.get(session_id)
         async with session.lock:
+            if session.startup_claimed:
+                return False
             ready = session.confirm_team(trainer_id)
             if not ready:
                 return False
             selected = getattr(session, "selected_creatures", {})
             teams = {player_id: selected[player_id] for player_id in session.player_ids}
+            if self._team_repository is None:
+                raise RuntimeError("PvP team repository is not configured.")
+            for player_id, team in teams.items():
+                slots = await self._team_repository.get_by_trainer(player_id)
+                configured_ids = {slot.creature_id for slot in slots}
+                if any(creature.id not in configured_ids for creature in team):
+                    raise ValueError(
+                        "A selected creature is no longer in the trainer's team."
+                    )
+                refreshed = await self._creature_repository.get_many(
+                    [creature.id for creature in team]
+                )
+                if len(refreshed) != len(team) or any(
+                    creature.trainer_id != player_id for creature in refreshed
+                ):
+                    raise ValueError("A selected creature is no longer owned by you.")
+                self._team_validator.validate(refreshed)
+                session.selected_creatures[player_id] = tuple(refreshed)
+            teams = {
+                player_id: session.selected_creatures[player_id]
+                for player_id in session.player_ids
+            }
             all_creatures = tuple(
                 creature for team in teams.values() for creature in team
             )
@@ -123,7 +168,14 @@ class PvpApplicationService:
                 tuple(creature.id for creature in all_creatures),
             )
             session.phase = PvpPhase.STARTING
-            controller = self._controller_factory()
+            session.startup_claimed = True
+            try:
+                controller = self._controller_factory()
+            except Exception:
+                session.startup_claimed = False
+                session.cancel()
+                self.registry.remove(session_id)
+                raise
             session.battle_controller = controller
             if on_event is not None:
                 self._event_handlers[session_id] = on_event
@@ -132,6 +184,7 @@ class PvpApplicationService:
             if on_snapshot is not None:
                 self._snapshot_handlers[session_id] = on_snapshot
             session.begin_battle()
+            session.phase = PvpPhase.STARTING
 
         callbacks = PvpControllerCallbacks(
             on_actions=lambda player_id, legal: self.request_action(
@@ -140,13 +193,67 @@ class PvpApplicationService:
             on_protocol=lambda messages: self.handle_protocol(session_id, messages),
             on_finished=lambda battle: self.finish_from_controller(session_id, battle),
             on_snapshot=lambda snapshot: self.handle_snapshot(session_id, snapshot),
+            on_error=lambda error: self.handle_controller_error(session_id, error),
         )
+        task = asyncio.create_task(
+            self._start_controller(session_id, session, controller, teams, callbacks)
+        )
+        session.startup_task = task
+        session.timeout_tasks.add(task)
+        task.add_done_callback(self._consume_start_task)
+        return True
+
+    async def _start_controller(
+        self, session_id, session, controller, teams, callbacks
+    ) -> None:
         try:
             await controller.start(teams, callbacks)
-        except Exception:
-            await self.cleanup(session_id)
+            session.phase = PvpPhase.WAITING_FOR_ACTIONS
+        except asyncio.CancelledError:
             raise
-        return True
+        except Exception as error:
+            logger.warning(
+                "PvP startup failed",
+                extra={
+                    "session_id": str(session_id),
+                    "session_state": session.phase.value,
+                    "error_type": type(error).__name__,
+                },
+            )
+            handler = self._event_handlers.get(session_id)
+            try:
+                if handler is not None:
+                    await handler("PvP could not start. The challenge was cancelled.")
+            except Exception:
+                logger.debug("Unable to publish PvP startup failure", exc_info=True)
+            await self.cleanup(session_id)
+
+    async def handle_controller_error(
+        self, session_id: UUID, error: BaseException
+    ) -> None:
+        logger.warning(
+            "PvP controller task failed",
+            extra={
+                "session_id": str(session_id),
+                "error_type": type(error).__name__,
+            },
+        )
+        handler = self._event_handlers.get(session_id)
+        if handler is not None:
+            try:
+                await handler("PvP ended unexpectedly and was cleaned up.")
+            except Exception:
+                logger.debug("Unable to publish PvP controller failure", exc_info=True)
+        await self.cleanup(session_id)
+
+    @staticmethod
+    def _consume_start_task(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.exception()
+        except Exception:
+            logger.debug("Unable to retrieve PvP startup task exception", exc_info=True)
 
     async def request_action(
         self,
@@ -335,13 +442,22 @@ class PvpApplicationService:
             for key, value in self._request_ids.items()
             if key[0] != session_id
         }
+        current_task = asyncio.current_task()
+        tasks_to_cancel = [
+            task
+            for task in session.timeout_tasks
+            if task is not current_task and not task.done()
+        ]
+        for task in tasks_to_cancel:
+            task.cancel()
+        if tasks_to_cancel:
+            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+        session.timeout_tasks.clear()
+        session.startup_task = None
+        session.startup_claimed = False
         controller = session.battle_controller
         if controller is not None:
             await controller.close()
-        for task in list(session.timeout_tasks):
-            if not task.done():
-                task.cancel()
-        session.timeout_tasks.clear()
         session.cancel()
         self._event_handlers.pop(session_id, None)
         self._finish_handlers.pop(session_id, None)

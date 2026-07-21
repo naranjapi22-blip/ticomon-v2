@@ -118,3 +118,28 @@ async def test_board_coalesces_rapid_public_edits():
     assert source.message.edit.await_args.kwargs["content"].endswith(
         "latest\nReady: none"
     )
+
+
+@pytest.mark.asyncio
+async def test_confirm_team_defers_before_slow_start():
+    order = []
+
+    async def confirm(_trainer_id):
+        order.append("confirm")
+        await asyncio.sleep(0)
+        return True
+
+    team_view = SimpleNamespace(confirm=confirm)
+    from interfaces.discord.views.pvp_challenge_view import PvpTeamConfirmView
+
+    view = PvpTeamConfirmView(team_view)
+    interaction = _interaction()
+    interaction.response.defer = AsyncMock(
+        side_effect=lambda **_: order.append("defer")
+    )
+
+    await view.children[0].callback(interaction)
+
+    assert order == ["defer", "confirm"]
+    interaction.response.send_message.assert_not_awaited()
+    interaction.followup.send.assert_awaited_once()

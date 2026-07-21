@@ -491,6 +491,7 @@ def build_core(
     )
     pvp_application_service = PvpApplicationService(
         creature_repository=creature_repository,
+        team_repository=team_repository,
     )
     creature_loadout_service = CreatureLoadoutService(
         creature_repository=creature_repository,

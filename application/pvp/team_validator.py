@@ -26,23 +26,23 @@ class PvpTeamValidator:
             raise ValueError("A PvP team cannot contain duplicate species.")
 
         for creature in team:
-            if not creature.ability_id:
-                raise ValueError(
-                    f"{creature.species.name} has no valid persisted ability."
-                )
-            valid_abilities = {
-                ability.id for ability in self._catalog.abilities_for(creature.species)
-            }
-            if creature.ability_id not in valid_abilities:
-                raise ValueError(f"{creature.species.name} has an invalid ability.")
-            legal_moves = {
-                move.id for move in self._catalog.moves_for(creature.species)
-            }
-            if not creature.moves or len(creature.moves) > 4:
-                raise ValueError(
-                    f"{creature.species.name} must have one to four equipped moves."
-                )
-            if any(move not in legal_moves for move in creature.moves):
-                raise ValueError(f"{creature.species.name} has an illegal move.")
-            self._set_adapter.to_showdown_set(creature)
+            self.validate_creature(creature)
         return team
+
+    def validate_creature(self, creature: Creature) -> Creature:
+        if not creature.ability_id:
+            raise ValueError(f"{creature.species.name} has no valid persisted ability.")
+        valid_abilities = {
+            ability.id for ability in self._catalog.abilities_for(creature.species)
+        }
+        if creature.ability_id not in valid_abilities:
+            raise ValueError(f"{creature.species.name} has an invalid ability.")
+        legal_moves = {move.id for move in self._catalog.moves_for(creature.species)}
+        if not creature.moves or len(creature.moves) > 4:
+            raise ValueError(
+                f"{creature.species.name} must have one to four equipped moves."
+            )
+        if any(move not in legal_moves for move in creature.moves):
+            raise ValueError(f"{creature.species.name} has an illegal move.")
+        self._set_adapter.to_showdown_set(creature)
+        return creature
