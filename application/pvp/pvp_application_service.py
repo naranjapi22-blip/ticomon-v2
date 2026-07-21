@@ -80,6 +80,7 @@ class PvpApplicationService:
         self._snapshot_handlers: dict[
             UUID, Callable[[PvpBattleSnapshot], Awaitable[None]]
         ] = {}
+        self._finished_sessions: set[UUID] = set()
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
@@ -444,10 +445,15 @@ class PvpApplicationService:
                 await handler(step.message)
 
     async def finish_from_controller(self, session_id: UUID, battle: object) -> None:
+        if session_id in self._finished_sessions:
+            return
+        self._finished_sessions.add(session_id)
         handler = self._finish_handlers.get(session_id)
-        if handler is not None:
-            await handler(battle)
-        await self.cleanup(session_id)
+        try:
+            if handler is not None:
+                await handler(battle)
+        finally:
+            await self.cleanup(session_id)
 
     async def handle_snapshot(
         self, session_id: UUID, snapshot: PvpBattleSnapshot
@@ -505,6 +511,7 @@ class PvpApplicationService:
         self._finish_handlers.pop(session_id, None)
         self._snapshot_handlers.pop(session_id, None)
         self.registry.remove(session_id)
+        self._finished_sessions.discard(session_id)
 
     def _automatic_action(self, legal: PvpLegalActions) -> PvpAction:
         candidates = legal.moves if not legal.forced_switch else legal.switches

@@ -12,12 +12,19 @@ class PvpEventTranslator:
 
     def translate(self, messages: list[list[str]]) -> tuple[PvpPresentationStep, ...]:
         steps: list[PvpPresentationStep] = []
+        move_by_target: dict[str, str] = {}
         for message in messages:
             if len(message) < 2:
                 continue
             event = message[1]
             try:
-                text = self._translate_event(event, message[2:])
+                values = message[2:]
+                text = self._translate_event(event, values)
+                if event == "move" and len(values) >= 3:
+                    move_by_target[_protocol_id(values[2])] = text or ""
+                elif event == "-damage" and values:
+                    if move_by_target.pop(_protocol_id(values[0]), None):
+                        text = None
             except Exception:
                 logger.exception("Unable to translate PvP event=%s", event)
                 text = None
@@ -75,3 +82,11 @@ def _pokemon_name(value: str) -> str:
         if text.startswith(prefix):
             return text[len(prefix) :].strip()
     return text
+
+
+def _protocol_id(value: str) -> str:
+    text = str(value).strip()
+    for prefix in ("p1a:", "p2a:"):
+        if text.startswith(prefix):
+            return text[len(prefix) :].strip().lower()
+    return text.lower()

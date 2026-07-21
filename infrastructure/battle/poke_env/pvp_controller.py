@@ -154,6 +154,7 @@ class ManualPvpPlayer(Player):
         self._capture_sprite_urls = capture_sprite_urls or {}
         self._closing = False
         self.background_errors: list[BaseException] = []
+        self._pending_finished_battles: list[AbstractBattle] = []
         super().__init__(
             account_configuration=AccountConfiguration(username, None),
             battle_format=PVP_BATTLE_FORMAT,
@@ -202,8 +203,8 @@ class ManualPvpPlayer(Player):
     async def _handle_battle_message(self, split_messages):
         await self._callbacks.on_protocol(split_messages)
         await super()._handle_battle_message(split_messages)
-        if self._callbacks.on_snapshot is not None:
-            for battle in self.battles.values():
+        for battle in self.battles.values():
+            if self._callbacks.on_snapshot is not None:
                 await self._callbacks.on_snapshot(
                     snapshot_battle(
                         battle,
@@ -212,9 +213,12 @@ class ManualPvpPlayer(Player):
                         capture_sprite_urls=self._capture_sprite_urls,
                     )
                 )
+            if battle.finished and battle in self._pending_finished_battles:
+                self._pending_finished_battles.remove(battle)
+                self._schedule_callback(self._callbacks.on_finished(battle))
 
     def _battle_finished_callback(self, battle: AbstractBattle) -> None:
-        self._schedule_callback(self._callbacks.on_finished(battle))
+        self._pending_finished_battles.append(battle)
 
     @staticmethod
     def _legal_actions(

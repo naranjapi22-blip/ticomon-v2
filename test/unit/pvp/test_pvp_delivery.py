@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -106,6 +108,25 @@ async def test_manual_action_wins_just_before_timeout(monkeypatch):
     assert await service.submit_action(session.id, 1, action)
     assert await waiting == action
     assert session.selected_actions == {1: action.identifier}
+
+
+@pytest.mark.asyncio
+async def test_finish_from_controller_notifies_and_cleans_up_once():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    session.battle_controller = SimpleNamespace(close=AsyncMock())
+    calls = []
+    service._finish_handlers[session.id] = lambda _battle: _record(calls)
+
+    await service.finish_from_controller(session.id, object())
+    await service.finish_from_controller(session.id, object())
+
+    assert calls == ["finished"]
+    session.battle_controller.close.assert_awaited_once()
+
+
+async def _record(calls):
+    calls.append("finished")
 
 
 @pytest.mark.asyncio

@@ -116,6 +116,9 @@ class PvpTeamConfirmView(discord.ui.View):
                 ephemeral=True,
             )
             return
+        get_board = getattr(self.team_view, "_get_board", None)
+        if get_board is not None:
+            await get_board()
         await interaction.followup.send(
             "Both teams are confirmed. Starting PvP…", ephemeral=True
         )
@@ -207,7 +210,6 @@ class PvpTeamSelectionView(discord.ui.View):
         if self.message is None:
             return
         board = await self._get_board()
-        board.current_event = "Battle finished."
         await board.finish()
 
     async def on_timeout(self) -> None:
@@ -349,10 +351,19 @@ class PvpBoardView(discord.ui.View):
             self._snapshots[snapshot.player_id] = snapshot
             self.snapshot = snapshot
         self._terminal = True
+        self.current_event = self._result_text()
         self._visual_version += 1
         await self._edit_message(force=True)
         if self._edit_task is not None:
             await self._edit_task
+
+    def _result_text(self) -> str:
+        snapshot = self._display_snapshot()
+        if snapshot.tie:
+            return "The battle ended in a draw."
+        if snapshot.winner_id is not None:
+            return f"{self._visible_name(snapshot.winner_id)} won the battle."
+        return "The battle ended."
 
     async def _edit_message(self, *, force: bool = False) -> None:
         if self.message is None:

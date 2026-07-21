@@ -10,6 +10,7 @@ from core.pvp.session import PvpPhase, PvpSessionRegistry
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
 from interfaces.discord.views.pvp_challenge_view import (
     PvpBoardView,
+    PvpChallengeView,
     PvpTeamSelectionView,
 )
 
@@ -220,6 +221,13 @@ def test_pvp_board_falls_back_to_trainer_without_full_id():
     assert board._visible_name(session.opponent_id) == "A" * 24
 
 
+def test_pending_challenge_owns_accept_and_decline_only():
+    session = PvpSessionRegistry().create(1, 2)
+    view = PvpChallengeView(SimpleNamespace(), session)
+
+    assert [child.label for child in view.children] == ["Accept", "Decline"]
+
+
 @pytest.mark.asyncio
 async def test_confirm_team_defers_before_slow_start():
     order = []
@@ -243,3 +251,42 @@ async def test_confirm_team_defers_before_slow_start():
     assert order == ["defer", "confirm"]
     interaction.response.send_message.assert_not_awaited()
     interaction.followup.send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_finished_board_replaces_previous_components_and_announces_winner():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    message = SimpleNamespace(edit=AsyncMock())
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=message,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    board._edit_interval = 0
+    board.snapshot = PvpBattleSnapshot(
+        1,
+        1,
+        2,
+        PvpPokemonSnapshot("Gardevoir", None, 100, 100, 1.0, None, False),
+        PvpPokemonSnapshot("Bellibolt", None, 0, 214, 0.0, None, True),
+        3,
+        0,
+        False,
+        False,
+        True,
+        1,
+        False,
+    )
+    board._snapshots[1] = board.snapshot
+
+    await board.finish()
+
+    kwargs = message.edit.await_args.kwargs
+    assert kwargs["view"] is None
+    assert "Orange won the battle." in kwargs["content"]
+    assert board._terminal
