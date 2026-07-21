@@ -33,6 +33,8 @@ class BattlePresentationRenderer:
     def __init__(self, gif_loader: BattleGifLoader | None = None) -> None:
         self._assets = BattleAssets()
         self._gif_loader = gif_loader
+        self._sprite_cache: dict[tuple[str, bool, bool], Image.Image] = {}
+        self._missing_asset_warnings: set[tuple[str, bool, bool]] = set()
 
     def render_to_bytes(
         self,
@@ -67,23 +69,45 @@ class BattlePresentationRenderer:
         )
 
     def _load_sprite(self, side, *, player_side: bool) -> Image.Image:
-        url = pvp_sprite_url(
-            side.sprite_identifier,
-            player_side=player_side,
-            shiny=side.shiny,
-        )
-        try:
-            sequence = load_gif_sequence(url, loader=self._gif_loader)
-            return sequence.frames[0]
-        except Exception:
-            # A missing cosmetic asset must degrade the presentation, not end PvP.
+        if side.sprite_identifier is None:
+            return self._placeholder_sprite()
+        key = (side.sprite_identifier, player_side, side.shiny)
+        cached = self._sprite_cache.get(key)
+        if cached is not None:
+            return cached.copy()
+
+        identifiers = [side.sprite_identifier]
+        if "-" in side.sprite_identifier:
+            identifiers.append(side.sprite_identifier.split("-", 1)[0])
+        for identifier in dict.fromkeys(identifiers):
+            url = pvp_sprite_url(
+                identifier,
+                player_side=player_side,
+                shiny=side.shiny,
+            )
+            try:
+                sequence = load_gif_sequence(url, loader=self._gif_loader)
+                sprite = sequence.frames[0].copy()
+                self._sprite_cache[key] = sprite
+                return sprite.copy()
+            except Exception:
+                continue
+
+        if key not in self._missing_asset_warnings:
             logger.warning(
                 "Missing PvP battle sprite asset identifier=%s player_side=%s shiny=%s",
                 side.sprite_identifier,
                 player_side,
                 side.shiny,
             )
-            return Image.new("RGBA", (180, 180), (0, 0, 0, 0))
+            self._missing_asset_warnings.add(key)
+        sprite = self._placeholder_sprite()
+        self._sprite_cache[key] = sprite
+        return sprite.copy()
+
+    @staticmethod
+    def _placeholder_sprite() -> Image.Image:
+        return Image.new("RGBA", (180, 180), (0, 0, 0, 0))
 
     def _draw_hud(self, canvas: Image.Image, state: BattlePresentationState) -> None:
         draw = ImageDraw.Draw(canvas)
@@ -127,7 +151,8 @@ class BattlePresentationRenderer:
         )
         pokemon_y = y + 36
         status = f" · {side.status}" if side.status else ""
-        name = f"{side.active_name}{status}{' (KO)' if side.fainted else ''}"
+        active_name = side.active_name or "Waiting for Pokémon"
+        name = f"{active_name}{status}{' (KO)' if side.fainted else ''}"
         draw.text(
             (x, pokemon_y),
             name,

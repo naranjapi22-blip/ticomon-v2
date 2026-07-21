@@ -31,6 +31,7 @@ PVP_BATTLE_FORMAT = "gen9customgame"
 SHOWDOWN_CONNECTION_TIMEOUT_SECONDS = 10
 SHOWDOWN_START_TIMEOUT_SECONDS = 15
 SHOWDOWN_CLOSE_TIMEOUT_SECONDS = 5
+SHOWDOWN_MESSAGE_CLOSE_TIMEOUT_SECONDS = 1
 SHOWDOWN_WEBSOCKET_URL = os.getenv(
     "SHOWDOWN_WEBSOCKET_URL", "ws://localhost:8000/showdown/websocket"
 )
@@ -62,12 +63,17 @@ class ManualPvpPlayer(Player):
         self.opponent_id: int | None = None
         self._callbacks = callbacks
         self._callback_tasks = callback_tasks
+        self._closing = False
         self.background_errors: list[BaseException] = []
         super().__init__(
             account_configuration=AccountConfiguration(username, None),
             battle_format=PVP_BATTLE_FORMAT,
             team=team,
             **kwargs,
+        )
+        self.ps_client.logger = _PvpClientLogger(
+            self.ps_client.logger,
+            lambda: self._closing,
         )
         self.ps_client.change_avatar = self._skip_avatar_change
         original_handle_message = self.ps_client._handle_message
@@ -274,6 +280,10 @@ class PokeEnvPvpController:
                     return
 
     async def close(self) -> None:
+        players = self._players
+        if players is not None:
+            for player in players:
+                player._closing = True
         if self._battle_task is not None:
             if not self._battle_task.done():
                 try:
@@ -291,8 +301,8 @@ class PokeEnvPvpController:
                     pass
                 except Exception:
                     logger.debug("PvP Showdown task ended with an error", exc_info=True)
-        if self._players is not None:
-            for player in self._players:
+        if players is not None:
+            for player in players:
                 try:
                     await asyncio.wait_for(
                         player.ps_client.stop_listening(),
@@ -300,13 +310,24 @@ class PokeEnvPvpController:
                     )
                 except Exception:
                     logger.debug("Unable to close a PvP Showdown player", exc_info=True)
-        if self._players is not None:
-            for player in self._players:
-                active_tasks = list(getattr(player.ps_client, "_active_tasks", ()))
-                for task in active_tasks:
-                    if not task.done():
-                        task.cancel()
-                if active_tasks:
+        if players is not None:
+            active_tasks = [
+                task
+                for player in players
+                for task in list(getattr(player.ps_client, "_active_tasks", ()))
+                if not task.done()
+            ]
+            if active_tasks:
+                gather_task = asyncio.gather(*active_tasks, return_exceptions=True)
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(gather_task),
+                        timeout=SHOWDOWN_MESSAGE_CLOSE_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    for task in active_tasks:
+                        if not task.done():
+                            task.cancel()
                     await asyncio.gather(*active_tasks, return_exceptions=True)
         current_task = asyncio.current_task()
         callback_tasks = [
@@ -367,3 +388,20 @@ def _consume_task_exception(task: asyncio.Task) -> None:
         task.exception()
     except Exception:
         logger.debug("Unable to retrieve PvP task exception", exc_info=True)
+
+
+class _PvpClientLogger(logging.LoggerAdapter):
+    """Downgrade poke-env's known cancellation logs during intentional close."""
+
+    def __init__(self, logger, is_closing: Callable[[], bool]) -> None:
+        super().__init__(logger, {})
+        self._is_closing = is_closing
+
+    def critical(self, msg, *args, **kwargs) -> None:
+        if self._is_closing() and str(msg) in {
+            "CancelledError intercepted: %s",
+            "Listen interrupted by %s",
+        }:
+            self.debug(msg, *args, **kwargs)
+            return
+        super().critical(msg, *args, **kwargs)

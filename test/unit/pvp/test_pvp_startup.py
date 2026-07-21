@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from types import SimpleNamespace
 
@@ -10,6 +11,7 @@ from core.team.team_slot import TeamSlot
 from infrastructure.battle.poke_env.pvp_controller import (
     PokeEnvPvpController,
     PvpControllerCallbacks,
+    _PvpClientLogger,
     _RetrievedTaskSet,
 )
 
@@ -295,3 +297,26 @@ async def test_background_task_exception_is_retrieved():
     await asyncio.sleep(0)
 
     assert isinstance(player.background_errors[0], RuntimeError)
+
+
+def test_intentional_client_cancellation_is_debug_not_critical(caplog):
+    base_logger = logging.getLogger("test.pvp.client")
+    adapter = _PvpClientLogger(base_logger, lambda: True)
+
+    with caplog.at_level(logging.DEBUG, logger="test.pvp.client"):
+        adapter.critical("CancelledError intercepted: %s", "cleanup")
+
+    assert "CancelledError intercepted" in caplog.text
+    assert not [
+        record for record in caplog.records if record.levelno >= logging.CRITICAL
+    ]
+
+
+def test_unexpected_client_cancellation_remains_an_error(caplog):
+    base_logger = logging.getLogger("test.pvp.active-client")
+    adapter = _PvpClientLogger(base_logger, lambda: False)
+
+    with caplog.at_level(logging.CRITICAL, logger="test.pvp.active-client"):
+        adapter.critical("CancelledError intercepted: %s", "active battle")
+
+    assert any(record.levelno >= logging.CRITICAL for record in caplog.records)

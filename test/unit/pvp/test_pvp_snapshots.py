@@ -64,3 +64,19 @@ def test_snapshot_derives_winner_only_from_battle_flags() -> None:
 
     assert snapshot.winner_id == 20
     assert not snapshot.tie
+
+
+def test_snapshot_uses_poke_env_identifier_for_compound_sprite_names() -> None:
+    class Species:
+        identifier = "ironcrown"
+
+        def __str__(self):
+            return self.identifier
+
+    battle = FakeBattle()
+    battle.active_pokemon.species = Species()
+
+    snapshot = snapshot_battle(battle, player_id=10, opponent_id=20)
+
+    assert snapshot.player_active is not None
+    assert snapshot.player_active.sprite_identifier == "iron-crown"

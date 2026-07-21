@@ -38,13 +38,13 @@ def pvp_presentation_state(
 
 def _side(
     trainer_id: int, name: str, pokemon: PvpPokemonSnapshot | None, remaining: int
-):
+) -> BattlePresentationSide:
     if pokemon is None:
         return BattlePresentationSide(
             trainer_id=trainer_id,
             display_name=name,
-            active_name="Waiting for Pokémon",
-            sprite_identifier="missingno",
+            active_name=None,
+            sprite_identifier=None,
             shiny=False,
             hp_current=0,
             hp_max=1,

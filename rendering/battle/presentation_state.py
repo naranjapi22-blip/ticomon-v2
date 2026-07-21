@@ -9,8 +9,8 @@ class BattlePresentationSide:
 
     trainer_id: int
     display_name: str
-    active_name: str
-    sprite_identifier: str
+    active_name: str | None
+    sprite_identifier: str | None
     shiny: bool
     hp_current: int
     hp_max: int

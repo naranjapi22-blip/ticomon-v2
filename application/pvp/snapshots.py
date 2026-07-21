@@ -14,7 +14,7 @@ class PvpPokemonSnapshot:
     hp_fraction: float
     status: str | None
     fainted: bool
-    sprite_identifier: str = "missingno"
+    sprite_identifier: str | None = None
     shiny: bool = False
 
 
@@ -80,8 +80,11 @@ def _pokemon_snapshot(pokemon) -> PvpPokemonSnapshot | None:
                 status, "value", None
             )
         status_name = str(status_name).upper()
+    species_value = getattr(pokemon, "species", None)
+    species_identifier = getattr(species_value, "identifier", None)
+    species_name = str(species_value or getattr(pokemon, "name", "Unknown"))
     return PvpPokemonSnapshot(
-        species_name=str(getattr(pokemon, "species", None) or pokemon.name),
+        species_name=species_name,
         form_name=getattr(pokemon, "forme", None),
         current_hp=getattr(pokemon, "current_hp", None),
         max_hp=getattr(pokemon, "max_hp", None),
@@ -89,8 +92,9 @@ def _pokemon_snapshot(pokemon) -> PvpPokemonSnapshot | None:
         status=status_name,
         fainted=bool(getattr(pokemon, "fainted", False)),
         sprite_identifier=showdown_sprite_identifier(
-            str(getattr(pokemon, "species", None) or pokemon.name),
+            species_name,
             getattr(pokemon, "forme", None),
+            species_identifier,
         ),
         shiny=bool(getattr(pokemon, "is_shiny", False)),
     )
