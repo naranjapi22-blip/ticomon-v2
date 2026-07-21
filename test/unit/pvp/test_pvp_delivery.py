@@ -517,3 +517,72 @@ def test_canonical_translator_does_not_mix_opposite_client_sides():
     steps = translator.translate([["battle", "-damage", "p1a: Zacian", "123/198"]])
 
     assert steps[0].message == "Zacian took 75 damage."
+
+
+def _damage_snapshot(turn=2):
+    return PvpBattleSnapshot(
+        turn,
+        1,
+        2,
+        PvpPokemonSnapshot("Hydrapple", None, 212, 212, 1.0, None, False),
+        PvpPokemonSnapshot("Tyranitar", None, 201, 201, 1.0, None, False),
+        3,
+        3,
+        False,
+        False,
+        False,
+        None,
+        False,
+    )
+
+
+@pytest.mark.asyncio
+async def test_duplicate_damage_is_deduplicated_before_hp_calculation():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    events = []
+
+    async def collect(step):
+        events.append(step)
+
+    service._event_handlers[session.id] = collect
+    service._event_translators[session.id] = PvpEventTranslator(1, 2)
+    await service.handle_snapshot(session.id, _damage_snapshot())
+    messages = [
+        ["battle", "move", "p1a: Hydrapple", "Leaf Storm", "p2a: Tyranitar"],
+        ["battle", "-damage", "p2a: Tyranitar", "49/201"],
+    ]
+
+    await service.handle_protocol(session.id, messages, source_player_id=1)
+    await service.handle_protocol(session.id, messages, source_player_id=2)
+
+    assert len(events) == 1
+    assert "Tyranitar took 152 damage." in events[0].message
+    assert events[0].event is not None
+    assert events[0].event.direct_damage == 152
+    await service.cleanup(session.id)
+
+
+@pytest.mark.asyncio
+async def test_non_canonical_damage_arriving_first_does_not_consume_canonical_event():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    events = []
+
+    async def collect(step):
+        events.append(step)
+
+    service._event_handlers[session.id] = collect
+    service._event_translators[session.id] = PvpEventTranslator(1, 2)
+    await service.handle_snapshot(session.id, _damage_snapshot())
+    messages = [
+        ["battle", "move", "p1a: Hydrapple", "Leaf Storm", "p2a: Tyranitar"],
+        ["battle", "-damage", "p2a: Tyranitar", "49/201"],
+    ]
+
+    await service.handle_protocol(session.id, messages, source_player_id=2)
+    await service.handle_protocol(session.id, messages, source_player_id=1)
+
+    assert len(events) == 1
+    assert "152 damage" in events[0].message
+    await service.cleanup(session.id)

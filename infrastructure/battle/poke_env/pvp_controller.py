@@ -130,7 +130,7 @@ def validate_showdown_configuration() -> tuple[str, str]:
 @dataclass(frozen=True)
 class PvpControllerCallbacks:
     on_actions: Callable[[int, PvpLegalActions], Awaitable[PvpAction]]
-    on_protocol: Callable[[list[list[str]]], Awaitable[None]]
+    on_protocol: Callable[[int, list[list[str]]], Awaitable[None]]
     on_finished: Callable[[AbstractBattle], Awaitable[None]]
     on_snapshot: Callable[[PvpBattleSnapshot], Awaitable[None]] | None = None
     on_error: Callable[[BaseException], Awaitable[None]] | None = None
@@ -202,7 +202,7 @@ class ManualPvpPlayer(Player):
             raise ValueError("Showdown returned an invalid PvP action.") from error
 
     async def _handle_battle_message(self, split_messages):
-        await self._callbacks.on_protocol(split_messages)
+        await self._callbacks.on_protocol(self.trainer_id, split_messages)
         await super()._handle_battle_message(split_messages)
         for battle in self.battles.values():
             if self._callbacks.on_snapshot is not None:

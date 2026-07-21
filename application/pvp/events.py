@@ -75,6 +75,7 @@ class PvpEventTranslator:
         self._player_id = player_id
         self._opponent_id = opponent_id
         self._active_ids: dict[str, str] = {}
+        self.last_damage_diagnostic: dict[str, object] | None = None
 
     def observe_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
         if self._player_id is not None and snapshot.player_id != self._player_id:
@@ -292,7 +293,15 @@ class PvpEventTranslator:
         damage = None
         if previous is not None and previous[0] >= current:
             damage = previous[0] - current
-        return damage, _classify_damage(details or [])
+        source = _classify_damage(details or [])
+        self.last_damage_diagnostic = {
+            "target": _pokemon_name(target),
+            "previous_hp": previous[0] if previous is not None else None,
+            "resulting_hp": current,
+            "calculated_damage": damage,
+            "source": source,
+        }
+        return damage, source
 
     def _damage_text(
         self,

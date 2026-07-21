@@ -84,6 +84,7 @@ class PvpApplicationService:
         self._finalizing_sessions: set[UUID] = set()
         self._event_translators: dict[UUID, PvpEventTranslator] = {}
         self._latest_snapshots: dict[UUID, dict[int, PvpBattleSnapshot]] = {}
+        self._protocol_event_keys: dict[UUID, set[tuple]] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
@@ -232,7 +233,9 @@ class PvpApplicationService:
             on_actions=lambda player_id, legal: self.request_action(
                 session_id, player_id, legal
             ),
-            on_protocol=lambda messages: self.handle_protocol(session_id, messages),
+            on_protocol=lambda source_player_id, messages: self.handle_protocol(
+                session_id, messages, source_player_id=source_player_id
+            ),
             on_finished=lambda battle: self.finish_from_controller(session_id, battle),
             on_snapshot=lambda snapshot: self.handle_snapshot(session_id, snapshot),
             on_error=lambda error: self.handle_controller_error(session_id, error),
@@ -452,7 +455,11 @@ class PvpApplicationService:
         )
 
     async def handle_protocol(
-        self, session_id: UUID, messages: list[list[str]]
+        self,
+        session_id: UUID,
+        messages: list[list[str]],
+        *,
+        source_player_id: int | None = None,
     ) -> None:
         if (
             session_id in self._finalizing_sessions
@@ -464,9 +471,52 @@ class PvpApplicationService:
             )
             return
         session = self.registry.get(session_id)
+        canonical_source = session.initiator_id
+        filtered_messages: list[list[str]] = []
+        event_keys = self._protocol_event_keys.setdefault(session_id, set())
         for message in messages:
-            if len(message) < 2 or message[1] not in {"win", "tie"}:
+            if len(message) < 2:
                 continue
+            if (
+                source_player_id is not None
+                and source_player_id != canonical_source
+                and message[1] not in {"win", "tie"}
+            ):
+                logger.debug(
+                    "Ignoring non-canonical PvP protocol event session_id=%s "
+                    "turn=%s canonical_source_player_id=%s "
+                    "incoming_source_player_id=%s ignored_reason=non_canonical_source",
+                    session_id,
+                    session.turn_number,
+                    canonical_source,
+                    source_player_id,
+                )
+                continue
+            event_key = (
+                session.turn_number,
+                message[1],
+                tuple(str(value).strip() for value in message[2:]),
+            )
+            if event_key in event_keys:
+                logger.debug(
+                    "Ignoring duplicate PvP protocol event session_id=%s turn=%s "
+                    "canonical_source_player_id=%s incoming_source_player_id=%s "
+                    "event_key=%s duplicate=true ignored_reason=duplicate_event",
+                    session_id,
+                    session.turn_number,
+                    canonical_source,
+                    source_player_id,
+                    event_key,
+                )
+                continue
+            event_keys.add(event_key)
+            filtered_messages.append(message)
+        messages = filtered_messages
+        terminal_messages = [
+            message for message in messages if message[1] in {"win", "tie"}
+        ]
+        if terminal_messages:
+            message = terminal_messages[0]
             winner_name = message[2] if len(message) > 2 else None
             winner_id = None
             resolver = getattr(session.battle_controller, "resolve_winner", None)
@@ -492,6 +542,17 @@ class PvpApplicationService:
                 tie=message[1] == "tie",
             )
             return
+        if source_player_id is not None and source_player_id != canonical_source:
+            logger.debug(
+                "Ignoring non-canonical PvP narration source session_id=%s turn=%s "
+                "canonical_source_player_id=%s incoming_source_player_id=%s "
+                "ignored_reason=non_canonical_narration_source",
+                session_id,
+                session.turn_number,
+                canonical_source,
+                source_player_id,
+            )
+            return
         # Raw protocol is deliberately not rendered as history. The callback receives
         # only the current compact event and the board layer replaces the old one.
         translator = self._event_translators.setdefault(
@@ -499,6 +560,39 @@ class PvpApplicationService:
             PvpEventTranslator(),
         )
         steps = translator.translate(messages)
+        diagnostic = translator.last_damage_diagnostic
+        if diagnostic is not None:
+            actor = next(
+                (
+                    str(message[2])[:80]
+                    for message in messages
+                    if len(message) >= 3 and message[1] == "move"
+                ),
+                None,
+            )
+            logger.debug(
+                "PvP damage diagnostic session_id=%s turn=%s "
+                "canonical_source_player_id=%s incoming_source_player_id=%s "
+                "actor=%s target=%s previous_hp=%s resulting_hp=%s "
+                "calculated_damage=%s event_key=%s duplicate=false "
+                "ignored_reason=%s",
+                session_id,
+                session.turn_number,
+                canonical_source,
+                source_player_id,
+                actor,
+                diagnostic.get("target"),
+                diagnostic.get("previous_hp"),
+                diagnostic.get("resulting_hp"),
+                diagnostic.get("calculated_damage"),
+                (
+                    session.turn_number,
+                    "-damage",
+                    diagnostic.get("target"),
+                    diagnostic.get("resulting_hp"),
+                ),
+                None,
+            )
         handler = self._event_handlers.get(session_id)
         if handler is not None:
             for step in steps:
@@ -600,7 +694,9 @@ class PvpApplicationService:
             return
         translator = self._event_translators.get(session_id)
         if translator is not None:
-            translator.observe_snapshot(snapshot)
+            session = self.registry.get(session_id)
+            if snapshot.player_id == session.initiator_id:
+                translator.observe_snapshot(snapshot)
         self._latest_snapshots.setdefault(session_id, {})[snapshot.player_id] = snapshot
         handler = self._snapshot_handlers.get(session_id)
         if handler is not None:
@@ -657,6 +753,7 @@ class PvpApplicationService:
         self._snapshot_handlers.pop(session_id, None)
         self._event_translators.pop(session_id, None)
         self._latest_snapshots.pop(session_id, None)
+        self._protocol_event_keys.pop(session_id, None)
         self.registry.remove(session_id)
         self._finalizing_sessions.discard(session_id)
 
