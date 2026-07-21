@@ -15,6 +15,7 @@ class PvpPokemonSnapshot:
     status: str | None
     fainted: bool
     sprite_identifier: str | None = None
+    capture_sprite_url: str | None = None
     shiny: bool = False
 
 
@@ -39,6 +40,7 @@ def snapshot_battle(
     *,
     player_id: int,
     opponent_id: int,
+    capture_sprite_urls: dict[tuple[str, bool], str] | None = None,
 ) -> PvpBattleSnapshot:
     player_team = tuple(battle.team.values())
     opponent_team = tuple(battle.opponent_team.values())
@@ -51,9 +53,13 @@ def snapshot_battle(
         turn=int(getattr(battle, "turn", 0) or 0),
         player_id=player_id,
         opponent_id=opponent_id,
-        player_active=_pokemon_snapshot(getattr(battle, "active_pokemon", None)),
+        player_active=_pokemon_snapshot(
+            getattr(battle, "active_pokemon", None),
+            capture_sprite_urls=capture_sprite_urls,
+        ),
         opponent_active=_pokemon_snapshot(
-            getattr(battle, "opponent_active_pokemon", None)
+            getattr(battle, "opponent_active_pokemon", None),
+            capture_sprite_urls=capture_sprite_urls,
         ),
         player_remaining=sum(not pokemon.fainted for pokemon in player_team),
         opponent_remaining=sum(not pokemon.fainted for pokemon in opponent_team),
@@ -67,7 +73,11 @@ def snapshot_battle(
     )
 
 
-def _pokemon_snapshot(pokemon) -> PvpPokemonSnapshot | None:
+def _pokemon_snapshot(
+    pokemon,
+    *,
+    capture_sprite_urls: dict[tuple[str, bool], str] | None = None,
+) -> PvpPokemonSnapshot | None:
     if pokemon is None:
         return None
     status = getattr(pokemon, "status", None)
@@ -83,6 +93,12 @@ def _pokemon_snapshot(pokemon) -> PvpPokemonSnapshot | None:
     species_value = getattr(pokemon, "species", None)
     species_identifier = getattr(species_value, "identifier", None)
     species_name = str(species_value or getattr(pokemon, "name", "Unknown"))
+    sprite_identifier = showdown_sprite_identifier(
+        species_name,
+        getattr(pokemon, "forme", None),
+        species_identifier,
+    )
+    shiny = bool(getattr(pokemon, "is_shiny", False))
     return PvpPokemonSnapshot(
         species_name=species_name,
         form_name=getattr(pokemon, "forme", None),
@@ -91,10 +107,7 @@ def _pokemon_snapshot(pokemon) -> PvpPokemonSnapshot | None:
         hp_fraction=float(getattr(pokemon, "current_hp_fraction", 0.0) or 0.0),
         status=status_name,
         fainted=bool(getattr(pokemon, "fainted", False)),
-        sprite_identifier=showdown_sprite_identifier(
-            species_name,
-            getattr(pokemon, "forme", None),
-            species_identifier,
-        ),
-        shiny=bool(getattr(pokemon, "is_shiny", False)),
+        sprite_identifier=sprite_identifier,
+        capture_sprite_url=(capture_sprite_urls or {}).get((sprite_identifier, shiny)),
+        shiny=shiny,
     )

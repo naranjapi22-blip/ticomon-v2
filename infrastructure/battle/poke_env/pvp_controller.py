@@ -26,8 +26,25 @@ from application.pvp.models import (
 from application.pvp.snapshots import PvpBattleSnapshot, snapshot_battle
 from core.creature.creature import Creature
 from infrastructure.battle.poke_env.pvp_set_adapter import PvpSetAdapter
+from rendering.battle.pvp_sprite_urls import showdown_sprite_identifier
+from rendering.sprites import get_capture_creature_gif
 
 logger = logging.getLogger(__name__)
+
+
+class _ExpectedCancellationFilter(logging.Filter):
+    """Suppress poke-env's critical cancellation message only during close."""
+
+    def __init__(self, player) -> None:
+        super().__init__()
+        self._player = player
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (
+            getattr(self._player, "_closing", False)
+            and record.getMessage().startswith("CancelledError intercepted")
+        )
+
 
 PVP_BATTLE_FORMAT = "gen9customgame"
 SHOWDOWN_CONNECTION_TIMEOUT_SECONDS = 10
@@ -127,12 +144,14 @@ class ManualPvpPlayer(Player):
         callbacks: PvpControllerCallbacks,
         username: str,
         callback_tasks: set[asyncio.Task] | None = None,
+        capture_sprite_urls: dict[tuple[str, bool], str] | None = None,
         **kwargs: Any,
     ) -> None:
         self.trainer_id = trainer_id
         self.opponent_id: int | None = None
         self._callbacks = callbacks
         self._callback_tasks = callback_tasks
+        self._capture_sprite_urls = capture_sprite_urls or {}
         self._closing = False
         self.background_errors: list[BaseException] = []
         super().__init__(
@@ -142,6 +161,7 @@ class ManualPvpPlayer(Player):
             **kwargs,
         )
         self.ps_client.change_avatar = self._skip_avatar_change
+        self.ps_client.logger.addFilter(_ExpectedCancellationFilter(self))
         original_handle_message = self.ps_client._handle_message
 
         async def _handle_message_without_challenge_logging(message):
@@ -189,6 +209,7 @@ class ManualPvpPlayer(Player):
                         battle,
                         player_id=self.trainer_id,
                         opponent_id=self.opponent_id or 0,
+                        capture_sprite_urls=self._capture_sprite_urls,
                     )
                 )
 
@@ -268,6 +289,7 @@ class PokeEnvPvpController:
         packed_teams = {
             trainer_id: self._pack_team(team) for trainer_id, team in teams.items()
         }
+        capture_sprite_urls = self._capture_sprite_urls(teams)
         player_kwargs = {
             "callbacks": callbacks,
             "loop": asyncio.get_running_loop(),
@@ -275,6 +297,7 @@ class PokeEnvPvpController:
                 websocket_url=websocket_url,
                 authentication_url=authentication_url,
             ),
+            "capture_sprite_urls": capture_sprite_urls,
         }
         last_error = None
         for attempt in range(1, 4):
@@ -387,6 +410,10 @@ class PokeEnvPvpController:
                         player.ps_client.stop_listening(),
                         timeout=SHOWDOWN_CLOSE_TIMEOUT_SECONDS,
                     )
+                except asyncio.CancelledError:
+                    if not player._closing:
+                        raise
+                    logger.debug("PvP Showdown listener cancellation during close")
                 except Exception:
                     logger.debug("Unable to close a PvP Showdown player", exc_info=True)
         if players is not None:
@@ -440,6 +467,22 @@ class PokeEnvPvpController:
                 )
             )
         return Teambuilder.join_team(sets)
+
+    def _capture_sprite_urls(
+        self, teams: dict[int, tuple[Creature, ...]]
+    ) -> dict[tuple[str, bool], str]:
+        urls: dict[tuple[str, bool], str] = {}
+        for team in teams.values():
+            for creature in team:
+                data = self._set_adapter.to_showdown_set(creature)
+                identifier = showdown_sprite_identifier(
+                    data.species,
+                    creature.current_form.name if creature.current_form else None,
+                )
+                urls[(identifier, creature.is_shiny)] = get_capture_creature_gif(
+                    creature
+                )
+        return urls
 
 
 class _RetrievedTaskSet(set):

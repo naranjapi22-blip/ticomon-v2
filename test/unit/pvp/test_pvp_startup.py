@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import logging
 import re
 from types import SimpleNamespace
 
@@ -103,6 +104,9 @@ async def test_pvp_selector_uses_only_configured_team_and_filters_invalid_loadou
     options = await service.get_team_selector(1)
 
     assert [number for number, _ in options] == [1, 2, 3]
+    creatures[1][0].species.name = "Gardevoir"
+    options = await service.get_team_selector(1)
+    assert any("Gardevoir" in label for _, label in options)
     assert 99 not in [number for number, _ in options]
 
 
@@ -466,6 +470,54 @@ async def test_manual_player_does_not_assign_read_only_psclient_logger():
 
     assert player.ps_client.logger is not None
     assert player.trainer_id == 1
+
+
+@pytest.mark.asyncio
+async def test_expected_poke_env_cancellation_is_not_logged_as_critical(caplog):
+    callbacks = PvpControllerCallbacks(
+        on_actions=lambda *_: asyncio.sleep(0),
+        on_protocol=lambda *_: asyncio.sleep(0),
+        on_finished=lambda *_: asyncio.sleep(0),
+    )
+    player = ManualPvpPlayer(
+        1,
+        "",
+        callbacks,
+        username="tmcancelp1",
+        server_configuration=controller_module.ServerConfiguration(
+            websocket_url="ws://showdown.internal/showdown/websocket",
+            authentication_url="",
+        ),
+        loop=asyncio.get_running_loop(),
+        start_listening=False,
+    )
+    caplog.set_level(logging.DEBUG, logger=player.ps_client.logger.name)
+
+    player._closing = True
+    player.ps_client.logger.critical("CancelledError intercepted: expected")
+    assert "CancelledError intercepted: expected" not in caplog.text
+
+    player._closing = False
+    player.ps_client.logger.critical("CancelledError intercepted: unexpected")
+    assert "CancelledError intercepted: unexpected" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_controller_close_treats_listener_cancellation_as_expected():
+    async def cancelled_listener():
+        raise asyncio.CancelledError
+
+    player = SimpleNamespace(
+        _closing=True,
+        ps_client=SimpleNamespace(
+            stop_listening=cancelled_listener,
+            _active_tasks=set(),
+        ),
+    )
+    controller = PokeEnvPvpController()
+    controller._players = (player,)
+
+    await controller.close()
 
 
 @pytest.mark.asyncio

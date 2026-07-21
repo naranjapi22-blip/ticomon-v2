@@ -18,6 +18,7 @@ class BattlePresentationSide:
     status: str | None
     fainted: bool
     remaining: int
+    capture_sprite_url: str | None = None
 
 
 @dataclass(frozen=True)

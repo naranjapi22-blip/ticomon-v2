@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from PIL import Image
 
 from rendering.battle.gif_assets import GifSequence
@@ -11,6 +12,7 @@ from rendering.battle.presentation_state import (
     BattlePresentationState,
 )
 from rendering.battle.pvp_sprite_urls import pvp_sprite_url, showdown_sprite_identifier
+from rendering.sprites import get_capture_species_gif
 
 
 class RecordingLoader:
@@ -28,12 +30,19 @@ class RecordingLoader:
         )
 
 
-def _side(name: str, identifier: str, *, shiny: bool = False):
+def _side(
+    name: str,
+    identifier: str,
+    *,
+    shiny: bool = False,
+    capture_sprite_url: str | None = None,
+):
     return BattlePresentationSide(
         trainer_id=1,
         display_name=name,
         active_name=identifier,
         sprite_identifier=identifier,
+        capture_sprite_url=capture_sprite_url,
         shiny=shiny,
         hp_current=50,
         hp_max=100,
@@ -153,6 +162,87 @@ def test_missing_asset_is_cached_and_warned_once(caplog):
 
     assert len(loader.urls) == 1
     assert caplog.text.count("Missing PvP battle sprite asset") == 1
+
+
+@pytest.mark.parametrize("folder", ["regular", "back", "shiny", "back_shiny"])
+def test_iron_hands_missing_pvp_asset_uses_capture_gif(folder, caplog):
+    caplog.set_level(logging.WARNING, logger="rendering.battle.presentation_renderer")
+    url = pvp_sprite_url(
+        "iron-hands",
+        player_side=folder in {"back", "back_shiny"},
+        shiny=folder in {"shiny", "back_shiny"},
+    )
+    capture_url = get_capture_species_gif(992, folder in {"shiny", "back_shiny"})
+    loader = RecordingLoader(fail={url})
+    renderer = BattlePresentationRenderer(gif_loader=loader)
+
+    sprite_side = _side(
+        "Rival" if folder not in {"back", "back_shiny"} else "Player",
+        "iron-hands",
+        shiny=folder in {"shiny", "back_shiny"},
+        capture_sprite_url=capture_url,
+    )
+    renderer.render_to_bytes(
+        BattlePresentationState(
+            top=sprite_side if folder in {"regular", "shiny"} else _empty_side("Rival"),
+            bottom=(
+                sprite_side
+                if folder in {"back", "back_shiny"}
+                else _empty_side("Player")
+            ),
+            turn=1,
+            last_event="Iron Hands appeared.",
+        )
+    )
+
+    assert loader.urls == [url, capture_url]
+    assert "Missing PvP battle sprite asset identifier=iron-hands" not in caplog.text
+
+
+def test_exact_pvp_sprite_has_priority_over_capture_gif():
+    capture_url = get_capture_species_gif(992, False)
+    pvp_url = pvp_sprite_url("iron-hands", player_side=False, shiny=False)
+    loader = RecordingLoader()
+    renderer = BattlePresentationRenderer(gif_loader=loader)
+
+    renderer.render_to_bytes(
+        BattlePresentationState(
+            top=_side(
+                "Rival",
+                "iron-hands",
+                capture_sprite_url=capture_url,
+            ),
+            bottom=_empty_side("Player"),
+            turn=1,
+            last_event="Iron Hands appeared.",
+        )
+    )
+
+    assert loader.urls == [pvp_url]
+
+
+def test_missing_pvp_and_capture_assets_show_unavailable(caplog):
+    caplog.set_level(logging.WARNING, logger="rendering.battle.presentation_renderer")
+    pvp_url = pvp_sprite_url("iron-hands", player_side=False, shiny=False)
+    capture_url = get_capture_species_gif(992, False)
+    loader = RecordingLoader(fail={pvp_url, capture_url})
+    renderer = BattlePresentationRenderer(gif_loader=loader)
+
+    renderer.render_to_bytes(
+        BattlePresentationState(
+            top=_side(
+                "Rival",
+                "iron-hands",
+                capture_sprite_url=capture_url,
+            ),
+            bottom=_empty_side("Player"),
+            turn=1,
+            last_event="Iron Hands appeared.",
+        )
+    )
+
+    assert loader.urls == [pvp_url, capture_url]
+    assert "Missing PvP battle sprite asset identifier=iron-hands" in caplog.text
 
 
 def test_empty_side_can_transition_to_real_sprite():

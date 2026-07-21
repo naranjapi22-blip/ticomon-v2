@@ -80,3 +80,18 @@ def test_snapshot_uses_poke_env_identifier_for_compound_sprite_names() -> None:
 
     assert snapshot.player_active is not None
     assert snapshot.player_active.sprite_identifier == "iron-crown"
+
+
+def test_snapshot_carries_species_capture_fallback_url() -> None:
+    battle = FakeBattle()
+    snapshot = snapshot_battle(
+        battle,
+        player_id=10,
+        opponent_id=20,
+        capture_sprite_urls={
+            ("gyarados", False): "https://example.test/regular/130.gif"
+        },
+    )
+
+    assert snapshot.player_active is not None
+    assert snapshot.player_active.capture_sprite_url.endswith("/regular/130.gif")
