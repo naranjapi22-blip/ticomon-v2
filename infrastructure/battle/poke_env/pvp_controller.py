@@ -141,10 +141,6 @@ class ManualPvpPlayer(Player):
             team=team,
             **kwargs,
         )
-        self.ps_client.logger = _PvpClientLogger(
-            self.ps_client.logger,
-            lambda: self._closing,
-        )
         self.ps_client.change_avatar = self._skip_avatar_change
         original_handle_message = self.ps_client._handle_message
 
@@ -469,20 +465,3 @@ def _consume_task_exception(task: asyncio.Task) -> None:
         task.exception()
     except Exception:
         logger.debug("Unable to retrieve PvP task exception", exc_info=True)
-
-
-class _PvpClientLogger(logging.LoggerAdapter):
-    """Downgrade poke-env's known cancellation logs during intentional close."""
-
-    def __init__(self, logger, is_closing: Callable[[], bool]) -> None:
-        super().__init__(logger, {})
-        self._is_closing = is_closing
-
-    def critical(self, msg, *args, **kwargs) -> None:
-        if self._is_closing() and str(msg) in {
-            "CancelledError intercepted: %s",
-            "Listen interrupted by %s",
-        }:
-            self.debug(msg, *args, **kwargs)
-            return
-        super().critical(msg, *args, **kwargs)

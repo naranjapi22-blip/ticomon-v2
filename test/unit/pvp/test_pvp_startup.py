@@ -1,19 +1,22 @@
 import asyncio
-import logging
+import importlib
 import re
 from types import SimpleNamespace
 
 import pytest
 
-import infrastructure.battle.poke_env.pvp_controller as controller_module
 from application.pvp.pvp_application_service import PvpApplicationService
 from core.pvp.session import PvpSessionRegistry
 from core.team.team_slot import TeamSlot
 from infrastructure.battle.poke_env.pvp_controller import (
+    ManualPvpPlayer,
     PokeEnvPvpController,
     PvpControllerCallbacks,
-    _PvpClientLogger,
     _RetrievedTaskSet,
+)
+
+controller_module = importlib.import_module(
+    "infrastructure.battle.poke_env.pvp_controller"
 )
 
 
@@ -405,6 +408,31 @@ def test_invalid_showdown_websocket_urls_are_rejected(
 
 
 @pytest.mark.asyncio
+async def test_manual_player_does_not_assign_read_only_psclient_logger():
+    callbacks = PvpControllerCallbacks(
+        on_actions=lambda *_: asyncio.sleep(0),
+        on_protocol=lambda *_: asyncio.sleep(0),
+        on_finished=lambda *_: asyncio.sleep(0),
+    )
+
+    player = ManualPvpPlayer(
+        1,
+        "",
+        callbacks,
+        username="tmtestp1",
+        server_configuration=controller_module.ServerConfiguration(
+            websocket_url="ws://showdown.internal/showdown/websocket",
+            authentication_url="",
+        ),
+        loop=asyncio.get_running_loop(),
+        start_listening=False,
+    )
+
+    assert player.ps_client.logger is not None
+    assert player.trainer_id == 1
+
+
+@pytest.mark.asyncio
 async def test_background_task_exception_is_retrieved():
     player = SimpleNamespace(background_errors=[])
     player._record_background_error = player.background_errors.append
@@ -419,26 +447,3 @@ async def test_background_task_exception_is_retrieved():
     await asyncio.sleep(0)
 
     assert isinstance(player.background_errors[0], RuntimeError)
-
-
-def test_intentional_client_cancellation_is_debug_not_critical(caplog):
-    base_logger = logging.getLogger("test.pvp.client")
-    adapter = _PvpClientLogger(base_logger, lambda: True)
-
-    with caplog.at_level(logging.DEBUG, logger="test.pvp.client"):
-        adapter.critical("CancelledError intercepted: %s", "cleanup")
-
-    assert "CancelledError intercepted" in caplog.text
-    assert not [
-        record for record in caplog.records if record.levelno >= logging.CRITICAL
-    ]
-
-
-def test_unexpected_client_cancellation_remains_an_error(caplog):
-    base_logger = logging.getLogger("test.pvp.active-client")
-    adapter = _PvpClientLogger(base_logger, lambda: False)
-
-    with caplog.at_level(logging.CRITICAL, logger="test.pvp.active-client"):
-        adapter.critical("CancelledError intercepted: %s", "active battle")
-
-    assert any(record.levelno >= logging.CRITICAL for record in caplog.records)
