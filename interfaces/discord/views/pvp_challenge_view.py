@@ -341,6 +341,13 @@ class PvpBoardView(discord.ui.View):
         if session.phase is PvpPhase.STARTING:
             return "Starting"
         if session.phase is PvpPhase.FORCED_SWITCH:
+            if self.snapshot is not None and (
+                self.snapshot.force_switch_player
+                and self.snapshot.player_remaining <= 0
+                or self.snapshot.force_switch_opponent
+                and self.snapshot.opponent_remaining <= 0
+            ):
+                return "Battle finished"
             waiting = tuple(
                 player_id
                 for player_id in (session.initiator_id, session.opponent_id)

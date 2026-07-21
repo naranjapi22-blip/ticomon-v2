@@ -261,3 +261,74 @@ def test_event_translator_uses_damage_without_repeating_hp_and_normalizes_names(
     assert "/167" not in steps[0].message
     assert display_species_name("ironthorns") == "Iron Thorns"
     assert display_species_name("kommoo") == "Kommo-o"
+
+
+@pytest.mark.parametrize(
+    ("previous", "current", "expected"), [(212, 0, 212), (50, 0, 50)]
+)
+def test_ko_damage_uses_positive_hp_delta(previous, current, expected):
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            1,
+            1,
+            2,
+            PvpPokemonSnapshot("Garchomp", None, 100, 100, 1.0, None, False),
+            PvpPokemonSnapshot("Hydrapple", None, previous, 212, 1.0, None, False),
+            3,
+            1,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    steps = translator.translate(
+        [
+            ["battle", "move", "p1a: Garchomp", "Outrage"],
+            ["battle", "-damage", "p2a: Hydrapple", f"{current}/212"],
+            ["battle", "faint", "p2a: Hydrapple"],
+        ]
+    )
+
+    assert f"{expected} damage" in steps[0].message
+    assert "took 0 damage" not in steps[0].message
+
+
+def test_ko_without_previous_snapshot_omits_damage():
+    steps = PvpEventTranslator().translate(
+        [
+            ["battle", "move", "p1a: Garchomp", "Outrage"],
+            ["battle", "-damage", "p2a: Hydrapple", "0/212"],
+            ["battle", "faint", "p2a: Hydrapple"],
+        ]
+    )
+
+    assert steps[0].message == "Garchomp used Outrage. Hydrapple was knocked out."
+    assert "took 0 damage" not in steps[0].message
+
+
+def test_explicit_zero_damage_is_allowed_without_ko():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(
+        PvpBattleSnapshot(
+            1,
+            1,
+            2,
+            PvpPokemonSnapshot("Garchomp", None, 100, 100, 1.0, None, False),
+            PvpPokemonSnapshot("Hydrapple", None, 212, 212, 1.0, None, False),
+            3,
+            1,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    steps = translator.translate([["battle", "-damage", "p2a: Hydrapple", "212/212"]])
+
+    assert steps[0].message == "Hydrapple took 0 damage."

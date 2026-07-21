@@ -59,7 +59,7 @@ class PvpEventTranslator:
                             target=_pokemon_name(values[0]),
                             damage=(
                                 previous[0] - current
-                                if previous is not None and previous[0] >= current
+                                if previous is not None and previous[0] > current
                                 else None
                             ),
                         )
@@ -73,7 +73,7 @@ class PvpEventTranslator:
                             target=_pokemon_name(values[0]),
                             healing=(
                                 current - previous[0]
-                                if previous is not None and current >= previous[0]
+                                if previous is not None and current > previous[0]
                                 else None
                             ),
                         )
@@ -107,6 +107,12 @@ class PvpEventTranslator:
         summary: list[str],
         structured: PvpEvent | None,
     ) -> PvpPresentationStep:
+        if structured is not None and structured.fainted:
+            summary = [
+                item
+                for item in summary
+                if "took 0 damage" not in item and "dealt 0 damage" not in item
+            ]
         return PvpPresentationStep(
             message=_compact_summary(summary),
             event=structured,
@@ -191,19 +197,21 @@ class PvpEventTranslator:
 
     def _damage_text(
         self, target: str, hp_value: str, details: list[str] | None = None
-    ) -> str:
+    ) -> str | None:
         name = display_species_name(target)
         current, maximum = _parse_hp(hp_value)
         key = _protocol_id(target)
         previous = self._last_hp.get(key)
         self._last_hp[key] = (current, maximum)
-        if previous is not None and previous[0] >= current:
+        if previous is not None and previous[0] > current:
             damage = previous[0] - current
             if details and any("weather" in item.casefold() for item in details):
                 weather = self._weather or "Weather"
                 return f"{weather} dealt {damage} damage to {name}."
             return f"{name} took {damage} damage."
-        return f"{name} took damage."
+        if previous is not None and previous[0] == current:
+            return f"{name} took 0 damage."
+        return None
 
 
 def _parse_hp(value: str) -> tuple[int, int]:

@@ -292,6 +292,22 @@ def test_pvp_board_shows_resolving_and_forced_replacement_phases():
     assert "Choose a replacement" in board.render()
     assert "Orange" in board.render()
 
+    board.snapshot = PvpBattleSnapshot(
+        5,
+        1,
+        2,
+        PvpPokemonSnapshot("Hydrapple", None, 0, 212, 0.0, "FNT", True),
+        PvpPokemonSnapshot("Garchomp", None, 208, 208, 1.0, None, False),
+        0,
+        1,
+        True,
+        False,
+        False,
+        None,
+        False,
+    )
+    assert "Battle finished" in board.render()
+
 
 def test_private_action_details_include_move_and_switch_information():
     move = PvpAction(
