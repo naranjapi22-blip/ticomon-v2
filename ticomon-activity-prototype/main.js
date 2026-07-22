@@ -1,9 +1,12 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import {
+  clearCachedActivityAuth,
   isAuthorizedRole,
   resolveActivitySprite,
+  setOverlayVisibility,
   shouldShowBlockingSetup,
 } from "./activity_ui_state.js";
+import { authenticateActivity } from "./activity_auth.js";
 import "./style.css";
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
@@ -53,6 +56,7 @@ const state = {
   reconnectAttempt: 0,
   authenticating: false,
   intentionalSocketClose: false,
+  freshAuthRetryUsed: false,
 };
 
 elements.forfeit.addEventListener("click", () => {
@@ -80,7 +84,8 @@ async function initialize() {
     state.discordSdk = new DiscordSDK(clientId);
     await state.discordSdk.ready();
     await subscribeToActivityPresence();
-    await authenticate();
+    const authenticated = await authenticate(true);
+    state.sessionToken = authenticated.auth.session_token;
     connectSocket();
   } catch (error) {
     console.error("Activity initialization failed.", error);
@@ -108,24 +113,22 @@ function updateSdkPresence(participants) {
   }
 }
 
-async function authenticate() {
+async function authenticate(initialLaunch = false) {
   state.authenticating = true;
   showConnectionState("Authenticating with Discord...");
   try {
-    const challenge = await requestJson("/api/activity/auth/challenge");
-    const { code } = await state.discordSdk.commands.authorize({
-      client_id: clientId,
-      response_type: "code",
-      state: challenge.state,
-      prompt: "none",
-      scope: ["identify"],
+    const authenticated = await authenticateActivity({
+      sdk: state.discordSdk,
+      clientId,
+      channelId: state.discordSdk.channelId,
+      requestJson,
+      freshRetryUsed: state.freshAuthRetryUsed,
+      initialLaunch,
     });
-    const auth = await requestJson("/api/activity/auth", {
-      method: "POST",
-      body: JSON.stringify({ code, state: challenge.state }),
-    });
-    state.sessionToken = auth.session_token;
+    state.freshAuthRetryUsed = authenticated.freshRetryUsed;
+    state.sessionToken = authenticated.auth.session_token;
     clearActivityOverlay("Connecting to the battle...");
+    return authenticated;
   } finally {
     state.authenticating = false;
   }
@@ -381,12 +384,12 @@ function showConnectionState(message, isError = false) {
     return;
   }
   setSetup(message, "The backend remains authoritative for the current battle state.");
-  elements.setupScreen.hidden = false;
+  setOverlayVisibility(elements.setupScreen, true);
   elements.battleScreen.hidden = true;
 }
 
 function clearActivityOverlay(status = "") {
-  elements.setupScreen.hidden = true;
+  setOverlayVisibility(elements.setupScreen, false);
   elements.battleScreen.hidden = false;
   elements.connectionStatus.hidden = !status;
   elements.connectionStatus.textContent = status;
@@ -415,12 +418,12 @@ function showSetup(message, detail) {
     return;
   }
   setSetup(message, detail);
-  elements.setupScreen.hidden = false;
+  setOverlayVisibility(elements.setupScreen, true);
   elements.battleScreen.hidden = true;
 }
 
 function showBattle() {
-  elements.setupScreen.hidden = true;
+  setOverlayVisibility(elements.setupScreen, false);
   elements.battleScreen.hidden = false;
 }
 
@@ -440,6 +443,10 @@ async function refreshAuthentication() {
     state.socket?.close();
     connectSocket();
   } catch (error) {
+    if (error.freshRetryUsed) {
+      state.freshAuthRetryUsed = true;
+    }
+    clearCachedActivityAuth(window.localStorage);
     console.error("Activity authorization refresh failed.", error);
     showConnectionFailure("Activity authorization failed.", error.message || "Try reopening the Activity.");
   }
