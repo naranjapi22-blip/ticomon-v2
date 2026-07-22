@@ -1,0 +1,15 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+.poetry-*
+__pycache__
+*.py[cod]
+.env
+.env.*
+!*.env.example
+ticomon-activity-prototype/node_modules
+ticomon-activity-prototype/dist
+node_modules
+dist
+rendering/assets/battle_bacgrounds

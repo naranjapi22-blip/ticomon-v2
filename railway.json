@@ -1,8 +1,8 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
-    "buildCommand": "poetry install --no-interaction --no-root",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
     "watchPatterns": [
       "/application/**",
       "/core/**",
@@ -15,7 +15,8 @@
     ]
   },
   "deploy": {
-    "startCommand": "poetry run python main.py",
+    "preDeployCommand": "/app/.venv/bin/python scripts/create_creature_loadout_schema.py",
+    "startCommand": "/app/.venv/bin/python main.py",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
