@@ -2,12 +2,18 @@ from contextlib import asynccontextmanager
 
 import pytest
 
+from application.release.preview_release_application_service import (
+    PreviewReleaseApplicationService,
+)
 from application.release.release_application_service import (
     ReleaseApplicationService,
 )
 from core.candy.candy_inventory import CandyInventory
+from core.candy.candy_type import CandyType
 from core.candy.reward_policy import RewardPolicy
+from core.evolution.evolution_chain import EvolutionChain
 from test.builders.creature_builder import CreatureBuilder
+from test.builders.species_builder import SpeciesBuilder
 from test.fakes.fake_candy_repository import FakeCandyRepository
 from test.fakes.fake_creature_repository import FakeCreatureRepository
 
@@ -221,3 +227,46 @@ async def test_atomic_release_commits_creatures_and_candies_together():
     assert result.success
     assert unit_of_work.creatures == []
     assert unit_of_work.inventory.has(result.reward_bundle)
+
+
+@pytest.mark.asyncio
+async def test_release_and_preview_share_stage_reward_for_multiple_evolutions():
+    stages = [
+        SpeciesBuilder()
+        .with_id(1)
+        .with_evolution_chain(EvolutionChain(1, [1], {}))
+        .build(),
+        SpeciesBuilder()
+        .with_id(2)
+        .with_evolution_chain(EvolutionChain(1, [1, 2], {}))
+        .build(),
+        SpeciesBuilder()
+        .with_id(3)
+        .with_evolution_chain(EvolutionChain(1, [1, 2, 3], {}))
+        .build(),
+    ]
+    creatures = [
+        CreatureBuilder()
+        .with_id(index)
+        .with_collection_number(index)
+        .with_species(species)
+        .build()
+        for index, species in enumerate(stages, start=1)
+    ]
+    repository = FakeCreatureRepository(*creatures)
+    preview_service = PreviewReleaseApplicationService(
+        repository,
+        FakeCandyRepository(),
+        RewardPolicy(),
+    )
+    release_service = ReleaseApplicationService(
+        repository,
+        FakeCandyRepository(),
+        RewardPolicy(),
+    )
+
+    preview = await preview_service.preview(1, [1, 2, 3])
+    released = await release_service.release(1, [1, 2, 3])
+
+    assert dict(preview.reward_bundle.items()) == dict(released.reward_bundle.items())
+    assert released.reward_bundle.get(CandyType.FIRE) == 12

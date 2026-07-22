@@ -14,6 +14,7 @@ from core.species.variant import Variant
 from infrastructure.battle.poke_env.loadout_catalog import PokeEnvLoadoutCatalog
 from infrastructure.db_config import get_pool
 from infrastructure.persistence.mappers.candy_mapper import CandyMapper
+from infrastructure.species.evolution_chain_loader import build_evolution_chains
 
 
 class NeonEvolutionUnitOfWork(EvolutionUnitOfWork):
@@ -63,8 +64,14 @@ class _NeonEvolutionTransaction(EvolutionTransaction):
             """,
             species_id,
         )
+        evolution_rows = await self._connection.fetch(
+            "SELECT from_species_id, to_species_id, tier FROM pokemon_evolutions"
+        )
+        evolution_chains = build_evolution_chains(evolution_rows)
         return self._species_mapper.from_row(
-            row, tuple(Variant(id=item["id"], name=item["name"]) for item in variants)
+            row,
+            tuple(Variant(id=item["id"], name=item["name"]) for item in variants),
+            evolution_chains.get(species_id),
         )
 
     async def get_candy_inventory(self, trainer_id: int) -> CandyInventory:

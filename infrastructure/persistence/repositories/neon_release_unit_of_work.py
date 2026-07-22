@@ -10,6 +10,7 @@ from core.species.species_mapper import SpeciesMapper
 from core.species.variant import Variant
 from infrastructure.db_config import get_pool
 from infrastructure.persistence.mappers.candy_mapper import CandyMapper
+from infrastructure.species.evolution_chain_loader import build_evolution_chains
 
 
 class NeonReleaseUnitOfWork(ReleaseUnitOfWork):
@@ -75,6 +76,10 @@ class _NeonReleaseTransaction(ReleaseTransaction):
             """,
             species_ids,
         )
+        evolution_rows = await self._connection.fetch(
+            "SELECT from_species_id, to_species_id, tier FROM pokemon_evolutions"
+        )
+        evolution_chains = build_evolution_chains(evolution_rows)
         variants_by_species: dict[int, list] = {}
         for row in variant_rows:
             variants_by_species.setdefault(row["species_id"], []).append(
@@ -84,6 +89,7 @@ class _NeonReleaseTransaction(ReleaseTransaction):
             row["id"]: self._species_mapper.from_row(
                 row,
                 tuple(variants_by_species.get(row["id"], ())),
+                evolution_chains.get(row["id"]),
             )
             for row in species_rows
         }

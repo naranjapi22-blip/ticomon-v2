@@ -19,6 +19,7 @@ from core.capture.application.capture_unit_of_work import (
 from core.capture.domain.capture_attempt import CaptureAttempt
 from core.capture.domain.capture_ball import CaptureBall
 from core.capture.domain.capture_result import CaptureResult
+from core.evolution.evolution_chain import EvolutionChain
 from core.opportunity.opportunity_factory import OpportunityFactory
 from core.safari import (
     SafariDailyCaptureResult,
@@ -281,6 +282,23 @@ async def test_success_persists_creature_candies_and_creates_world():
 
 
 @pytest.mark.asyncio
+async def test_successful_capture_uses_the_captured_species_stage_reward():
+    species = (
+        SpeciesBuilder()
+        .with_id(2)
+        .with_types(["fire"])
+        .with_evolution_chain(EvolutionChain(1, [1, 2], {}))
+        .build()
+    )
+    service, transaction, _ = await _service(success=True, species=species)
+
+    result = await service.capture(TRAINER_ID, GUILD_ID)
+
+    assert result.reward.get(CandyType.FIRE) == 4
+    assert transaction.inventory.get_amount(CandyType.FIRE) == 4
+
+
+@pytest.mark.asyncio
 async def test_success_records_collection_entry_inside_capture_transaction():
     service, transaction, _ = await _service(success=True)
     entries = []
@@ -480,8 +498,9 @@ async def _service(
     fail_clear=False,
     progress_service=None,
     achievement_award_service=None,
+    species=None,
 ):
-    species = SpeciesBuilder().with_types(["fire", "water"]).build()
+    species = species or SpeciesBuilder().with_types(["fire", "water"]).build()
     opportunity = OpportunityFactory.create(species)
     creature = (
         CreatureBuilder().with_species(species).with_trainer_id(TRAINER_ID).build()

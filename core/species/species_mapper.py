@@ -1,4 +1,5 @@
 from core.creature.base_stats import BaseStats
+from core.evolution.evolution_chain import EvolutionChain
 from core.rarity import Rarity
 from core.species.species import Species
 from core.species.species_metadata import SpeciesMetadata
@@ -10,6 +11,7 @@ class SpeciesMapper:
     def from_row(
         row,
         variants: tuple[Variant, ...],
+        evolution_chain: EvolutionChain | None = None,
     ) -> Species:
         return Species(
             id=row["id"],
@@ -34,6 +36,6 @@ class SpeciesMapper:
                 is_legendary=row["is_legendary"],
                 is_mythical=row["is_mythical"],
             ),
-            evolution_chain=None,
+            evolution_chain=evolution_chain,
             variants=variants,
         )

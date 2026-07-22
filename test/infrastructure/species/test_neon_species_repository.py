@@ -31,6 +31,8 @@ class _Connection:
 
     async def fetch(self, query: str, *args):
         self.calls.append((query, args))
+        if "FROM pokemon_evolutions" in query:
+            return []
         if "FROM species_variants" in query:
             return [
                 {"species_id": 1, "id": 11, "name": "heat"},
@@ -110,7 +112,7 @@ async def test_find_many_by_names_loads_species_and_variants_in_two_queries(
         "wash",
     ]
     assert species_by_name["porygon"].variants == ()
-    assert len(connection.calls) == 2
+    assert len(connection.calls) == 3
     assert connection.calls[0][1] == (["rotom", "porygon", "missing"],)
     assert connection.calls[1][1] == ([1, 2],)
 

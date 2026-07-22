@@ -4,6 +4,7 @@ from core.species.species_mapper import SpeciesMapper
 from core.species.species_repository import SpeciesRepository
 from core.species.variant import Variant
 from infrastructure.db_config import get_pool
+from infrastructure.species.evolution_chain_loader import build_evolution_chains
 
 
 class NeonSpeciesRepository(SpeciesRepository):
@@ -93,6 +94,13 @@ class NeonSpeciesRepository(SpeciesRepository):
 
         return {species_id: tuple(values) for species_id, values in variants.items()}
 
+    @staticmethod
+    async def _load_evolution_chains(connection):
+        rows = await connection.fetch(
+            "SELECT from_species_id, to_species_id, tier FROM pokemon_evolutions"
+        )
+        return build_evolution_chains(rows)
+
     async def get(
         self,
         species_id: int,
@@ -121,10 +129,12 @@ class NeonSpeciesRepository(SpeciesRepository):
                 connection,
                 species_id,
             )
+            chains = await self._load_evolution_chains(connection)
 
         return self._mapper.from_row(
             row,
             variants,
+            chains.get(species_id),
         )
 
     async def find_by_name(
@@ -155,10 +165,12 @@ class NeonSpeciesRepository(SpeciesRepository):
                 connection,
                 row["id"],
             )
+            chains = await self._load_evolution_chains(connection)
 
         return self._mapper.from_row(
             row,
             variants,
+            chains.get(row["id"]),
         )
 
     async def find_many_by_names(
@@ -185,11 +197,13 @@ class NeonSpeciesRepository(SpeciesRepository):
                 connection,
                 [row["id"] for row in rows],
             )
+            chains = await self._load_evolution_chains(connection)
 
         return {
             row["name"]: self._mapper.from_row(
                 row,
                 variants_by_species.get(row["id"], ()),
+                chains.get(row["id"]),
             )
             for row in rows
         }
@@ -214,6 +228,7 @@ class NeonSpeciesRepository(SpeciesRepository):
             variants_map = await self._load_all_variants(
                 connection,
             )
+            chains = await self._load_evolution_chains(connection)
 
             species = []
 
@@ -226,6 +241,7 @@ class NeonSpeciesRepository(SpeciesRepository):
                             row["id"],
                             (),
                         ),
+                        chains.get(row["id"]),
                     )
                 )
 
@@ -257,6 +273,7 @@ class NeonSpeciesRepository(SpeciesRepository):
                 connection,
                 [row["id"] for row in rows],
             )
+            chains = await self._load_evolution_chains(connection)
 
             species = []
 
@@ -269,6 +286,7 @@ class NeonSpeciesRepository(SpeciesRepository):
                             row["id"],
                             (),
                         ),
+                        chains.get(row["id"]),
                     )
                 )
 
@@ -300,6 +318,7 @@ class NeonSpeciesRepository(SpeciesRepository):
                 connection,
                 [row["id"] for row in rows],
             )
+            chains = await self._load_evolution_chains(connection)
 
             species = []
 
@@ -312,6 +331,7 @@ class NeonSpeciesRepository(SpeciesRepository):
                             row["id"],
                             (),
                         ),
+                        chains.get(row["id"]),
                     )
                 )
 

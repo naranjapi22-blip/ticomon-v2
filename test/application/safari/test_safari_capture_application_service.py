@@ -62,14 +62,15 @@ class _DeterministicRandom:
 
 
 class _EncounterGenerator:
-    def __init__(self) -> None:
+    def __init__(self, species=None) -> None:
         self.context = None
         self.compositions = None
+        self.species = species or create_species(id=999)
 
     async def generate_with_events(self, context, compositions):
         self.context = context
         self.compositions = compositions
-        opportunity = OpportunityFactory.create(create_species(id=999))
+        opportunity = OpportunityFactory.create(self.species)
         encounter = SafariEncounter(
             uuid4(),
             SafariComposition.NORMAL,
@@ -154,6 +155,7 @@ def _capture_service(
     *,
     activity: InMemorySafariActivityRepository | None = None,
     unit_of_work: CaptureUnitOfWork | None = None,
+    species=None,
 ) -> SafariCaptureApplicationService:
     if activity is None:
         activity = _TrackingActivityRepository()
@@ -163,7 +165,7 @@ def _capture_service(
         CaptureAttemptService(_AlwaysSuccessChanceCalculator()),
         _DeterministicRandom(),
     )
-    generator = _EncounterGenerator()
+    generator = _EncounterGenerator(species=species)
     return SafariCaptureApplicationService(
         activity_repository=activity,
         capture_resolver=resolver,
@@ -379,6 +381,49 @@ async def test_resolve_capture_persists_creatures_candies_and_applies_session():
     assert session.participants_by_trainer[1].captured_creature_ids == (101,)
     assert session.participants_by_trainer[2].captured_creature_ids == (102,)
     assert session.participants_by_trainer[1].remaining_balls == 2
+
+
+@pytest.mark.asyncio
+async def test_safari_capture_uses_the_captured_species_stage_reward():
+    activity = _TrackingActivityRepository()
+    session = make_session((SafariParticipant(1, 3, 3),))
+    await activity.save_session(session)
+    transaction = _Transaction()
+    species = create_species(
+        id=2,
+        types=["fire"],
+        evolution_species=[1, 2],
+    )
+    service = _capture_service(
+        activity=activity,
+        unit_of_work=_UnitOfWork(transaction),
+        species=species,
+    )
+    session.publish_encounter(
+        SafariEncounter(
+            uuid4(),
+            SafariComposition.NORMAL,
+            (
+                SafariEncounterSlot(
+                    uuid4(),
+                    OpportunityFactory.create(species),
+                ),
+            ),
+        )
+    )
+
+    await service.select_capture(
+        session.guild_id,
+        1,
+        session.current_encounter.slots[0].id,
+        1,
+    )
+    await service.confirm_capture_selection(session.guild_id, 1)
+    await service.close_capture_selection(session.guild_id)
+    result = await service.resolve_capture(session.guild_id)
+
+    assert result.slot_results[0].reward.get(CandyType.FIRE) == 4
+    assert result.rewards_by_trainer[1].get(CandyType.FIRE) == 4
 
 
 @pytest.mark.asyncio

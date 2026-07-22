@@ -18,6 +18,10 @@ class EvolutionChain:
     # Candy cost required to evolve FROM a species.
     candy_requirements: dict[int, int]
 
+    # Optional explicit depths for branched chains. The linear ``species``
+    # list remains the compatibility fallback for existing callers.
+    stage_by_species: dict[int, int] | None = None
+
     def stage_of(
         self,
         species_id: int,
@@ -27,6 +31,10 @@ class EvolutionChain:
 
         Stage numbering starts at 1.
         """
+        if self.stage_by_species is not None:
+            if species_id not in self.stage_by_species:
+                raise ValueError("Species is not part of the evolution chain.")
+            return self.stage_by_species[species_id]
         return self.species.index(species_id) + 1
 
     def has_next(
