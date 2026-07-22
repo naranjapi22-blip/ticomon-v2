@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-ACTIVITY_SPRITE_BASE_URL = "https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev"
+ACTIVITY_SPRITE_BASE_URL = "/sprites"
 
 
 def activity_sprite_url(

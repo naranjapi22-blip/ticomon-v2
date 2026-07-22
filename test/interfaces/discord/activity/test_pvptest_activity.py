@@ -201,10 +201,20 @@ def test_activity_event_and_pokemon_dtos_are_serializable():
 
 
 @pytest.mark.parametrize(
-    ("name", "pokeapi_id"),
-    [("Bulbasaur", 1), ("Kadabra", 64), ("Chandelure", 609)],
+    ("name", "pokeapi_id", "opponent_url", "player_url"),
+    [
+        (
+            "Cofagrigus",
+            563,
+            "/sprites/regular/563.gif",
+            "/sprites/back/563.gif",
+        ),
+        ("Bulbasaur", 1, "/sprites/regular/1.gif", "/sprites/back/1.gif"),
+    ],
 )
-def test_activity_sprites_use_pokeapi_ids(name, pokeapi_id):
+def test_activity_sprites_use_discord_url_mapping_paths(
+    name, pokeapi_id, opponent_url, player_url
+):
     pokemon = PvpPokemonSnapshot(
         species_name=name,
         form_name=None,
@@ -219,12 +229,45 @@ def test_activity_sprites_use_pokeapi_ids(name, pokeapi_id):
     opponent = pokemon_to_dto(pokemon, player_side=False)
     player = pokemon_to_dto(pokemon, player_side=True)
 
-    assert opponent["sprite_url"] == (
-        f"https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/regular/{pokeapi_id}.gif"
+    assert opponent["sprite_url"] == opponent_url
+    assert player["sprite_url"] == player_url
+
+
+def test_activity_sprites_use_discord_url_mapping_shiny_paths():
+    pokemon = PvpPokemonSnapshot(
+        species_name="Bulbasaur",
+        form_name=None,
+        current_hp=100,
+        max_hp=100,
+        hp_fraction=1.0,
+        status=None,
+        fainted=False,
+        pokeapi_id=1,
+        shiny=True,
     )
-    assert player["sprite_url"] == (
-        f"https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/back/{pokeapi_id}.gif"
+
+    assert pokemon_to_dto(pokemon, player_side=False)["sprite_url"] == (
+        "/sprites/shiny/1.gif"
     )
+    assert pokemon_to_dto(pokemon, player_side=True)["sprite_url"] == (
+        "/sprites/back_shiny/1.gif"
+    )
+
+
+def test_activity_sprite_url_is_empty_without_pokeapi_id():
+    pokemon = PvpPokemonSnapshot(
+        species_name="Unknown",
+        form_name=None,
+        current_hp=100,
+        max_hp=100,
+        hp_fraction=1.0,
+        status=None,
+        fainted=False,
+        pokeapi_id=None,
+    )
+
+    assert pokemon_to_dto(pokemon, player_side=False)["sprite_url"] is None
+    assert pokemon_to_dto(pokemon, player_side=True)["sprite_url"] is None
 
 
 @pytest.mark.asyncio
