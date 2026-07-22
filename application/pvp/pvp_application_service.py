@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from application.pvp.events import PvpEventTranslator
 from application.pvp.models import PvpAction, PvpLegalActions, is_decisive_event
 from application.pvp.snapshots import PvpBattleSnapshot, snapshot_battle
+from application.pvp.task_management import cancel_tasks_safely, register_task
 from application.pvp.team_validator import PvpTeamValidator
 from core.pvp.session import (
     ACTION_TIMEOUT_SECONDS,
@@ -156,6 +157,7 @@ class PvpApplicationService:
         self._protocol_event_keys: dict[UUID, set[tuple]] = {}
         self._last_decisive_events: dict[UUID, tuple[object, int]] = {}
         self._cleaned_sessions: dict[UUID, PvpSession] = {}
+        self._cleanup_tasks: dict[UUID, asyncio.Task] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
         return self.registry.create(initiator_id, opponent_id)
@@ -314,8 +316,15 @@ class PvpApplicationService:
             on_snapshot=lambda snapshot: self.handle_snapshot(session_id, snapshot),
             on_error=lambda error: self.handle_controller_error(session_id, error),
         )
-        task = asyncio.create_task(
-            self._start_controller(session_id, session, controller, teams, callbacks)
+        task = register_task(
+            asyncio.create_task(
+                self._start_controller(
+                    session_id, session, controller, teams, callbacks
+                ),
+                name=f"pvp-startup:{session_id}",
+            ),
+            owner="PvpApplicationService",
+            role="startup",
         )
         session.startup_task = task
         session.timeout_tasks.add(task)
@@ -849,63 +858,87 @@ class PvpApplicationService:
     async def cleanup(self, session_id: UUID) -> None:
         if session_id in self._cleaned_sessions:
             return
+        current_task = asyncio.current_task()
+        existing_cleanup = self._cleanup_tasks.get(session_id)
+        if existing_cleanup is not None:
+            if existing_cleanup is current_task:
+                logger.warning(
+                    "Skipping self-await during PvP cleanup session_id=%s "
+                    "task=%s reason=recursive_cleanup",
+                    session_id,
+                    current_task.get_name() if current_task is not None else None,
+                )
+                return
+            logger.debug(
+                "Waiting for existing PvP cleanup session_id=%s current_task=%s "
+                "target_task=%s",
+                session_id,
+                current_task.get_name() if current_task is not None else None,
+                existing_cleanup.get_name(),
+            )
+            await existing_cleanup
+            return
+        if current_task is not None:
+            self._cleanup_tasks[session_id] = current_task
         try:
             session = self.registry.get(session_id)
         except ValueError:
+            self._cleanup_tasks.pop(session_id, None)
             return
-        for key, future in list(self._action_waiters.items()):
-            if key[0] == session_id and not future.done():
-                future.cancel()
-        self._action_waiters = {
-            key: value
-            for key, value in self._action_waiters.items()
-            if key[0] != session_id
-        }
-        self._legal_actions = {
-            key: value
-            for key, value in self._legal_actions.items()
-            if key[0] != session_id
-        }
-        self._request_ids = {
-            key: value
-            for key, value in self._request_ids.items()
-            if key[0] != session_id
-        }
-        current_task = asyncio.current_task()
-        tasks_to_cancel = [
-            task
-            for task in session.timeout_tasks
-            if task is not current_task and not task.done()
-        ]
-        for task in tasks_to_cancel:
-            task.cancel()
-        if tasks_to_cancel:
-            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
-        session.timeout_tasks.clear()
-        session.startup_task = None
-        session.startup_claimed = False
-        controller = session.battle_controller
-        if controller is not None:
-            try:
-                await controller.close()
-            except Exception:
-                logger.warning(
-                    "PvP controller close failed during cleanup session_id=%s",
-                    session_id,
-                    exc_info=True,
-                )
-        if session.phase is not PvpPhase.FINISHED:
-            session.cancel()
-        session.mark_cleaned_up()
-        self._event_handlers.pop(session_id, None)
-        self._finish_handlers.pop(session_id, None)
-        self._snapshot_handlers.pop(session_id, None)
-        self._event_translators.pop(session_id, None)
-        self._latest_snapshots.pop(session_id, None)
-        self._protocol_event_keys.pop(session_id, None)
-        self._cleaned_sessions[session_id] = session
-        self.registry.remove(session_id)
-        self._finalizing_sessions.discard(session_id)
+        try:
+            for key, future in list(self._action_waiters.items()):
+                if key[0] == session_id and not future.done():
+                    future.cancel()
+            self._action_waiters = {
+                key: value
+                for key, value in self._action_waiters.items()
+                if key[0] != session_id
+            }
+            self._legal_actions = {
+                key: value
+                for key, value in self._legal_actions.items()
+                if key[0] != session_id
+            }
+            self._request_ids = {
+                key: value
+                for key, value in self._request_ids.items()
+                if key[0] != session_id
+            }
+            await cancel_tasks_safely(
+                session.timeout_tasks,
+                current_task=current_task,
+                session_id=session_id,
+                phase=session.phase,
+                owner="PvpApplicationService",
+                reason="session cleanup",
+            )
+            session.timeout_tasks.clear()
+            session.startup_task = None
+            session.startup_claimed = False
+            controller = session.battle_controller
+            if controller is not None:
+                try:
+                    await controller.close()
+                except Exception:
+                    logger.warning(
+                        "PvP controller close failed during cleanup session_id=%s",
+                        session_id,
+                        exc_info=True,
+                    )
+            if session.phase is not PvpPhase.FINISHED:
+                session.cancel()
+            session.mark_cleaned_up()
+            self._event_handlers.pop(session_id, None)
+            self._finish_handlers.pop(session_id, None)
+            self._snapshot_handlers.pop(session_id, None)
+            self._event_translators.pop(session_id, None)
+            self._latest_snapshots.pop(session_id, None)
+            self._protocol_event_keys.pop(session_id, None)
+            self._cleaned_sessions[session_id] = session
+            self.registry.remove(session_id)
+            self._finalizing_sessions.discard(session_id)
+        finally:
+            self._cleanup_tasks.pop(session_id, None)
 
     def _automatic_action(self, legal: PvpLegalActions) -> PvpAction:
         candidates = legal.moves if not legal.forced_switch else legal.switches

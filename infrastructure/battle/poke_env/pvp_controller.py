@@ -24,6 +24,12 @@ from application.pvp.models import (
     PvpLegalActions,
 )
 from application.pvp.snapshots import PvpBattleSnapshot, snapshot_battle
+from application.pvp.task_management import (
+    cancel_task_safely,
+    cancel_tasks_safely,
+    register_task,
+    unique_pending_tasks,
+)
 from core.creature.creature import Creature
 from infrastructure.battle.poke_env.pvp_set_adapter import PvpSetAdapter
 from rendering.battle.pvp_sprite_urls import showdown_sprite_identifier
@@ -181,7 +187,15 @@ class ManualPvpPlayer(Player):
         self.background_errors.append(error)
 
     def _schedule_callback(self, coroutine) -> None:
-        task = asyncio.create_task(coroutine)
+        task = register_task(
+            asyncio.create_task(
+                coroutine, name=f"pvp-player-callback:{self.trainer_id}"
+            ),
+            owner="PokeEnvPvpController",
+            role="final_callback",
+            may_call_cleanup=True,
+            cleanup_may_cancel=False,
+        )
         if self._callback_tasks is None:
             task.add_done_callback(_consume_task_exception)
             return
@@ -370,7 +384,14 @@ class PokeEnvPvpController:
                     self._wait_for_login(first, second),
                     timeout=SHOWDOWN_CONNECTION_TIMEOUT_SECONDS,
                 )
-                self._battle_task = asyncio.create_task(first.battle_against(second))
+                self._battle_task = register_task(
+                    asyncio.create_task(
+                        first.battle_against(second),
+                        name=f"pvp-battle:{player_ids[0]}:{player_ids[1]}",
+                    ),
+                    owner="PokeEnvPvpController",
+                    role="battle",
+                )
                 self._battle_task.add_done_callback(self._battle_task_finished)
                 await asyncio.sleep(0)
                 return
@@ -402,7 +423,16 @@ class PokeEnvPvpController:
             _safe_exception_message(error),
             exc_info=(type(error), error, error.__traceback__),
         )
-        callback_task = asyncio.create_task(self._callbacks.on_error(error))
+        callback_task = register_task(
+            asyncio.create_task(
+                self._callbacks.on_error(error),
+                name=f"pvp-controller-error:{self._attempt}",
+            ),
+            owner="PokeEnvPvpController",
+            role="final_callback",
+            may_call_cleanup=True,
+            cleanup_may_cancel=False,
+        )
         self._callback_tasks.add(callback_task)
         callback_task.add_done_callback(self._callback_tasks.discard)
         callback_task.add_done_callback(_consume_task_exception)
@@ -442,20 +472,31 @@ class PokeEnvPvpController:
                     return
 
     async def close(self) -> None:
+        current_task = asyncio.current_task()
         players = self._players
         if players is not None:
             for player in players:
                 player._closing = True
         if self._battle_task is not None:
-            if not self._battle_task.done():
+            if self._battle_task is current_task:
+                logger.warning(
+                    "Skipping task owned by current final-delivery path "
+                    "task=%s reason=self_battle_close",
+                    current_task.get_name() if current_task is not None else None,
+                )
+            elif not self._battle_task.done():
                 try:
                     await asyncio.wait_for(
                         asyncio.shield(self._battle_task),
                         timeout=SHOWDOWN_CLOSE_TIMEOUT_SECONDS,
                     )
                 except (asyncio.TimeoutError, asyncio.CancelledError):
-                    self._battle_task.cancel()
-                    await asyncio.gather(self._battle_task, return_exceptions=True)
+                    await cancel_task_safely(
+                        self._battle_task,
+                        current_task=current_task,
+                        owner="PokeEnvPvpController",
+                        reason="controller close battle task",
+                    )
             else:
                 try:
                     self._battle_task.result()
@@ -477,31 +518,40 @@ class PokeEnvPvpController:
                 except Exception:
                     logger.debug("Unable to close a PvP Showdown player", exc_info=True)
         if players is not None:
-            active_tasks = [
-                task
-                for player in players
-                for task in list(getattr(player.ps_client, "_active_tasks", ()))
-                if not task.done()
-            ]
+            active_tasks = unique_pending_tasks(
+                (
+                    task
+                    for player in players
+                    for task in list(getattr(player.ps_client, "_active_tasks", ()))
+                ),
+                current_task=current_task,
+            )
             if active_tasks:
-                gather_task = asyncio.gather(*active_tasks, return_exceptions=True)
-                try:
-                    await asyncio.wait_for(
-                        asyncio.shield(gather_task),
-                        timeout=SHOWDOWN_MESSAGE_CLOSE_TIMEOUT_SECONDS,
-                    )
-                except asyncio.TimeoutError:
-                    for task in active_tasks:
-                        if not task.done():
-                            task.cancel()
-                    await asyncio.gather(*active_tasks, return_exceptions=True)
-        current_task = asyncio.current_task()
-        callback_tasks = [
-            task for task in self._callback_tasks if task is not current_task
-        ]
+                _, pending_tasks = await asyncio.wait(
+                    active_tasks, timeout=SHOWDOWN_MESSAGE_CLOSE_TIMEOUT_SECONDS
+                )
+                await cancel_tasks_safely(
+                    pending_tasks,
+                    current_task=current_task,
+                    owner="PokeEnvPvpController",
+                    reason="controller close player listeners",
+                )
+        callback_tasks = unique_pending_tasks(
+            self._callback_tasks, current_task=current_task
+        )
         if callback_tasks:
-            await asyncio.gather(*callback_tasks, return_exceptions=True)
+            _, pending_tasks = await asyncio.wait(
+                callback_tasks, timeout=SHOWDOWN_MESSAGE_CLOSE_TIMEOUT_SECONDS
+            )
+            await cancel_tasks_safely(
+                pending_tasks,
+                current_task=current_task,
+                owner="PokeEnvPvpController",
+                reason="controller close callback tasks",
+            )
             self._callback_tasks.clear()
+        if current_task is not None:
+            self._callback_tasks.discard(current_task)
         self._battle_task = None
         self._players = None
         self._attempt = 0

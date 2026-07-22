@@ -636,3 +636,91 @@ async def test_terminal_batch_delivers_canonical_decisive_event_before_finalizat
     assert final_snapshot.opponent_remaining == 0
     assert final_snapshot.player_remaining == 3
     assert session.phase is PvpPhase.CLEANED_UP
+
+
+def test_event_translator_preserves_each_resolved_action_in_turn_order():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(_damage_snapshot(turn=4))
+
+    steps = translator.translate(
+        [
+            ["battle", "move", "p1a: Hydrapple", "Leaf Storm", "p2a: Tyranitar"],
+            ["battle", "-damage", "p2a: Tyranitar", "49/201"],
+            ["battle", "move", "p2a: Tyranitar", "Stone Edge", "p1a: Hydrapple"],
+            ["battle", "-damage", "p1a: Hydrapple", "124/212"],
+        ]
+    )
+
+    assert [step.message for step in steps] == [
+        "Hydrapple used Leaf Storm. Tyranitar took 152 damage.",
+        "Tyranitar used Stone Edge. Hydrapple took 88 damage.",
+    ]
+
+
+def test_event_translator_keeps_recoil_and_residual_effects_in_protocol_order():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(_damage_snapshot(turn=4))
+
+    steps = translator.translate(
+        [
+            ["battle", "move", "p1a: Hydrapple", "Leaf Storm", "p2a: Tyranitar"],
+            ["battle", "-damage", "p2a: Tyranitar", "49/201"],
+            ["battle", "-unboost", "p1a: Hydrapple", "spa", "2"],
+            ["battle", "-damage", "p1a: Hydrapple", "199/212", "[from] Recoil"],
+            ["battle", "move", "p2a: Tyranitar", "Stone Edge", "p1a: Hydrapple"],
+            ["battle", "-damage", "p1a: Hydrapple", "111/212"],
+        ]
+    )
+
+    assert [step.message for step in steps] == [
+        "Hydrapple used Leaf Storm. Tyranitar took 152 damage. "
+        "Hydrapple's Sp. Atk fell sharply. Hydrapple took 13 recoil damage.",
+        "Tyranitar used Stone Edge. Hydrapple took 88 damage.",
+    ]
+
+
+def test_event_translator_does_not_invent_a_second_action_after_ko():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(_damage_snapshot(turn=4))
+
+    steps = translator.translate(
+        [
+            ["battle", "move", "p1a: Hydrapple", "Leaf Storm", "p2a: Tyranitar"],
+            ["battle", "-damage", "p2a: Tyranitar", "0/201"],
+            ["battle", "faint", "p2a: Tyranitar"],
+        ]
+    )
+
+    assert len(steps) == 1
+    assert steps[0].message == (
+        "Hydrapple used Leaf Storm. Tyranitar took 201 damage. "
+        "Tyranitar was knocked out."
+    )
+
+
+def test_event_translator_reports_a_status_that_prevents_action():
+    steps = PvpEventTranslator().translate(
+        [["battle", "cant", "p2a: Tyranitar", "slp"]]
+    )
+
+    assert steps[0].message == "Tyranitar was asleep."
+    assert steps[0].event is not None
+    assert steps[0].event.status == "slp"
+
+
+def test_event_translator_keeps_switch_before_response_attack():
+    translator = PvpEventTranslator()
+    translator.observe_snapshot(_damage_snapshot(turn=4))
+
+    steps = translator.translate(
+        [
+            ["battle", "switch", "p1a: Hydrapple", "Hydrapple, L50"],
+            ["battle", "move", "p2a: Tyranitar", "Stone Edge", "p1a: Hydrapple"],
+            ["battle", "-damage", "p1a: Hydrapple", "124/212"],
+        ]
+    )
+
+    assert [step.message for step in steps] == [
+        "Hydrapple entered the battle.",
+        "Tyranitar used Stone Edge. Hydrapple took 88 damage.",
+    ]

@@ -221,6 +221,150 @@ def test_pvp_board_uses_sanitized_discord_display_names_and_canonical_orientatio
     assert "Tyranitar" not in content
 
 
+@pytest.mark.asyncio
+async def test_pvp_board_groups_complete_turn_events_in_order_and_deduplicates():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    first = PvpPresentationStep(
+        "Arcanine used Flare Blitz. Iron Moth took 167 damage.",
+        event=PvpEvent(actor="Arcanine", target="Iron Moth", move_name="Flare Blitz"),
+        turn=4,
+    )
+    recoil = PvpPresentationStep(
+        "Arcanine took 18 recoil damage.",
+        event=PvpEvent(target="Arcanine", damage=18, indirect_damage=18),
+        turn=4,
+    )
+    response = PvpPresentationStep(
+        "Iron Moth used Sludge Wave. Arcanine took 40 damage.",
+        event=PvpEvent(actor="Iron Moth", target="Arcanine", move_name="Sludge Wave"),
+        turn=4,
+    )
+
+    await board.set_event(first)
+    await board.set_event(recoil)
+    await board.set_event(response)
+    await board.set_event(response)
+
+    assert board.current_event == "\n".join(
+        (first.message, recoil.message, response.message)
+    )
+    assert board.current_event.count("Iron Moth used Sludge Wave.") == 1
+    assert "Arcanine used Flare Blitz." in board.render()
+    assert "Iron Moth used Sludge Wave." in board.render()
+
+
+@pytest.mark.asyncio
+async def test_pvp_board_resets_turn_events_only_when_turn_advances():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    await board.set_event(PvpPresentationStep("Turn four action.", turn=4))
+    await board.set_event(PvpPresentationStep("Turn four effect.", turn=4))
+
+    await board.set_snapshot(
+        PvpBattleSnapshot(
+            5,
+            1,
+            2,
+            None,
+            None,
+            3,
+            3,
+            False,
+            False,
+            False,
+            None,
+            False,
+        )
+    )
+
+    assert "Turn four" not in board.current_event
+    await board.set_event(PvpPresentationStep("Turn five action.", turn=5))
+    assert board.current_event == "Turn five action."
+
+
+@pytest.mark.asyncio
+async def test_pvp_board_final_result_keeps_the_complete_final_turn():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    session.final_winner_id = 1
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    await board.set_event(
+        PvpPresentationStep(
+            "Zacian used Play Rough. Tyranitar was knocked out.", turn=8
+        )
+    )
+    await board.set_event(PvpPresentationStep("The field settled.", turn=8))
+
+    await board.finish()
+
+    assert board.current_event == (
+        "Orange won the battle.\n"
+        "Zacian used Play Rough. Tyranitar was knocked out.\n"
+        "The field settled."
+    )
+
+
+@pytest.mark.asyncio
+async def test_pvp_board_bounds_long_turn_text_without_dropping_second_action():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=None,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    for index in range(5):
+        await board.set_event(
+            PvpPresentationStep(
+                f"Effect {index}: " + "x" * 500,
+                event=PvpEvent(status=f"effect-{index}"),
+                turn=9,
+            )
+        )
+    await board.set_event(
+        PvpPresentationStep(
+            "Iron Moth used Sludge Wave.",
+            event=PvpEvent(actor="Iron Moth", move_name="Sludge Wave"),
+            turn=9,
+        )
+    )
+
+    assert len(board.current_event) <= 1400
+    assert "Iron Moth used Sludge Wave." in board.current_event
+    assert "Additional turn effects omitted." in board.current_event
+
+
 def test_pvp_board_falls_back_to_trainer_without_full_id():
     registry = PvpSessionRegistry()
     session = registry.create(11310031531417600, 2)

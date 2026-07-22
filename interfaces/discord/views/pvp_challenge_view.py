@@ -17,10 +17,15 @@ from application.pvp.models import (
 )
 from application.pvp.presentation_adapter import pvp_presentation_state
 from application.pvp.snapshots import PvpBattleSnapshot
+from application.pvp.task_management import cancel_task_safely, register_task
 from core.pvp.session import PvpPhase
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
 
 logger = logging.getLogger(__name__)
+
+_MAX_TURN_EVENT_LINES = 4
+_MAX_TURN_EVENT_LINE_LENGTH = 320
+_MAX_TURN_EVENT_CHARS = 1400
 
 
 def _safe_display_name(name: object) -> str:
@@ -30,6 +35,13 @@ def _safe_display_name(name: object) -> str:
     if not value:
         return "Trainer"
     return value[:24]
+
+
+def _truncate_turn_event(message: str) -> str:
+    text = " ".join(str(message).split())
+    if len(text) <= _MAX_TURN_EVENT_LINE_LENGTH:
+        return text
+    return text[: _MAX_TURN_EVENT_LINE_LENGTH - 1].rstrip() + "…"
 
 
 class PvpChallengeView(discord.ui.View):
@@ -277,6 +289,10 @@ class PvpBoardView(discord.ui.View):
         self.display_names = dict(getattr(source, "display_names", {}))
         self.current_event = ""
         self._last_decisive_event: PvpPresentationStep | None = None
+        self.turn_events: list[str] = []
+        self._turn_event_steps: list[PvpPresentationStep | None] = []
+        self._turn_events_turn: int | None = None
+        self._turn_event_keys: set[tuple[int, str, object | None]] = set()
         self.recent_events: list[str] = []
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
@@ -446,10 +462,27 @@ class PvpBoardView(discord.ui.View):
             or message == "The battle ended in a tie."
         ):
             return
-        self.current_event = message
+        turn = (
+            step.turn
+            if isinstance(step, PvpPresentationStep) and step.turn is not None
+            else (self.snapshot.turn if self.snapshot is not None else 0)
+        )
+        if self._turn_events_turn != turn:
+            self.turn_events = []
+            self._turn_event_steps = []
+            self._turn_event_keys = set()
+            self._turn_events_turn = turn
+        event = step.event if isinstance(step, PvpPresentationStep) else None
+        event_key = (turn, message, event)
+        if event_key not in self._turn_event_keys:
+            self._turn_event_keys.add(event_key)
+            self.turn_events.append(message)
+            self._turn_event_steps.append(
+                step if isinstance(step, PvpPresentationStep) else None
+            )
+        self.current_event = self._visible_turn_events()
         if isinstance(step, PvpPresentationStep) and is_decisive_event(step.event):
             self._last_decisive_event = step
-        turn = self.snapshot.turn if self.snapshot is not None else 0
         self.recent_events.append(f"Turn {turn} · {message}"[:240])
         self.recent_events = self.recent_events[-3:]
         self.ready.clear()
@@ -480,6 +513,15 @@ class PvpBoardView(discord.ui.View):
         self._snapshot_turns[snapshot.player_id] = snapshot.turn
         self._snapshots[snapshot.player_id] = snapshot
         self.snapshot = snapshot
+        if (
+            self._turn_events_turn is not None
+            and snapshot.turn > self._turn_events_turn
+        ):
+            self.turn_events = []
+            self._turn_event_steps = []
+            self._turn_event_keys = set()
+            self._turn_events_turn = snapshot.turn
+            self.current_event = ""
         self._visual_version += 1
         await self._edit_message()
 
@@ -487,6 +529,15 @@ class PvpBoardView(discord.ui.View):
         if snapshot is not None:
             self._snapshots[snapshot.player_id] = snapshot
             self.snapshot = snapshot
+            if (
+                self._turn_events_turn is not None
+                and snapshot.turn > self._turn_events_turn
+            ):
+                self.turn_events = []
+                self._turn_event_steps = []
+                self._turn_event_keys = set()
+                self._turn_events_turn = snapshot.turn
+                self.current_event = ""
         self._terminal = True
         self.current_event = self._result_text()
         self._visual_version += 1
@@ -523,9 +574,9 @@ class PvpBoardView(discord.ui.View):
             else:
                 result = "Battle finished."
 
-        final_event = (
-            self._last_decisive_event.message if self._last_decisive_event else ""
-        )
+        final_event = self._visible_turn_events()
+        if not final_event and self._last_decisive_event:
+            final_event = self._last_decisive_event.message
         if (
             final_event
             and final_event not in result
@@ -533,6 +584,50 @@ class PvpBoardView(discord.ui.View):
         ):
             return f"{result}\n{final_event}"
         return result
+
+    def _visible_turn_events(self) -> str:
+        records = list(zip(self.turn_events, self._turn_event_steps))
+        if not records:
+            return ""
+
+        def is_primary(index: int) -> bool:
+            message, step = records[index]
+            event = step.event if step is not None else None
+            return (
+                bool(
+                    event is not None
+                    and (event.move_name or event.switch or event.fainted)
+                )
+                or " used " in message
+                or message.endswith(" entered the battle.")
+            )
+
+        mandatory = {index for index in range(len(records)) if is_primary(index)}
+        selected = set(mandatory)
+        omitted = False
+        for index in range(len(records)):
+            if index in selected:
+                continue
+            if len(selected) >= _MAX_TURN_EVENT_LINES:
+                omitted = True
+                continue
+            candidate = selected | {index}
+            rendered = "\n".join(
+                _truncate_turn_event(records[item][0]) for item in sorted(candidate)
+            )
+            if len(rendered) > _MAX_TURN_EVENT_CHARS:
+                omitted = True
+                continue
+            selected = candidate
+
+        rendered = "\n".join(
+            _truncate_turn_event(records[index][0]) for index in sorted(selected)
+        )
+        if len(selected) < len(records):
+            omitted = True
+        if omitted and len(rendered) + 36 <= _MAX_TURN_EVENT_CHARS:
+            rendered = f"{rendered}\n… Additional turn effects omitted."
+        return rendered
 
     async def _edit_message(self, *, force: bool = False) -> None:
         if self.message is None:
@@ -542,7 +637,13 @@ class PvpBoardView(discord.ui.View):
             return
         self._pending_edit = state
         if self._edit_task is None or self._edit_task.done():
-            self._edit_task = asyncio.create_task(self._flush_edits())
+            self._edit_task = register_task(
+                asyncio.create_task(
+                    self._flush_edits(), name=f"pvp-render:{self.session_id}"
+                ),
+                owner="PvpBoardView",
+                role="render",
+            )
 
     def _component_signature(self) -> tuple:
         return tuple(
@@ -732,7 +833,13 @@ class PvpBoardView(discord.ui.View):
 
     async def on_timeout(self) -> None:
         if self._edit_task is not None and not self._edit_task.done():
-            self._edit_task.cancel()
+            await cancel_task_safely(
+                self._edit_task,
+                current_task=asyncio.current_task(),
+                session_id=self.session_id,
+                owner="PvpBoardView",
+                reason="board timeout",
+            )
         if getattr(
             self.core.pvp_application_service,
             "is_cleaned_up",

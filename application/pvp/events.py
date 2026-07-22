@@ -162,6 +162,11 @@ class PvpEventTranslator:
                             actor=_pokemon_name(values[0]),
                             switch=_safe_protocol_text(values[1]),
                         )
+                    elif event == "cant" and len(values) >= 2:
+                        structured = PvpEvent(
+                            actor=_pokemon_name(values[0]),
+                            status=_safe_protocol_text(values[1]),
+                        )
                 if event == "-damage" and structured is not None:
                     has_direct_damage = structured.direct_damage is not None
                     structured = replace(
@@ -275,6 +280,14 @@ class PvpEventTranslator:
             return f"{display_species_name(values[0])} was immune."
         if event == "-fail" and values:
             return f"{display_species_name(values[0])}'s move failed."
+        if event == "cant" and len(values) >= 2:
+            reason = {
+                "flinch": "flinched",
+                "frz": "was frozen",
+                "par": "was fully paralyzed",
+                "slp": "was asleep",
+            }.get(str(values[1]).casefold(), f"could not move ({values[1]})")
+            return f"{display_species_name(values[0])} {reason}."
         if event == "-miss" and values:
             return f"{display_species_name(values[0])}'s move missed."
         if event == "-protect" and values:
