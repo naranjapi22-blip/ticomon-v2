@@ -145,4 +145,4 @@ async def test_collection_commands_report_invalid_type() -> None:
 
     await TopCog.top.callback(cog, ctx, "abc")
 
-    ctx.send.assert_awaited_once_with("Unknown Pokémon type: abc")
+    ctx.send.assert_awaited_once_with("Invalid top filter. Use:\n!top\n!top ivs")

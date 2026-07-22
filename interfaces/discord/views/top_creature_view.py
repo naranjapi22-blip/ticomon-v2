@@ -33,6 +33,15 @@ def format_ranked_creature_entry(
     )
 
 
+def format_iv_creature_entry(creature, position: int, species_emojis=None) -> str:
+    species_emoji = (species_emojis or {}).get(str(creature.species.pokeapi_id))
+    prefix = f"{species_emoji} " if species_emoji else ""
+    return (
+        f"{position}. {prefix}#{creature.collection_number} "
+        f"{creature.species.name.title()} — {creature.iv_percentage:.2f}%"
+    )
+
+
 class _MetricSelect(discord.ui.Select):
     def __init__(self, view: "TopCreatureView") -> None:
         super().__init__(

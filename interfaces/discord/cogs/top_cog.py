@@ -1,7 +1,7 @@
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
-from application.creature.creature_collection_service import TopMetric
+from application.creature.creature_collection_service import POKEMON_TYPES, TopMetric
 from interfaces.discord.application_emojis import get_application_emojis
 from interfaces.discord.cogs.collection_display import (
     build_empty_message,
@@ -10,7 +10,10 @@ from interfaces.discord.cogs.collection_display import (
 )
 from interfaces.discord.input_normalizer import normalize_text
 from interfaces.discord.views.creature_list_view import CreatureListView
-from interfaces.discord.views.top_creature_view import TopCreatureView
+from interfaces.discord.views.top_creature_view import (
+    TopCreatureView,
+    format_iv_creature_entry,
+)
 
 
 class TopCog(commands.Cog):
@@ -29,6 +32,41 @@ class TopCog(commands.Cog):
         normalized_type = (
             normalize_text(pokemon_type) if pokemon_type is not None else None
         )
+
+        if normalized_type not in (None, "iv", "ivs", *POKEMON_TYPES):
+            await ctx.send("Invalid top filter. Use:\n!top\n!top ivs")
+            return
+
+        if normalized_type in {"iv", "ivs"}:
+            creatures = await self.core.creature_collection_service.get_top_collection(
+                trainer_id=ctx.author.id,
+            )
+            if not creatures:
+                await ctx.send(build_empty_message(type_name=None, shiny_only=False))
+                return
+            creatures = sorted(
+                creatures,
+                key=lambda creature: (
+                    -creature.iv_percentage,
+                    (
+                        creature.collection_number
+                        if creature.collection_number is not None
+                        else float("inf")
+                    ),
+                ),
+            )
+            emojis = await get_application_emojis(ctx.bot)
+            view = CreatureListView(
+                author_id=ctx.author.id,
+                title="Top Pokémon — IVs",
+                entries=[
+                    format_iv_creature_entry(creature, position, emojis)
+                    for position, creature in enumerate(creatures, start=1)
+                ],
+            )
+            message = await ctx.send(embed=view.build_embed(), view=view)
+            view.message = message
+            return
 
         try:
             rankings_service = getattr(
