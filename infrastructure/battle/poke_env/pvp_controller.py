@@ -158,6 +158,7 @@ class ManualPvpPlayer(Player):
         self._callbacks = callbacks
         self._callback_tasks = callback_tasks
         self._capture_sprite_urls = capture_sprite_urls or {}
+        self._pokeapi_ids = kwargs.pop("pokeapi_ids", {})
         self._closing = False
         self.background_errors: list[BaseException] = []
         self._pending_finished_battles: list[AbstractBattle] = []
@@ -226,6 +227,7 @@ class ManualPvpPlayer(Player):
                         player_id=self.trainer_id,
                         opponent_id=self.opponent_id or 0,
                         capture_sprite_urls=self._capture_sprite_urls,
+                        pokeapi_ids=self._pokeapi_ids,
                     )
                 )
             if battle.finished and id(battle) not in self._finished_battle_ids:
@@ -358,6 +360,7 @@ class PokeEnvPvpController:
             trainer_id: self._pack_team(team) for trainer_id, team in teams.items()
         }
         capture_sprite_urls = self._capture_sprite_urls(teams)
+        pokeapi_ids = self._pokeapi_ids(teams)
         player_kwargs = {
             "callbacks": callbacks,
             "loop": asyncio.get_running_loop(),
@@ -366,6 +369,7 @@ class PokeEnvPvpController:
                 authentication_url=authentication_url,
             ),
             "capture_sprite_urls": capture_sprite_urls,
+            "pokeapi_ids": pokeapi_ids,
         }
         last_error = None
         for attempt in range(1, 4):
@@ -594,6 +598,20 @@ class PokeEnvPvpController:
                     creature
                 )
         return urls
+
+    def _pokeapi_ids(
+        self, teams: dict[int, tuple[Creature, ...]]
+    ) -> dict[tuple[str, bool], int]:
+        ids: dict[tuple[str, bool], int] = {}
+        for team in teams.values():
+            for creature in team:
+                data = self._set_adapter.to_showdown_set(creature)
+                identifier = showdown_sprite_identifier(
+                    data.species,
+                    creature.current_form.name if creature.current_form else None,
+                )
+                ids[(identifier, creature.is_shiny)] = creature.species.pokeapi_id
+        return ids
 
 
 class _RetrievedTaskSet(set):

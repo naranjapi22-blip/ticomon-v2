@@ -19,7 +19,7 @@ from core.pvp.session import (
     FORCED_SWITCH_TIMEOUT_SECONDS,
     PvpPhase,
 )
-from rendering.battle.pvp_sprite_urls import pvp_sprite_url
+from interfaces.discord.activity.sprite_urls import activity_sprite_url
 
 logger = logging.getLogger(__name__)
 
@@ -397,10 +397,10 @@ def pokemon_to_dto(
 ) -> dict | None:
     if pokemon is None:
         return None
-    sprite_url = pokemon.capture_sprite_url
-    if sprite_url is None and pokemon.sprite_identifier:
-        sprite_url = pvp_sprite_url(
-            pokemon.sprite_identifier,
+    sprite_url = None
+    if pokemon.pokeapi_id is not None:
+        sprite_url = activity_sprite_url(
+            pokemon.pokeapi_id,
             player_side=player_side,
             shiny=pokemon.shiny,
         )

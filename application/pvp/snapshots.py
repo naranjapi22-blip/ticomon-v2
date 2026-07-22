@@ -18,6 +18,7 @@ class PvpPokemonSnapshot:
     sprite_identifier: str | None = None
     capture_sprite_url: str | None = None
     shiny: bool = False
+    pokeapi_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ def snapshot_battle(
     player_id: int,
     opponent_id: int,
     capture_sprite_urls: dict[tuple[str, bool], str] | None = None,
+    pokeapi_ids: dict[tuple[str, bool], int] | None = None,
 ) -> PvpBattleSnapshot:
     player_team = tuple(battle.team.values())
     opponent_team = tuple(battle.opponent_team.values())
@@ -61,10 +63,12 @@ def snapshot_battle(
         player_active=_pokemon_snapshot(
             getattr(battle, "active_pokemon", None),
             capture_sprite_urls=capture_sprite_urls,
+            pokeapi_ids=pokeapi_ids,
         ),
         opponent_active=_pokemon_snapshot(
             getattr(battle, "opponent_active_pokemon", None),
             capture_sprite_urls=capture_sprite_urls,
+            pokeapi_ids=pokeapi_ids,
         ),
         player_remaining=sum(not pokemon.fainted for pokemon in player_team),
         opponent_remaining=sum(not pokemon.fainted for pokemon in opponent_team),
@@ -79,6 +83,7 @@ def snapshot_battle(
             _pokemon_snapshot(
                 pokemon,
                 capture_sprite_urls=capture_sprite_urls,
+                pokeapi_ids=pokeapi_ids,
             )
             for pokemon in player_team
         ),
@@ -86,6 +91,7 @@ def snapshot_battle(
             _pokemon_snapshot(
                 pokemon,
                 capture_sprite_urls=capture_sprite_urls,
+                pokeapi_ids=pokeapi_ids,
             )
             for pokemon in opponent_team
         ),
@@ -96,6 +102,7 @@ def _pokemon_snapshot(
     pokemon,
     *,
     capture_sprite_urls: dict[tuple[str, bool], str] | None = None,
+    pokeapi_ids: dict[tuple[str, bool], int] | None = None,
 ) -> PvpPokemonSnapshot | None:
     if pokemon is None:
         return None
@@ -138,4 +145,5 @@ def _pokemon_snapshot(
         sprite_identifier=sprite_identifier,
         capture_sprite_url=(capture_sprite_urls or {}).get((sprite_identifier, shiny)),
         shiny=shiny,
+        pokeapi_id=(pokeapi_ids or {}).get((sprite_identifier, shiny)),
     )

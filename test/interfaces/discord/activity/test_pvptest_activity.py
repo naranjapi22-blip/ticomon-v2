@@ -50,6 +50,7 @@ def _snapshot(player_id=10):
         status=None,
         fainted=False,
         sprite_identifier="pikachu",
+        pokeapi_id=25,
     )
     return PvpBattleSnapshot(
         turn=2,
@@ -196,7 +197,34 @@ def test_activity_event_and_pokemon_dtos_are_serializable():
     assert event["kind"] == "move"
     pokemon = pokemon_to_dto(_snapshot().player_active, player_side=True)
     assert pokemon["name"] == "Pikachu"
-    assert pokemon["sprite_url"].endswith("/PVP/back/pikachu.gif")
+    assert pokemon["sprite_url"].endswith("/back/25.gif")
+
+
+@pytest.mark.parametrize(
+    ("name", "pokeapi_id"),
+    [("Bulbasaur", 1), ("Kadabra", 64), ("Chandelure", 609)],
+)
+def test_activity_sprites_use_pokeapi_ids(name, pokeapi_id):
+    pokemon = PvpPokemonSnapshot(
+        species_name=name,
+        form_name=None,
+        current_hp=100,
+        max_hp=100,
+        hp_fraction=1.0,
+        status=None,
+        fainted=False,
+        pokeapi_id=pokeapi_id,
+    )
+
+    opponent = pokemon_to_dto(pokemon, player_side=False)
+    player = pokemon_to_dto(pokemon, player_side=True)
+
+    assert opponent["sprite_url"] == (
+        f"https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/regular/{pokeapi_id}.gif"
+    )
+    assert player["sprite_url"] == (
+        f"https://pub-23cb564f6c174627926c1ac0409563d4.r2.dev/back/{pokeapi_id}.gif"
+    )
 
 
 @pytest.mark.asyncio

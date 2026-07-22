@@ -1,10 +1,16 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
+import {
+  isAuthorizedRole,
+  resolveActivitySprite,
+  shouldShowBlockingSetup,
+} from "./activity_ui_state.js";
 import "./style.css";
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
 const apiOrigin = import.meta.env.VITE_ACTIVITY_API_ORIGIN?.trim() || "";
 const elements = {
   runtimeStatus: document.querySelector("#runtime-status"),
+  connectionStatus: document.querySelector("#connection-status"),
   setupScreen: document.querySelector("#setup-screen"),
   setupMessage: document.querySelector("#setup-message"),
   setupDetail: document.querySelector("#setup-detail"),
@@ -45,6 +51,8 @@ const state = {
   timer: null,
   reconnecting: false,
   reconnectAttempt: 0,
+  authenticating: false,
+  intentionalSocketClose: false,
 };
 
 elements.forfeit.addEventListener("click", () => {
@@ -77,7 +85,7 @@ async function initialize() {
   } catch (error) {
     console.error("Activity initialization failed.", error);
     setRuntime("Activity error");
-    showSetup("Activity initialization failed.", error.message || "Try reopening the Activity.");
+    showConnectionFailure("Activity initialization failed.", error.message || "Try reopening the Activity.");
   }
 }
 
@@ -101,29 +109,44 @@ function updateSdkPresence(participants) {
 }
 
 async function authenticate() {
-  setSetup("Authenticating with Discord...", "The server verifies the Discord identity before matching the battle.");
-  const challenge = await requestJson("/api/activity/auth/challenge");
-  const { code } = await state.discordSdk.commands.authorize({
-    client_id: clientId,
-    response_type: "code",
-    state: challenge.state,
-    prompt: "none",
-    scope: ["identify"],
-  });
-  const auth = await requestJson("/api/activity/auth", {
-    method: "POST",
-    body: JSON.stringify({ code, state: challenge.state }),
-  });
-  state.sessionToken = auth.session_token;
+  state.authenticating = true;
+  showConnectionState("Authenticating with Discord...");
+  try {
+    const challenge = await requestJson("/api/activity/auth/challenge");
+    const { code } = await state.discordSdk.commands.authorize({
+      client_id: clientId,
+      response_type: "code",
+      state: challenge.state,
+      prompt: "none",
+      scope: ["identify"],
+    });
+    const auth = await requestJson("/api/activity/auth", {
+      method: "POST",
+      body: JSON.stringify({ code, state: challenge.state }),
+    });
+    state.sessionToken = auth.session_token;
+    clearActivityOverlay("Connecting to the battle...");
+  } finally {
+    state.authenticating = false;
+  }
 }
 
 function connectSocket() {
+  const wasReconnecting = state.reconnecting;
   state.reconnecting = false;
-  state.sequence = 0;
+  if (!wasReconnecting && !state.snapshot) {
+    state.sequence = 0;
+  }
+  if (state.snapshot) {
+    showConnectionState("Reconnecting to the battle...");
+  }
   const wsUrl = new URL("/api/activity/pvptest/ws", apiOrigin || window.location.origin);
   wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
   state.socket = new WebSocket(wsUrl);
   state.socket.addEventListener("open", () => {
+    if (state.snapshot) {
+      showConnectionState("Syncing the current battle...");
+    }
     state.socket.send(JSON.stringify({
       type: "authenticate",
       session_token: state.sessionToken,
@@ -141,12 +164,16 @@ function connectSocket() {
     }
   });
   state.socket.addEventListener("close", () => {
+    if (state.intentionalSocketClose) {
+      state.intentionalSocketClose = false;
+      return;
+    }
     if (state.phase === "finished" || state.phase === "unauthorized") {
       return;
     }
     state.reconnecting = true;
     setRuntime("Reconnecting");
-    setSetup("Reconnecting to the battle...", "Your next snapshot will restore the current server state.");
+    showConnectionState("Reconnecting to the battle...");
     window.setTimeout(connectSocket, Math.min(5000, 500 * 2 ** state.reconnectAttempt++));
   });
   state.socket.addEventListener("error", () => {
@@ -162,6 +189,10 @@ function handleServerMessage(message) {
   }
   if (message.type === "error") {
     showError(message.message);
+    if (message.message?.toLowerCase().includes("expired")) {
+      refreshAuthentication();
+      return;
+    }
     if (message.message?.includes("not a player")) {
       state.phase = "unauthorized";
       showSetup("Unauthorized Activity user.", "Only the two selected !pvptest players can control this battle.");
@@ -170,7 +201,9 @@ function handleServerMessage(message) {
   }
   if (message.type === "connection_ready") {
     state.role = message.role;
-    if (state.role === "unauthorized") {
+    if (isAuthorizedRole(state.role)) {
+      clearActivityOverlay("Connected to the battle.");
+    } else {
       state.phase = "unauthorized";
       showSetup("Unauthorized Activity user.", "You can observe the Activity, but only the selected players can act.");
     }
@@ -191,7 +224,7 @@ function handleServerMessage(message) {
     if (state.role === "unauthorized") {
       showSetup("Unauthorized Activity user.", "You can observe the Activity, but only the selected players can act.");
     } else {
-      showBattle();
+      clearActivityOverlay("Connected to the battle.");
       elements.message.textContent = phaseMessage(message.phase);
     }
     return;
@@ -207,6 +240,7 @@ function handleServerMessage(message) {
     state.phase = message.phase;
     state.pendingAction = false;
     state.deadline = message.deadline;
+    clearActivityOverlay("");
     renderSnapshot(message);
   } else if (message.type === "battle_events") {
     state.pendingAction = false;
@@ -241,11 +275,24 @@ function renderSnapshot(snapshot) {
 }
 
 function renderPokemon(element, pokemon, playerSide) {
-  if (!pokemon?.sprite_url) {
+  const sprite = resolveActivitySprite(pokemon);
+  element.classList.remove("sprite-missing");
+  element.removeAttribute("data-sprite-error");
+  element.alt = sprite.alt || (playerSide ? "Your Pokemon" : "Opponent Pokemon");
+  if (!sprite.source) {
+    element.removeAttribute("src");
+    markSpriteMissing(element);
     return;
   }
-  element.src = pokemon.sprite_url;
-  element.alt = pokemon.name || (playerSide ? "Your Pokémon" : "Opponent Pokémon");
+  element.hidden = false;
+  element.src = sprite.source;
+  return;
+}
+function markSpriteMissing(element) {
+  element.hidden = true;
+  element.classList.add("sprite-missing");
+  element.dataset.spriteError = "true";
+  showError(`Could not load ${element.alt || "battle sprite"}.`);
 }
 
 function renderHp(fill, text, pokemon) {
@@ -328,6 +375,39 @@ function setSetup(message, detail) {
   elements.setupDetail.textContent = detail;
 }
 
+function showConnectionState(message, isError = false) {
+  if (
+    state.snapshot ||
+    !shouldShowBlockingSetup({ hasSnapshot: false, message })
+  ) {
+    elements.connectionStatus.hidden = !message;
+    elements.connectionStatus.textContent = message;
+    elements.connectionStatus.dataset.state = isError ? "error" : "info";
+    showBattle();
+    return;
+  }
+  setSetup(message, "The backend remains authoritative for the current battle state.");
+  elements.setupScreen.hidden = false;
+  elements.battleScreen.hidden = true;
+}
+
+function clearActivityOverlay(status = "") {
+  elements.setupScreen.hidden = true;
+  elements.battleScreen.hidden = false;
+  elements.connectionStatus.hidden = !status;
+  elements.connectionStatus.textContent = status;
+  elements.connectionStatus.dataset.state = "info";
+}
+
+function showConnectionFailure(message, detail) {
+  if (state.snapshot) {
+    showConnectionState(message, true);
+    showError(detail);
+    return;
+  }
+  showSetup(message, detail);
+}
+
 function showSetup(message, detail) {
   setSetup(message, detail);
   elements.setupScreen.hidden = false;
@@ -342,6 +422,22 @@ function showBattle() {
 function showError(message) {
   elements.errorMessage.hidden = false;
   elements.errorMessage.textContent = message;
+}
+
+async function refreshAuthentication() {
+  if (state.authenticating) {
+    return;
+  }
+  try {
+    showConnectionState("Refreshing Discord authorization...");
+    await authenticate();
+    state.intentionalSocketClose = true;
+    state.socket?.close();
+    connectSocket();
+  } catch (error) {
+    console.error("Activity authorization refresh failed.", error);
+    showConnectionFailure("Activity authorization failed.", error.message || "Try reopening the Activity.");
+  }
 }
 
 function phaseMessage(phase) {
@@ -388,7 +484,7 @@ function startTimer() {
 }
 
 [elements.player, elements.opponent].forEach((element) => {
-  element.addEventListener("error", () => showError(`Could not load ${element.alt || "battle sprite"}.`));
+  element.addEventListener("error", () => markSpriteMissing(element));
 });
 
 startTimer();
