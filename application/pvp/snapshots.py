@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from application.pvp.models import PvpEvent
 from rendering.battle.pvp_sprite_urls import showdown_sprite_identifier
 
 
@@ -35,6 +36,8 @@ class PvpBattleSnapshot:
     tie: bool
     player_team: tuple[PvpPokemonSnapshot, ...] = ()
     opponent_team: tuple[PvpPokemonSnapshot, ...] = ()
+    last_decisive_event: PvpEvent | None = None
+    last_decisive_event_turn: int | None = None
 
 
 def snapshot_battle(
@@ -115,14 +118,23 @@ def _pokemon_snapshot(
         species_identifier,
     )
     shiny = bool(getattr(pokemon, "is_shiny", False))
+    current_hp = getattr(pokemon, "current_hp", None)
+    fainted = bool(getattr(pokemon, "fainted", False)) or current_hp == 0
+    if fainted:
+        status_name = "FNT"
+        current_hp = 0
     return PvpPokemonSnapshot(
         species_name=species_name,
         form_name=getattr(pokemon, "forme", None),
-        current_hp=getattr(pokemon, "current_hp", None),
+        current_hp=current_hp,
         max_hp=getattr(pokemon, "max_hp", None),
-        hp_fraction=float(getattr(pokemon, "current_hp_fraction", 0.0) or 0.0),
+        hp_fraction=(
+            0.0
+            if fainted
+            else float(getattr(pokemon, "current_hp_fraction", 0.0) or 0.0)
+        ),
         status=status_name,
-        fainted=bool(getattr(pokemon, "fainted", False)),
+        fainted=fainted,
         sprite_identifier=sprite_identifier,
         capture_sprite_url=(capture_sprite_urls or {}).get((sprite_identifier, shiny)),
         shiny=shiny,

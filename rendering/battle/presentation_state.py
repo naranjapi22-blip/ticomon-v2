@@ -33,3 +33,5 @@ class BattlePresentationState:
     winner_id: int | None = None
     draw: bool = False
     waiting_text: str | None = None
+    last_decisive_event: object | None = None
+    last_decisive_event_turn: int | None = None

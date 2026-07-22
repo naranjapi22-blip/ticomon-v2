@@ -14,13 +14,17 @@ MAX_PVP_DURATION_SECONDS = 1800
 
 class PvpPhase(str, Enum):
     CHALLENGE = "challenge"
+    PENDING_CHALLENGE = "challenge"
     TEAM_SELECTION = "team_selection"
+    SELECTING_TEAMS = "team_selection"
     STARTING = "starting"
     WAITING_FOR_ACTIONS = "waiting_for_actions"
+    ACTIVE = "waiting_for_actions"
     RESOLVING = "resolving"
     FORCED_SWITCH = "forced_switch"
     FINALIZING = "finalizing"
     FINISHED = "finished"
+    CLEANED_UP = "cleaned_up"
     CANCELLED = "cancelled"
 
 
@@ -46,6 +50,7 @@ class PvpSession:
     final_winner_id: int | None = field(default=None, repr=False)
     final_winner_name: str | None = field(default=None, repr=False)
     final_tie: bool = field(default=False, repr=False)
+    final_reason: str | None = field(default=None, repr=False)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     @property
@@ -137,7 +142,17 @@ class PvpSession:
         return tuple(self.selected_actions.items())
 
     def finish(self) -> None:
+        if self.phase is not PvpPhase.FINALIZING:
+            raise ValueError("Only a finalizing PvP session can finish.")
         self.phase = PvpPhase.FINISHED
+        self.active_action_requests.clear()
+
+    def mark_cleaned_up(self) -> None:
+        if self.phase is PvpPhase.CLEANED_UP:
+            return
+        if self.phase not in {PvpPhase.FINISHED, PvpPhase.CANCELLED}:
+            raise ValueError("Only a finished PvP session can be cleaned up.")
+        self.phase = PvpPhase.CLEANED_UP
         self.active_action_requests.clear()
 
     def cancel(self) -> None:

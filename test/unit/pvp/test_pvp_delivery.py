@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -586,3 +587,52 @@ async def test_non_canonical_damage_arriving_first_does_not_consume_canonical_ev
     assert len(events) == 1
     assert "152 damage" in events[0].message
     await service.cleanup(session.id)
+
+
+@pytest.mark.asyncio
+async def test_terminal_batch_delivers_canonical_decisive_event_before_finalization():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    events = []
+    snapshots = []
+
+    async def collect(step):
+        events.append(step)
+
+    async def collect_snapshot(snapshot):
+        snapshots.append(snapshot)
+
+    service._event_handlers[session.id] = collect
+    service._event_translators[session.id] = PvpEventTranslator(1, 2)
+    service._snapshot_handlers[session.id] = collect_snapshot
+    session.turn_number = 2
+    await service.handle_snapshot(
+        session.id, replace(_damage_snapshot(), opponent_remaining=1)
+    )
+    session.battle_controller = SimpleNamespace(
+        resolve_winner=lambda _username: 1,
+        close=AsyncMock(),
+    )
+
+    await service.handle_protocol(
+        session.id,
+        [
+            ["battle", "move", "p1a: Hydrapple", "Leaf Storm", "p2a: Tyranitar"],
+            ["battle", "-damage", "p2a: Tyranitar", "0/201"],
+            ["battle", "faint", "p2a: Tyranitar"],
+            ["battle", "win", "Orange"],
+        ],
+        source_player_id=1,
+    )
+
+    assert len(events) == 1
+    assert events[0].turn == 2
+    assert events[0].event.fainted
+    assert events[0].event.direct_damage == 201
+    final_snapshot = snapshots[-1]
+    assert final_snapshot.last_decisive_event == events[0].event
+    assert final_snapshot.opponent_active.current_hp == 0
+    assert final_snapshot.opponent_active.status == "FNT"
+    assert final_snapshot.opponent_remaining == 0
+    assert final_snapshot.player_remaining == 3
+    assert session.phase is PvpPhase.CLEANED_UP

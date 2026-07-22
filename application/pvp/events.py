@@ -162,6 +162,33 @@ class PvpEventTranslator:
                             actor=_pokemon_name(values[0]),
                             switch=_safe_protocol_text(values[1]),
                         )
+                if event == "-damage" and structured is not None:
+                    has_direct_damage = structured.direct_damage is not None
+                    structured = replace(
+                        structured,
+                        target=_pokemon_name(values[0]),
+                        damage=(
+                            structured.damage
+                            if source != "direct" and has_direct_damage
+                            else damage
+                        ),
+                        direct_damage=(
+                            damage if source == "direct" else structured.direct_damage
+                        ),
+                        damage_source=(
+                            structured.damage_source
+                            if source != "direct" and has_direct_damage
+                            else source
+                        ),
+                        indirect_damage=(
+                            damage if source != "direct" else structured.indirect_damage
+                        ),
+                        indirect_damage_source=(
+                            source
+                            if source != "direct"
+                            else structured.indirect_damage_source
+                        ),
+                    )
                 if text:
                     summary.append(text)
                 structured = self._update_structured(structured, event, values)

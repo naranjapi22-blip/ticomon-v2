@@ -68,6 +68,8 @@ class PvpEvent:
     damage: int | None = None
     direct_damage: int | None = None
     damage_source: str | None = None
+    indirect_damage: int | None = None
+    indirect_damage_source: str | None = None
     effectiveness: str | None = None
     critical: bool = False
     status: str | None = None
@@ -77,12 +79,28 @@ class PvpEvent:
     switch: str | None = None
 
 
+def is_decisive_event(event: PvpEvent | None) -> bool:
+    """Return whether an event is useful context for a terminal result."""
+    if event is None:
+        return False
+    return bool(
+        event.move_name
+        or event.damage is not None
+        or event.healing is not None
+        or event.fainted
+        or event.status
+        or event.stat_changes
+        or event.switch
+    )
+
+
 @dataclass(frozen=True)
 class PvpPresentationStep:
     message: str
     board_state: PvpBoardState | None = None
     delay_seconds: float = 0.0
     event: PvpEvent | None = None
+    turn: int | None = None
 
 
 @dataclass

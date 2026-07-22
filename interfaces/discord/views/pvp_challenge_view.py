@@ -9,7 +9,12 @@ from dataclasses import replace
 import discord
 
 from application.pvp.events import display_species_name
-from application.pvp.models import PvpAction, PvpActionKind, PvpPresentationStep
+from application.pvp.models import (
+    PvpAction,
+    PvpActionKind,
+    PvpPresentationStep,
+    is_decisive_event,
+)
 from application.pvp.presentation_adapter import pvp_presentation_state
 from application.pvp.snapshots import PvpBattleSnapshot
 from core.pvp.session import PvpPhase
@@ -246,6 +251,8 @@ class PvpTeamSelectionView(discord.ui.View):
         await board.finish()
 
     async def on_timeout(self) -> None:
+        if self.superseded:
+            return
         await self.core.pvp_application_service.cleanup(self.session_id)
         for child in self.children:
             child.disabled = True
@@ -269,6 +276,7 @@ class PvpBoardView(discord.ui.View):
         self.source = source
         self.display_names = dict(getattr(source, "display_names", {}))
         self.current_event = ""
+        self._last_decisive_event: PvpPresentationStep | None = None
         self.recent_events: list[str] = []
         self.ready: set[int] = set()
         self.snapshot: PvpBattleSnapshot | None = None
@@ -439,6 +447,8 @@ class PvpBoardView(discord.ui.View):
         ):
             return
         self.current_event = message
+        if isinstance(step, PvpPresentationStep) and is_decisive_event(step.event):
+            self._last_decisive_event = step
         turn = self.snapshot.turn if self.snapshot is not None else 0
         self.recent_events.append(f"Turn {turn} · {message}"[:240])
         self.recent_events = self.recent_events[-3:]
@@ -489,19 +499,40 @@ class PvpBoardView(discord.ui.View):
             session = self.core.pvp_application_service.registry.get(self.session_id)
         except ValueError:
             session = None
-        snapshot = self._display_snapshot()
-        if (session is not None and session.final_tie) or snapshot.tie:
-            return "The battle ended in a draw."
-        winner_id = (
-            session.final_winner_id
-            if session is not None and session.final_winner_id is not None
-            else snapshot.winner_id
+        snapshot = self._display_snapshot() if self.snapshot is not None else None
+        result: str
+        if (session is not None and session.final_tie) or (
+            snapshot is not None and snapshot.tie
+        ):
+            result = "The battle ended in a draw."
+        else:
+            winner_id = (
+                session.final_winner_id
+                if session is not None and session.final_winner_id is not None
+                else (snapshot.winner_id if snapshot is not None else None)
+            )
+            reason = session.final_reason if session is not None else None
+            if winner_id is not None and reason == "forfeit":
+                result = f"{self._visible_name(winner_id)} won by forfeit."
+            elif winner_id is not None and reason == "timeout":
+                result = f"{self._visible_name(winner_id)} won by timeout."
+            elif winner_id is not None:
+                result = f"{self._visible_name(winner_id)} won the battle."
+            elif session is not None and session.final_winner_name:
+                result = "Battle finished. Winner could not be resolved."
+            else:
+                result = "Battle finished."
+
+        final_event = (
+            self._last_decisive_event.message if self._last_decisive_event else ""
         )
-        if winner_id is not None:
-            return f"{self._visible_name(winner_id)} won the battle."
-        if session is not None and session.final_winner_name:
-            return "Battle finished. Winner could not be resolved."
-        return "Battle finished."
+        if (
+            final_event
+            and final_event not in result
+            and not final_event.endswith((" won the battle.", "ended in a tie."))
+        ):
+            return f"{result}\n{final_event}"
+        return result
 
     async def _edit_message(self, *, force: bool = False) -> None:
         if self.message is None:
@@ -525,6 +556,12 @@ class PvpBoardView(discord.ui.View):
 
     async def _flush_edits(self) -> None:
         while self._pending_edit is not None and self.message is not None:
+            service = self.core.pvp_application_service
+            if getattr(service, "is_cleaned_up", lambda _session_id: False)(
+                self.session_id
+            ):
+                self._pending_edit = None
+                return
             wait = self._edit_interval - (time.monotonic() - self._last_edit_at)
             if wait > 0:
                 await asyncio.sleep(wait)
@@ -696,6 +733,12 @@ class PvpBoardView(discord.ui.View):
     async def on_timeout(self) -> None:
         if self._edit_task is not None and not self._edit_task.done():
             self._edit_task.cancel()
+        if getattr(
+            self.core.pvp_application_service,
+            "is_cleaned_up",
+            lambda _session_id: False,
+        )(self.session_id):
+            return
         if self.message is not None:
             try:
                 await self.message.edit(view=None)

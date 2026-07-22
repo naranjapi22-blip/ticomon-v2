@@ -35,6 +35,8 @@ def pvp_presentation_state(
         draw=snapshot.tie,
         waiting_text=waiting_text
         or ("Forced switch required" if snapshot.force_switch_player else None),
+        last_decisive_event=snapshot.last_decisive_event,
+        last_decisive_event_turn=snapshot.last_decisive_event_turn,
     )
 
 

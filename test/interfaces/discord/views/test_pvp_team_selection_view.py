@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
+from application.pvp.models import (
+    PvpAction,
+    PvpActionKind,
+    PvpEvent,
+    PvpLegalActions,
+    PvpPresentationStep,
+)
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
 from core.pvp.session import PvpPhase, PvpSessionRegistry
 from interfaces.discord.views.creature_selection_view import CreatureSelectionView
@@ -494,6 +500,68 @@ async def test_finished_board_replaces_previous_components_and_announces_winner(
 
 
 @pytest.mark.asyncio
+async def test_finished_board_keeps_the_decisive_event_with_the_result():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    session.final_winner_id = 1
+    message = SimpleNamespace(edit=AsyncMock())
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=message,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    board._edit_interval = 0
+    await board.set_event(
+        PvpPresentationStep(
+            "Zacian used Play Rough. Tyranitar was knocked out.",
+            event=PvpEvent(
+                actor="Zacian",
+                target="Tyranitar",
+                move_name="Play Rough",
+                damage=150,
+                direct_damage=150,
+                fainted=True,
+            ),
+        )
+    )
+
+    await board.finish()
+
+    content = message.edit.await_args.kwargs["content"]
+    assert content.endswith(
+        "Orange won the battle.\n" "Zacian used Play Rough. Tyranitar was knocked out."
+    )
+    assert content.count("Tyranitar was knocked out.") == 1
+
+
+@pytest.mark.asyncio
+async def test_finished_board_without_final_snapshot_still_delivers_result():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    session.final_winner_id = 2
+    message = SimpleNamespace(edit=AsyncMock())
+    source = SimpleNamespace(
+        core=SimpleNamespace(
+            pvp_application_service=SimpleNamespace(registry=registry)
+        ),
+        session_id=session.id,
+        message=message,
+        display_names={1: "Orange", 2: "Jorroco"},
+    )
+    board = PvpBoardView(source)
+    board._edit_interval = 0
+
+    await board.finish()
+
+    assert "Jorroco won the battle." in message.edit.await_args.kwargs["content"]
+    assert message.edit.await_args.kwargs["view"] is None
+
+
+@pytest.mark.asyncio
 async def test_superseded_challenge_timeout_cannot_restore_components():
     registry = PvpSessionRegistry()
     session = registry.create(1, 2)
@@ -501,6 +569,26 @@ async def test_superseded_challenge_timeout_cannot_restore_components():
     message = SimpleNamespace(edit=AsyncMock())
     service = SimpleNamespace(registry=registry, cleanup=AsyncMock())
     view = PvpChallengeView(
+        SimpleNamespace(pvp_application_service=service),
+        session,
+        {1: "Orange", 2: "Jorroco"},
+    )
+    view.message = message
+    view.superseded = True
+
+    await view.on_timeout()
+
+    message.edit.assert_not_awaited()
+    service.cleanup.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_superseded_team_selection_timeout_cannot_cleanup_active_board():
+    registry = PvpSessionRegistry()
+    session = registry.create(1, 2)
+    message = SimpleNamespace(edit=AsyncMock())
+    service = SimpleNamespace(registry=registry, cleanup=AsyncMock())
+    view = PvpTeamSelectionView(
         SimpleNamespace(pvp_application_service=service),
         session,
         {1: "Orange", 2: "Jorroco"},
