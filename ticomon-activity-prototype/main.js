@@ -7,6 +7,12 @@ import {
   shouldShowBlockingSetup,
 } from "./activity_ui_state.js";
 import { authenticateActivity } from "./activity_auth.js";
+import {
+  ActivityPresentationQueue,
+  replaceSpriteAfterPreload,
+  shouldRestoreSnapshotImmediately,
+  shouldExposeControls,
+} from "./activity_presentation.js";
 import "./style.css";
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
@@ -57,7 +63,22 @@ const state = {
   authenticating: false,
   intentionalSocketClose: false,
   freshAuthRetryUsed: false,
+  presentationBusy: false,
+  restoringSnapshot: false,
+  snapshotReceived: false,
 };
+
+const presentationQueue = new ActivityPresentationQueue({
+  present: presentQueuedMessage,
+  onStart: () => {
+    state.presentationBusy = true;
+    hideActionControls();
+  },
+  onIdle: () => {
+    state.presentationBusy = false;
+    renderControls(state.snapshot?.legal_actions);
+  },
+});
 
 elements.forfeit.addEventListener("click", () => {
   if (state.pendingAction || !state.socket || state.socket.readyState !== WebSocket.OPEN) {
@@ -137,6 +158,7 @@ async function authenticate(initialLaunch = false) {
 function connectSocket() {
   const wasReconnecting = state.reconnecting;
   state.reconnecting = false;
+  state.restoringSnapshot = wasReconnecting && Boolean(state.snapshot);
   if (!wasReconnecting && !state.snapshot) {
     state.sequence = 0;
   }
@@ -232,26 +254,36 @@ function handleServerMessage(message) {
     }
     return;
   }
-  if (message.sequence !== undefined && message.sequence <= state.sequence) {
+  if (
+    message.sequence !== undefined &&
+    message.sequence <= state.sequence &&
+    !(message.type === "battle_snapshot" && state.restoringSnapshot)
+  ) {
     return;
   }
   if (message.sequence !== undefined) {
     state.sequence = message.sequence;
   }
   if (message.type === "battle_snapshot") {
-    state.snapshot = message;
-    state.phase = message.phase;
-    state.pendingAction = false;
-    state.deadline = message.deadline;
-    clearActivityOverlay("");
-    renderSnapshot(message);
-  } else if (message.type === "battle_events") {
-    state.pendingAction = false;
-    const event = message.events?.at(-1);
-    if (event) {
-      elements.message.textContent = event.message || event.kind;
-      animateEvent(event);
+    if (shouldRestoreSnapshotImmediately({
+      reconnecting: state.restoringSnapshot,
+      hasSnapshot: Boolean(state.snapshot),
+    })) {
+      state.restoringSnapshot = false;
+      presentSnapshot(message, { restore: true });
+    } else {
+      presentationQueue.enqueue({ ...message, initial: !state.snapshotReceived });
+      state.snapshotReceived = true;
     }
+  } else if (message.type === "battle_events") {
+    message.events?.forEach((event, index) => {
+      presentationQueue.enqueue({
+        type: "battle_events",
+        sequence: message.sequence,
+        index,
+        event,
+      });
+    });
   } else if (message.type === "battle_finished") {
     state.phase = "finished";
     state.pendingAction = true;
@@ -262,34 +294,57 @@ function handleServerMessage(message) {
   }
 }
 
-function renderSnapshot(snapshot) {
+async function presentQueuedMessage(item) {
+  if (item.type === "battle_snapshot") {
+    await presentSnapshot(item);
+  } else if (item.type === "battle_events") {
+    elements.message.textContent = item.event.message || item.event.kind;
+    animateEvent(item.event);
+  }
+}
+
+async function presentSnapshot(snapshot, { restore = false } = {}) {
+  state.snapshot = snapshot;
+  state.phase = snapshot.phase;
+  state.deadline = snapshot.deadline;
+  state.pendingAction = false;
+  clearActivityOverlay("");
+  await renderSnapshot(snapshot);
+  if (restore) {
+    renderControls(snapshot.legal_actions);
+  }
+}
+
+async function renderSnapshot(snapshot) {
   showBattle();
   elements.turnLabel.textContent = `Turn ${snapshot.turn}`;
   elements.message.textContent = snapshot.message?.message || phaseMessage(snapshot.phase);
-  renderPokemon(elements.player, snapshot.self, true);
-  renderPokemon(elements.opponent, snapshot.opponent, false);
+  await Promise.all([
+    renderPokemon(elements.player, snapshot.self),
+    renderPokemon(elements.opponent, snapshot.opponent),
+  ]);
   renderHp(elements.playerHp, elements.playerHpText, snapshot.self);
   renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent);
   elements.playerStatus.textContent = snapshot.self?.status || "";
   elements.opponentStatus.textContent = snapshot.opponent?.status || "";
   renderTeam(elements.playerTeam, snapshot.self_team, snapshot.self_remaining);
   renderTeam(elements.opponentTeam, snapshot.opponent_team, snapshot.opponent_remaining);
-  renderControls(snapshot.legal_actions);
 }
 
-function renderPokemon(element, pokemon, playerSide) {
+async function renderPokemon(element, pokemon) {
   const sprite = resolveActivitySprite(pokemon);
-  element.classList.remove("sprite-missing");
-  element.removeAttribute("data-sprite-error");
-  element.alt = sprite.alt || (playerSide ? "Your Pokemon" : "Opponent Pokemon");
   if (!sprite.source) {
-    element.removeAttribute("src");
-    markSpriteMissing(element);
     return;
   }
-  element.hidden = false;
-  element.src = sprite.source;
-  return;
+  try {
+    await replaceSpriteAfterPreload(element, sprite.source);
+    element.alt = sprite.alt;
+    element.classList.remove("sprite-missing");
+    element.removeAttribute("data-sprite-error");
+  } catch (error) {
+    if (!element.src) element.hidden = true;
+    console.debug("Activity sprite preload failed.", error);
+  }
 }
 function markSpriteMissing(element) {
   element.hidden = true;
@@ -299,6 +354,12 @@ function markSpriteMissing(element) {
 }
 
 function renderHp(fill, text, pokemon) {
+  if (!pokemon) {
+    fill.style.width = "0";
+    fill.classList.remove("critical");
+    text.textContent = "—";
+    return;
+  }
   const current = pokemon?.hp_current ?? 0;
   const maximum = pokemon?.hp_max || 1;
   const percent = Math.max(0, Math.min(100, (current / maximum) * 100));
@@ -309,7 +370,8 @@ function renderHp(fill, text, pokemon) {
 
 function renderTeam(element, team, remaining) {
   element.replaceChildren();
-  const count = Math.max(team?.length || 0, 3);
+  if (!Array.isArray(team)) return;
+  const count = team.length;
   for (let index = 0; index < count; index += 1) {
     const marker = document.createElement("span");
     marker.className = index < remaining ? "team-alive" : "team-fainted";
@@ -319,12 +381,24 @@ function renderTeam(element, team, remaining) {
 }
 
 function renderControls(legal = { moves: [], switches: [], forced_switch: false }) {
+  if (!shouldExposeControls(state)) {
+    hideActionControls();
+    return;
+  }
+  elements.moves.hidden = false;
+  elements.switches.hidden = false;
   elements.moves.replaceChildren();
   elements.switches.replaceChildren();
   const controlsDisabled = state.role === "unauthorized" || state.pendingAction || state.phase === "finished";
   legal.moves?.forEach((move) => elements.moves.append(actionButton(move, "choose_move", controlsDisabled)));
   legal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", controlsDisabled)));
   elements.forfeit.disabled = controlsDisabled;
+}
+
+function hideActionControls() {
+  elements.moves.hidden = true;
+  elements.switches.hidden = true;
+  elements.forfeit.disabled = true;
 }
 
 function actionButton(action, type, disabled) {
@@ -338,7 +412,8 @@ function actionButton(action, type, disabled) {
       return;
     }
     state.pendingAction = true;
-    renderControls(state.snapshot?.legal_actions);
+    hideActionControls();
+    elements.message.textContent = "Waiting for opponent...";
     send({ type, slot: action.slot });
   });
   return button;

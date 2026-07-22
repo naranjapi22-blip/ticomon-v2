@@ -19,7 +19,7 @@
     <section id="battle-screen" class="battle-screen" hidden>
       <section class="hud opponent-hud">
         <div class="trainer-line">
-          <strong id="opponent-name">Opponent</strong>
+          <strong id="opponent-name">Waiting for battle snapshot...</strong>
           <span id="opponent-status" class="status"></span>
         </div>
         <div class="hp-line"><span>HP</span><span id="opponent-hp-text">—</span></div>
@@ -27,12 +27,12 @@
         <div id="opponent-team" class="team-indicator" aria-label="Opponent remaining team"></div>
       </section>
 
-      <img id="opponent" class="pokemon opponent" src="/charizard.gif" alt="Opponent Pokémon">
-      <img id="player" class="pokemon player" src="/pikachu-back.gif" alt="Your Pokémon">
+      <img id="opponent" class="pokemon opponent" hidden alt="">
+      <img id="player" class="pokemon player" hidden alt="">
 
       <section class="hud player-hud">
         <div class="trainer-line">
-          <strong id="player-name">You</strong>
+          <strong id="player-name">Waiting for battle snapshot...</strong>
           <span id="player-status" class="status"></span>
         </div>
         <div class="hp-line"><span>HP</span><span id="player-hp-text">—</span></div>
