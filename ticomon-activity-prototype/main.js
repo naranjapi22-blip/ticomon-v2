@@ -376,14 +376,8 @@ function setSetup(message, detail) {
 }
 
 function showConnectionState(message, isError = false) {
-  if (
-    state.snapshot ||
-    !shouldShowBlockingSetup({ hasSnapshot: false, message })
-  ) {
-    elements.connectionStatus.hidden = !message;
-    elements.connectionStatus.textContent = message;
-    elements.connectionStatus.dataset.state = isError ? "error" : "info";
-    showBattle();
+  if (!shouldShowBlockingSetup({ hasSnapshot: Boolean(state.snapshot) })) {
+    showNonBlockingConnectionStatus(message, isError);
     return;
   }
   setSetup(message, "The backend remains authoritative for the current battle state.");
@@ -399,6 +393,13 @@ function clearActivityOverlay(status = "") {
   elements.connectionStatus.dataset.state = "info";
 }
 
+function showNonBlockingConnectionStatus(message, isError = false) {
+  elements.connectionStatus.hidden = !message;
+  elements.connectionStatus.textContent = message;
+  elements.connectionStatus.dataset.state = isError ? "error" : "info";
+  showBattle();
+}
+
 function showConnectionFailure(message, detail) {
   if (state.snapshot) {
     showConnectionState(message, true);
@@ -409,6 +410,10 @@ function showConnectionFailure(message, detail) {
 }
 
 function showSetup(message, detail) {
+  if (!shouldShowBlockingSetup({ hasSnapshot: Boolean(state.snapshot) })) {
+    showNonBlockingConnectionStatus(message, true);
+    return;
+  }
   setSetup(message, detail);
   elements.setupScreen.hidden = false;
   elements.battleScreen.hidden = true;

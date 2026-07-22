@@ -8,24 +8,41 @@ import {
 
 test("a snapshot stays visible during auth refresh or reconnect", () => {
   assert.equal(
-    shouldShowBlockingSetup({ hasSnapshot: true, message: "Authenticating with Discord..." }),
+    shouldShowBlockingSetup({ hasSnapshot: true }),
     false,
   );
   assert.equal(
-    shouldShowBlockingSetup({ hasSnapshot: true, message: "Reconnecting to the battle..." }),
+    shouldShowBlockingSetup({ hasSnapshot: true }),
     false,
   );
 });
 
 test("initial setup remains blocking until initialization succeeds", () => {
+  assert.equal(shouldShowBlockingSetup({ hasSnapshot: false }), true);
   assert.equal(
-    shouldShowBlockingSetup({ hasSnapshot: false, message: "Authenticating with Discord..." }),
-    true,
-  );
-  assert.equal(
-    shouldShowBlockingSetup({ hasSnapshot: false, message: "Connected to the battle.", initialized: true }),
+    shouldShowBlockingSetup({ hasSnapshot: true }),
     false,
   );
+});
+
+test("an auth refresh cannot restore the setup overlay after the first snapshot", () => {
+  const ui = { hasSnapshot: false, setupVisible: true };
+
+  ui.authenticating = true;
+  assert.equal(shouldShowBlockingSetup(ui), true);
+  ui.hasSnapshot = true;
+  ui.authenticating = false;
+  ui.setupVisible = shouldShowBlockingSetup(ui);
+  assert.equal(ui.setupVisible, false);
+
+  ui.refreshingAuthentication = true;
+  ui.setupVisible = shouldShowBlockingSetup(ui);
+  assert.equal(ui.setupVisible, false);
+
+  ui.refreshingAuthentication = false;
+  ui.authResponseReceived = true;
+  ui.setupVisible = shouldShowBlockingSetup(ui);
+  assert.equal(ui.setupVisible, false);
 });
 
 test("the backend-resolved Kadabra sprite URL is preserved", () => {

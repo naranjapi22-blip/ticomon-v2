@@ -1,17 +1,5 @@
-const transientConnectionMessages = new Set([
-  "Connecting to Discord...",
-  "Authenticating with Discord...",
-  "Refreshing Discord authorization...",
-  "Reconnecting to the battle...",
-  "Syncing the current battle...",
-]);
-
-export function isTransientConnectionMessage(message) {
-  return transientConnectionMessages.has(message);
-}
-
-export function shouldShowBlockingSetup({ hasSnapshot, message, initialized = false }) {
-  return !initialized && !(hasSnapshot && isTransientConnectionMessage(message));
+export function shouldShowBlockingSetup({ hasSnapshot }) {
+  return !hasSnapshot;
 }
 
 export function isAuthorizedRole(role) {
