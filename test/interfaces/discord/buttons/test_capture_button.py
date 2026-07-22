@@ -1,6 +1,6 @@
 ﻿from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -16,7 +16,11 @@ from interfaces.discord.buttons.capture_button import CaptureButton
 async def test_capture_button_keeps_main_message_and_notifies_dual_type_unlock() -> (
     None
 ):
-    species = SimpleNamespace(name="Dracopod", types=["dragon", "poison"])
+    species = SimpleNamespace(
+        name="Dracopod",
+        pokeapi_id=10000,
+        types=["dragon", "poison"],
+    )
     creature = SimpleNamespace(
         id=101,
         collection_number=1,
@@ -43,6 +47,7 @@ async def test_capture_button_keeps_main_message_and_notifies_dual_type_unlock()
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=7, mention="<@7>"),
         guild=SimpleNamespace(id=9),
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(defer=AsyncMock()),
         followup=followup,
         delete_original_response=AsyncMock(),
@@ -154,7 +159,11 @@ async def test_capture_gif_falls_back_without_hiding_a_successful_capture(
 
 @pytest.mark.asyncio
 async def test_capture_button_posts_success_when_the_gif_is_unavailable() -> None:
-    species = SimpleNamespace(name="Oricorio-Baile", types=["fire", "flying"])
+    species = SimpleNamespace(
+        name="Oricorio-Baile",
+        pokeapi_id=10101,
+        types=["fire", "flying"],
+    )
     creature = SimpleNamespace(
         id=4425,
         collection_number=73,
@@ -174,6 +183,7 @@ async def test_capture_button_posts_success_when_the_gif_is_unavailable() -> Non
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=8, mention="<@8>"),
         guild=SimpleNamespace(id=9),
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(defer=AsyncMock()),
         followup=followup,
         delete_original_response=AsyncMock(),

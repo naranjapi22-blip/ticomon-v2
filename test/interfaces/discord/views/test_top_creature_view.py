@@ -10,7 +10,7 @@ from interfaces.discord.views.top_creature_view import TopCreatureView
 def _ranking(collection_number: int, metric: TopMetric = TopMetric.OVERALL):
     creature = SimpleNamespace(
         collection_number=collection_number,
-        species=SimpleNamespace(name="Pikachu", types=["electric"]),
+        species=SimpleNamespace(name="Pikachu", pokeapi_id=25, types=["electric"]),
         is_shiny=False,
         iv_percentage=100,
     )

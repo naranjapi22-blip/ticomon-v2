@@ -1,5 +1,6 @@
 from discord.ext import commands
 
+from interfaces.discord.application_emojis import get_application_emojis
 from interfaces.discord.views.collections_view import CollectionsOverviewView
 
 
@@ -14,6 +15,11 @@ class CollectionsCog(commands.Cog):
         except ValueError as error:
             await ctx.send(str(error))
             return
-        view = CollectionsOverviewView(self._core, ctx.author.id, albums)
+        view = CollectionsOverviewView(
+            self._core,
+            ctx.author.id,
+            albums,
+            await get_application_emojis(ctx.bot),
+        )
         message = await ctx.send(embed=view.embed(), view=view)
         view.message = message

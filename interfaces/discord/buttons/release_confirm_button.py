@@ -3,6 +3,11 @@ import logging
 import discord
 
 from application.release.exceptions import ReleaseCreatureAssignedToTeam
+from interfaces.discord.application_emojis import (
+    candy_emoji_prefix,
+    get_application_emojis,
+    species_emoji_prefix,
+)
 from interfaces.discord.release_messages import assigned_creatures_message
 
 logger = logging.getLogger(__name__)
@@ -57,37 +62,15 @@ class ReleaseConfirmButton(discord.ui.Button):
             )
             return
 
+        emojis = await get_application_emojis(interaction.client)
         released = "\n".join(
-            f"• #{creature.collection_number} {creature.species.name.title()}"
+            f"• {species_emoji_prefix(emojis, creature.species.pokeapi_id)}"
+            f"#{creature.collection_number} {creature.species.name.title()}"
             for creature in result.released_creatures
         )
-
-        emoji = {
-            "normal": "⚪",
-            "fire": "🔥",
-            "water": "💧",
-            "electric": "⚡",
-            "grass": "🌿",
-            "ice": "❄️",
-            "fighting": "🥊",
-            "poison": "☠️",
-            "ground": "🌎",
-            "flying": "🪽",
-            "psychic": "🔮",
-            "bug": "🐛",
-            "rock": "🪨",
-            "ghost": "👻",
-            "dragon": "🐉",
-            "dark": "🌑",
-            "steel": "⚙️",
-            "fairy": "🧚",
-        }
-
         rewards = "\n".join(
-            (
-                f"• {emoji.get(candy_type.value, '🍬')} "
-                f"{candy_type.value.title()} Candy ×{amount}"
-            )
+            f"• {candy_emoji_prefix(emojis, candy_type)}"
+            f"{candy_type.value.title()} Candy ×{amount}"
             for candy_type, amount in result.reward_bundle.items()
         )
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import discord
 
 from application.bootstrap.core import CoreServices
+from interfaces.discord.application_emojis import get_application_emojis
 from interfaces.discord.views.team_view import TeamView
 
 
@@ -59,6 +60,7 @@ class TeamLauncherView(discord.ui.View):
         team_view = await TeamView.create(
             self.core,
             self.trainer_id,
+            await get_application_emojis(interaction.client),
         )
 
         team_view.message = await interaction.followup.send(

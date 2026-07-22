@@ -4,6 +4,7 @@ from discord import Embed
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
+from interfaces.discord.application_emojis import get_application_emojis
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +29,7 @@ class CandyCog(commands.Cog):
             trainer_id=ctx.author.id,
         )
 
-        application_emojis = await ctx.bot.fetch_application_emojis()
-        logger.debug(
-            "fetched application emojis application_id=%s count=%s",
-            ctx.bot.application_id,
-            len(application_emojis),
-        )
-
-        emojis_by_name = {emoji.name: emoji for emoji in application_emojis}
+        emojis_by_name = await get_application_emojis(ctx.bot)
 
         embed = Embed(
             title="🍬 Your Type Candies",
@@ -60,10 +54,11 @@ class CandyCog(commands.Cog):
                     emoji_name,
                 )
 
-                emoji_text = str(emoji) if emoji is not None else "🍬"
+                emoji_text = str(emoji) if emoji is not None else ""
 
                 embed.add_field(
-                    name=(f"{emoji_text} " f"{candy_type.value.title()}"),
+                    name=(f"{emoji_text} " if emoji_text else "")
+                    + candy_type.value.title(),
                     value=f"x{amount}",
                     inline=True,
                 )

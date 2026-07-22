@@ -7,6 +7,7 @@ from core.shop.catalog import (
     ALCREMIE_DECORATIONS,
     ShopStore,
 )
+from interfaces.discord.application_emojis import candy_emoji_prefix
 from interfaces.discord.images import (
     download_gif_file,
     get_creature_gif,
@@ -38,9 +39,11 @@ def _product_label(product) -> str:
     return product.species_name.title()
 
 
-def _cost_text(bundle) -> str:
+def _cost_text(bundle, emoji_index=None) -> str:
     return " + ".join(
-        f"{amount} {candy_type.value.title()}" for candy_type, amount in bundle.items()
+        f"{candy_emoji_prefix(emoji_index or {}, candy_type)}"
+        f"{amount} {candy_type.value.title()}"
+        for candy_type, amount in bundle.items()
     )
 
 
@@ -55,22 +58,26 @@ def _inventory_text(inventory) -> str:
     )
 
 
-def _bundle_inventory_text(inventory, bundle) -> str:
+def _bundle_inventory_text(inventory, bundle, emoji_index=None) -> str:
     return "\n".join(
+        f"{candy_emoji_prefix(emoji_index or {}, candy_type)}"
         f"{candy_type.value.title()}: {inventory.get_amount(candy_type)}"
         for candy_type, _ in bundle.items()
     )
 
 
-def _bundle_cost_text(bundle) -> str:
+def _bundle_cost_text(bundle, emoji_index=None) -> str:
     return "\n".join(
-        f"{candy_type.value.title()}: {amount}" for candy_type, amount in bundle.items()
+        f"{candy_emoji_prefix(emoji_index or {}, candy_type)}"
+        f"{candy_type.value.title()}: {amount}"
+        for candy_type, amount in bundle.items()
     )
 
 
-def _missing_text(inventory, bundle) -> str:
+def _missing_text(inventory, bundle, emoji_index=None) -> str:
     return "\n".join(
         f"Missing: {amount - inventory.get_amount(candy_type)} "
+        f"{candy_emoji_prefix(emoji_index or {}, candy_type)}"
         f"{candy_type.value.title()}"
         for candy_type, amount in bundle.items()
         if inventory.get_amount(candy_type) < amount
@@ -97,9 +104,11 @@ async def _shop_preview_file(core, preview):
 
 
 async def _show_purchase_preview(
-    core, trainer_id, interaction, preview, message
+    core, trainer_id, interaction, preview, message, emoji_index=None
 ) -> None:
-    view = ShopConfirmationViewWithButtons(core, trainer_id, preview)
+    view = ShopConfirmationViewWithButtons(
+        core, trainer_id, preview, emoji_index=emoji_index
+    )
     view.message = message
     gif_file = await _shop_preview_file(core, preview)
     await interaction.edit_original_response(
@@ -110,10 +119,11 @@ async def _show_purchase_preview(
 
 
 class ShopView(discord.ui.View):
-    def __init__(self, core, trainer_id: int) -> None:
+    def __init__(self, core, trainer_id: int, emoji_index=None) -> None:
         super().__init__(timeout=180)
         self.core = core
         self.trainer_id = trainer_id
+        self.emoji_index = emoji_index or {}
         self.message = None
         self._add_store_buttons()
 
@@ -145,7 +155,12 @@ class ShopView(discord.ui.View):
             view = GardenView(self.core, self.trainer_id)
             embed = view.menu_embed()
         else:
-            view = ProductView(self.core, self.trainer_id, store)
+            view = ProductView(
+                self.core,
+                self.trainer_id,
+                store,
+                emoji_index=self.emoji_index,
+            )
             embed = view.menu_embed()
         view.message = self.message
         await interaction.response.edit_message(embed=embed, view=view)
@@ -181,12 +196,19 @@ class CloseShopButton(discord.ui.Button):
 
 class ProductView(discord.ui.View):
     def __init__(
-        self, core, trainer_id: int, store: ShopStore, products=None, title=None
+        self,
+        core,
+        trainer_id: int,
+        store: ShopStore,
+        products=None,
+        title=None,
+        emoji_index=None,
     ) -> None:
         super().__init__(timeout=180)
         self.core = core
         self.trainer_id = trainer_id
         self.store = store
+        self.emoji_index = emoji_index or {}
         self.message = None
         self._title = title or self._default_title()
         products = products or core.shop_application.products(store)
@@ -194,7 +216,7 @@ class ProductView(discord.ui.View):
             discord.SelectOption(
                 label=_product_label(product),
                 value=product.id,
-                description=_cost_text(product.cost),
+                description=_cost_text(product.cost, self.emoji_index),
             )
             for product in products
         ]
@@ -238,7 +260,12 @@ class ProductView(discord.ui.View):
             )
             return
         await _show_purchase_preview(
-            self.core, self.trainer_id, interaction, preview, self.message
+            self.core,
+            self.trainer_id,
+            interaction,
+            preview,
+            self.message,
+            self.emoji_index,
         )
 
     async def on_timeout(self) -> None:
@@ -259,7 +286,11 @@ class BackToStoresButton(discord.ui.Button):
         super().__init__(label="Back", style=discord.ButtonStyle.secondary)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        view = ShopView(self.view.core, self.view.trainer_id)
+        view = ShopView(
+            self.view.core,
+            self.view.trainer_id,
+            self.view.emoji_index,
+        )
         view.message = self.view.message
         await interaction.response.edit_message(
             embed=discord.Embed(
@@ -519,11 +550,12 @@ class GardenButton(discord.ui.Button):
 
 
 class ShopConfirmationView(discord.ui.View):
-    def __init__(self, core, trainer_id: int, preview) -> None:
+    def __init__(self, core, trainer_id: int, preview, emoji_index=None) -> None:
         super().__init__(timeout=180)
         self.core = core
         self.trainer_id = trainer_id
         self.preview = preview
+        self.emoji_index = emoji_index or {}
         self.message = None
         self._processing = False
 
@@ -535,19 +567,34 @@ class ShopConfirmationView(discord.ui.View):
             product_name += f" ({_variant_label(self.preview.variant_name)})"
         description = f"Product: **{product_name}**\n"
         if affordable:
-            current = _bundle_inventory_text(self.preview.inventory, self.preview.cost)
-            remaining = _bundle_inventory_text(self._remaining(), self.preview.cost)
+            current = _bundle_inventory_text(
+                self.preview.inventory, self.preview.cost, self.emoji_index
+            )
+            remaining = _bundle_inventory_text(
+                self._remaining(), self.preview.cost, self.emoji_index
+            )
             description += (
                 f"Current balance:\n{current}\n"
-                f"Price:\n{_bundle_cost_text(self.preview.cost)}\n"
+                f"Price:\n{_bundle_cost_text(self.preview.cost, self.emoji_index)}\n"
                 f"Balance after purchase:\n{remaining}"
             )
         else:
+            current = _bundle_inventory_text(
+                self.preview.inventory,
+                self.preview.cost,
+                self.emoji_index,
+            )
+            price = _bundle_cost_text(self.preview.cost, self.emoji_index)
+            missing = _missing_text(
+                self.preview.inventory,
+                self.preview.cost,
+                self.emoji_index,
+            )
             description += (
                 "**Insufficient candies**\n"
-                f"{_bundle_inventory_text(self.preview.inventory, self.preview.cost)}\n"
-                f"Price:\n{_bundle_cost_text(self.preview.cost)}\n"
-                f"{_missing_text(self.preview.inventory, self.preview.cost)}"
+                f"{current}\n"
+                f"Price:\n{price}\n"
+                f"{missing}"
             )
         if self.preview.cream:
             description += (
@@ -654,7 +701,7 @@ class CancelPurchaseButton(discord.ui.Button):
 
 
 class ShopConfirmationViewWithButtons(ShopConfirmationView):
-    def __init__(self, core, trainer_id: int, preview) -> None:
-        super().__init__(core, trainer_id, preview)
+    def __init__(self, core, trainer_id: int, preview, emoji_index=None) -> None:
+        super().__init__(core, trainer_id, preview, emoji_index=emoji_index)
         self.add_item(ConfirmPurchaseButton())
         self.add_item(CancelPurchaseButton())

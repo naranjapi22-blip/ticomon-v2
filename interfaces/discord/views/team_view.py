@@ -5,6 +5,7 @@ import discord
 from application.bootstrap.core import CoreServices
 from application.team.exceptions import TeamApplicationError
 from application.team.team_dto import TeamDTO
+from interfaces.discord.application_emojis import species_emoji_from_index
 from interfaces.discord.cogs.collection_display import format_creature_entry
 from interfaces.discord.views.team_add_modal import TeamAddModal
 from interfaces.discord.views.team_replace_modal import TeamReplaceModal
@@ -16,12 +17,14 @@ class TeamView(discord.ui.View):
         core: CoreServices,
         trainer_id: int,
         team: TeamDTO,
+        emoji_index=None,
     ) -> None:
         super().__init__(timeout=300)
 
         self.core = core
         self.trainer_id = trainer_id
         self.team = team
+        self.emoji_index = emoji_index or {}
         self.message: discord.Message | None = None
 
         self._sync_buttons()
@@ -31,12 +34,14 @@ class TeamView(discord.ui.View):
         cls,
         core: CoreServices,
         trainer_id: int,
+        emoji_index=None,
     ) -> TeamView:
         team = await core.team_application_service.get_team(trainer_id)
         return cls(
             core,
             trainer_id,
             team,
+            emoji_index,
         )
 
     def build_embed(self) -> discord.Embed:
@@ -57,10 +62,16 @@ class TeamView(discord.ui.View):
                 "Use **Add** to assign Pokémon from your collection."
             )
 
-        lines = [
-            f"**Slot {slot.slot}:** {format_creature_entry(slot.creature)}"
-            for slot in self.team.slots
-        ]
+        lines = []
+        for slot in self.team.slots:
+            species_emoji = species_emoji_from_index(
+                self.emoji_index,
+                slot.creature.species.pokeapi_id,
+            )
+            lines.append(
+                f"**Slot {slot.slot}:** "
+                f"{format_creature_entry(slot.creature, species_emoji)}"
+            )
         return "\n".join(lines)
 
     def _sync_buttons(self) -> None:

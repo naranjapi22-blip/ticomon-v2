@@ -1,6 +1,10 @@
 from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
+from interfaces.discord.application_emojis import (
+    get_application_emojis,
+    species_emoji_from_index,
+)
 from interfaces.discord.cogs.collection_display import (
     build_empty_message,
     build_recent_title,
@@ -52,13 +56,20 @@ class InventoryCog(commands.Cog):
             )
             return
 
+        emojis = await get_application_emojis(ctx.bot)
         view = CreatureListView(
             author_id=ctx.author.id,
             title=build_recent_title(
                 normalized_type,
                 shiny_only,
             ),
-            entries=[format_creature_entry(creature) for creature in creatures],
+            entries=[
+                format_creature_entry(
+                    creature,
+                    species_emoji_from_index(emojis, creature.species.pokeapi_id),
+                )
+                for creature in creatures
+            ],
         )
 
         message = await ctx.send(

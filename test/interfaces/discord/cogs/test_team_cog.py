@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -56,6 +56,7 @@ async def test_launcher_opens_ephemeral_team_view() -> None:
     followup_send = AsyncMock(return_value=SimpleNamespace())
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=42),
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(
             defer=AsyncMock(),
         ),

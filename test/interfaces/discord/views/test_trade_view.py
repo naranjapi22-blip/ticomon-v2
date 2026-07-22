@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -247,6 +247,7 @@ async def test_accept_button_calls_application_service() -> None:
     )
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=101),
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(
             defer=AsyncMock(side_effect=defer),
             send_message=AsyncMock(),
@@ -297,6 +298,7 @@ async def test_reject_button_calls_application_service() -> None:
     )
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=202),
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(
             defer=AsyncMock(side_effect=defer),
             send_message=AsyncMock(),
@@ -347,6 +349,7 @@ async def test_cancel_button_calls_application_service() -> None:
     )
     interaction = SimpleNamespace(
         user=SimpleNamespace(id=101),
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(
             defer=AsyncMock(side_effect=defer),
             send_message=AsyncMock(),

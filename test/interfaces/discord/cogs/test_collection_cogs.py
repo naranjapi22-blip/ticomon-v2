@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -16,7 +16,7 @@ def _creature(
 ):
     return SimpleNamespace(
         collection_number=collection_number,
-        species=SimpleNamespace(name=name),
+        species=SimpleNamespace(name=name, pokeapi_id=25),
         iv_percentage=iv_percentage,
         is_shiny=shiny,
     )
@@ -25,6 +25,7 @@ def _creature(
 def _ctx():
     return SimpleNamespace(
         author=SimpleNamespace(id=99),
+        bot=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         send=AsyncMock(),
     )
 

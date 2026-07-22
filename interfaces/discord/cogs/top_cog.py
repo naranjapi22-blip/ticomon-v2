@@ -2,6 +2,7 @@ from discord.ext import commands
 
 from application.bootstrap.core import CoreServices
 from application.creature.creature_collection_service import TopMetric
+from interfaces.discord.application_emojis import get_application_emojis
 from interfaces.discord.cogs.collection_display import (
     build_empty_message,
     build_top_title,
@@ -80,10 +81,17 @@ class TopCog(commands.Cog):
             return
 
         if rankings_service is None:
+            emojis = await get_application_emojis(ctx.bot)
             view = CreatureListView(
                 author_id=ctx.author.id,
                 title=build_top_title(normalized_type),
-                entries=[format_creature_entry(creature) for creature in creatures],
+                entries=[
+                    format_creature_entry(
+                        creature,
+                        emojis.get(str(creature.species.pokeapi_id)),
+                    )
+                    for creature in creatures
+                ],
             )
         else:
 
@@ -94,6 +102,7 @@ class TopCog(commands.Cog):
                     pokemon_type=pokemon_type,
                 )
 
+            emojis = await get_application_emojis(ctx.bot)
             view = TopCreatureView(
                 author_id=ctx.author.id,
                 trainer_id=ctx.author.id,
@@ -101,6 +110,7 @@ class TopCog(commands.Cog):
                 metric=TopMetric.OVERALL,
                 pokemon_type=normalized_type,
                 load_rankings=load_rankings,
+                species_emojis=emojis,
             )
 
         message = await ctx.send(

@@ -17,15 +17,18 @@ METRIC_LABELS = {metric: metric.label for metric in TopMetric}
 def format_ranked_creature_entry(
     ranking: RankedCreature,
     position: int,
+    species_emojis=None,
 ) -> str:
     creature = ranking.creature
     shiny = "✨ " if creature.is_shiny else ""
     name = creature.species.name.title()
+    species_emoji = (species_emojis or {}).get(str(creature.species.pokeapi_id))
+    prefix = f"{species_emoji} " if species_emoji else ""
     current_form = getattr(creature, "current_form", None)
     if current_form is not None:
         name = f"{name} ({current_form.name.title()})"
     return (
-        f"#{position} · {shiny}{name} · #{creature.collection_number} · "
+        f"{prefix}#{position} · {shiny}{name} · #{creature.collection_number} · "
         f"{ranking.metric.label}: {ranking.score} · IVs: {creature.iv_percentage}%"
     )
 
@@ -89,12 +92,14 @@ class TopCreatureView(CreatureListView):
         load_rankings: Callable[
             [TopMetric, str | None], Awaitable[list[RankedCreature]]
         ],
+        species_emojis=None,
     ) -> None:
         self.trainer_id = trainer_id
         self.metric = metric
         self.pokemon_type = pokemon_type
         self.rankings = rankings
         self._load_rankings = load_rankings
+        self.species_emojis = species_emojis or {}
         super().__init__(
             author_id=author_id,
             title=self._title(),
@@ -113,7 +118,11 @@ class TopCreatureView(CreatureListView):
 
     def _format_entries(self, rankings: list[RankedCreature]) -> list[str]:
         return [
-            format_ranked_creature_entry(ranking, position)
+            format_ranked_creature_entry(
+                ranking,
+                position,
+                self.species_emojis,
+            )
             for position, ranking in enumerate(rankings, start=1)
         ]
 

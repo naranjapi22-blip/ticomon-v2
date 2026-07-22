@@ -3,6 +3,7 @@ import math
 import discord
 
 from interfaces.discord.achievement_notifications import format_mint_reward
+from interfaces.discord.application_emojis import candy_emoji_prefix
 from interfaces.discord.views.next_button import NextButton
 from interfaces.discord.views.previous_button import PreviousButton
 
@@ -35,10 +36,11 @@ class _OverviewButton(discord.ui.Button):
 class AchievementsView(discord.ui.View):
     PAGE_SIZE = 6
 
-    def __init__(self, trainer_id: int, statuses) -> None:
+    def __init__(self, trainer_id: int, statuses, emoji_index=None) -> None:
         super().__init__(timeout=300)
         self.trainer_id = trainer_id
         self.statuses = tuple(statuses)
+        self.emoji_index = emoji_index or {}
         self.family: str | None = None
         self.page = 0
         self.message: discord.Message | None = None
@@ -72,11 +74,11 @@ class AchievementsView(discord.ui.View):
             self.family is None or self.page >= self.total_pages - 1
         )
 
-    @staticmethod
-    def _reward(status) -> str:
+    def _reward(self, status) -> str:
         rewards = []
         if status.rewarded_candies is not None:
             rewards.extend(
+                f"{candy_emoji_prefix(self.emoji_index, kind)}"
                 f"{kind.value.title()} +{amount}"
                 for kind, amount in status.rewarded_candies.items()
             )
@@ -91,6 +93,7 @@ class AchievementsView(discord.ui.View):
             return ", ".join(rewards)
         if status.rewarded_candies is not None:
             return ", ".join(
+                f"{candy_emoji_prefix(self.emoji_index, kind)}"
                 f"{kind.value.title()} +{amount}"
                 for kind, amount in status.rewarded_candies.items()
             )

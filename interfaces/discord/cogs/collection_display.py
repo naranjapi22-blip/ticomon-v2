@@ -1,9 +1,13 @@
 from core.creature.creature import Creature
 
 
-def format_creature_entry(creature: Creature) -> str:
+def format_creature_entry(
+    creature: Creature,
+    species_emoji: str | None = None,
+) -> str:
+    prefix = f"{species_emoji} " if species_emoji else ""
     return (
-        f"#{creature.collection_number} "
+        f"{prefix}#{creature.collection_number} "
         f"{creature.species.name.title()} — IVs: {creature.iv_percentage}%"
     )
 

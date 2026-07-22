@@ -1,6 +1,11 @@
 from discord.ext import commands
 
 from application.release.exceptions import ReleaseCreatureAssignedToTeam
+from interfaces.discord.application_emojis import (
+    candy_emoji_prefix,
+    get_application_emojis,
+    species_emoji_prefix,
+)
 from interfaces.discord.release_messages import assigned_creatures_message
 from interfaces.discord.views.release_confirm_view import (
     ReleaseConfirmView,
@@ -62,6 +67,18 @@ class ReleaseCog(commands.Cog):
 
         rewards = "\n".join(
             f"• {amount} {candy_type.value.title()} Candy"
+            for candy_type, amount in preview.reward_bundle.items()
+        )
+
+        emojis = await get_application_emojis(ctx.bot)
+        released = "\n".join(
+            f"• {species_emoji_prefix(emojis, creature.species.pokeapi_id)}"
+            f"#{creature.collection_number} {creature.species.name.title()}"
+            for creature in preview.creatures
+        )
+        rewards = "\n".join(
+            f"• {candy_emoji_prefix(emojis, candy_type)}"
+            f"{amount} {candy_type.value.title()} Candy"
             for candy_type, amount in preview.reward_bundle.items()
         )
 

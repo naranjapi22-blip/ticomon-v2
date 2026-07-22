@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -50,6 +50,7 @@ async def test_deferred_evolution_result_edits_original_response(monkeypatch):
         achievements=(),
     )
     interaction = SimpleNamespace(
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
         response=SimpleNamespace(edit_message=AsyncMock()),
         edit_original_response=AsyncMock(),
     )
@@ -74,7 +75,10 @@ async def test_deferred_evolution_result_without_file_uses_empty_attachments(
         evolved_species=SimpleNamespace(id=2, name="ivysaur"),
         achievements=(),
     )
-    interaction = SimpleNamespace(edit_original_response=AsyncMock())
+    interaction = SimpleNamespace(
+        client=Mock(fetch_application_emojis=AsyncMock(return_value=[])),
+        edit_original_response=AsyncMock(),
+    )
     monkeypatch.setattr(evolution_sender, "_build_animation", lambda _result: None)
 
     await evolution_sender.edit_evolution_result(interaction, result)

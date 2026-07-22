@@ -7,6 +7,11 @@ import discord
 
 from core.spawn.exceptions import NoActiveSpawnSession
 from interfaces.discord.achievement_notifications import send_unlocks
+from interfaces.discord.application_emojis import (
+    candy_emoji_prefix,
+    get_application_emojis,
+    species_emoji_from_index,
+)
 from rendering.capture_animation import CaptureAnimation
 from rendering.sprites import get_capture_creature_gif, get_capture_species_gif
 
@@ -133,14 +138,21 @@ class CaptureButton(discord.ui.Button):
             result.attempt.capture_ball.name,
         )
 
+        emojis = await get_application_emojis(interaction.client)
+        species_emoji = species_emoji_from_index(
+            emojis,
+            result.creature.species.pokeapi_id,
+        )
         rewards = "\n".join(
-            f"🍬 {candy_type.value.title()}: +{amount}"
+            f"{candy_emoji_prefix(emojis, candy_type)}"
+            f"{candy_type.value.title()}: +{amount}"
             for candy_type, amount in result.reward.items()
         )
 
         message = {
             "content": (
                 f"🎉 {interaction.user.mention} caught "
+                f"{species_emoji + ' ' if species_emoji else ''}"
                 f"{result.creature.species.name.title()} "
                 f"(#{result.creature.collection_number}) "
                 f"using a {ball_name}!\n"
@@ -159,6 +171,7 @@ class CaptureButton(discord.ui.Button):
             interaction.followup.send,
             result.achievements,
             context=f"capture_button trainer_id={interaction.user.id}",
+            bot=interaction.client,
         )
 
         await interaction.delete_original_response()

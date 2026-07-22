@@ -1,5 +1,6 @@
 from discord.ext import commands
 
+from interfaces.discord.application_emojis import get_candy_emoji
 from interfaces.discord.views.evolution_confirm_view import (
     EvolutionConfirmView,
 )
@@ -72,29 +73,10 @@ class EvolutionCog(commands.Cog):
             rule=rule,
         )
 
-        emoji = {
-            "normal": "⚪",
-            "fire": "🔥",
-            "water": "💧",
-            "electric": "⚡",
-            "grass": "🌿",
-            "ice": "❄️",
-            "fighting": "🥊",
-            "poison": "☠️",
-            "ground": "🌎",
-            "flying": "🪽",
-            "psychic": "🔮",
-            "bug": "🐛",
-            "rock": "🪨",
-            "ghost": "👻",
-            "dragon": "🐉",
-            "dark": "🌑",
-            "steel": "⚙️",
-            "fairy": "🧚",
-        }.get(
-            confirmation.cost.type.value,
-            "🍬",
-        )
+        emoji = await get_candy_emoji(ctx.bot, confirmation.cost.type.value)
+        cost_label = (
+            f"{emoji} " if emoji else ""
+        ) + f"Cost: **{confirmation.cost.amount}**"
 
         view = EvolutionConfirmView(
             core=self._core,
@@ -110,7 +92,7 @@ class EvolutionCog(commands.Cog):
                 f"➡️ "
                 f"**{confirmation.evolved_species.name.title()}**\n\n"
                 f"{emoji} **{confirmation.cost.type.value.title()} Candy**\n"
-                f"🍬 Cost: **{confirmation.cost.amount}**\n"
+                f"{cost_label}\n"
                 f"🎒 You have: **{confirmation.current_candies}**\n\n"
                 "Do you want to evolve this Pokémon?"
             ),

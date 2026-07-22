@@ -2,6 +2,7 @@ import logging
 
 import discord
 
+from interfaces.discord.application_emojis import candy_emoji_prefix
 from interfaces.discord.images import (
     download_gif_file,
     get_creature_gif,
@@ -12,8 +13,9 @@ logger = logging.getLogger(__name__)
 _MISSING_COLLECTION_RESOURCES: set[tuple[int, int | None]] = set()
 
 
-def _reward_text(milestone) -> str:
+def _reward_text(milestone, emoji_index=None) -> str:
     rewards = [
+        f"{candy_emoji_prefix(emoji_index or {}, candy_type)}"
         f"{amount} {candy_type.value.title()}"
         for candy_type, amount in milestone.candies.items()
     ]
@@ -45,10 +47,13 @@ async def _entry_file(core, entry):
 
 
 class _OwnedCollectionView(discord.ui.View):
-    def __init__(self, core, trainer_id: int, *, timeout: float = 180) -> None:
+    def __init__(
+        self, core, trainer_id: int, *, timeout: float = 180, emoji_index=None
+    ) -> None:
         super().__init__(timeout=timeout)
         self.core = core
         self.trainer_id = trainer_id
+        self.emoji_index = emoji_index or {}
         self.message = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -70,8 +75,8 @@ class _OwnedCollectionView(discord.ui.View):
 
 
 class CollectionsOverviewView(_OwnedCollectionView):
-    def __init__(self, core, trainer_id: int, albums) -> None:
-        super().__init__(core, trainer_id)
+    def __init__(self, core, trainer_id: int, albums, emoji_index=None) -> None:
+        super().__init__(core, trainer_id, emoji_index=emoji_index)
         self.albums = albums
         self.add_item(CollectionAlbumSelect(albums))
         self.add_item(CollectionCloseButton())
@@ -99,7 +104,13 @@ class CollectionsOverviewView(_OwnedCollectionView):
                 content="Unknown collection.", embed=None, view=None
             )
             return
-        view = CollectionAlbumView(self.core, self.trainer_id, album, self.albums)
+        view = CollectionAlbumView(
+            self.core,
+            self.trainer_id,
+            album,
+            self.albums,
+            self.emoji_index,
+        )
         view.message = self.message
         await interaction.response.edit_message(embed=view.embed(), view=view)
 
@@ -139,8 +150,10 @@ class CollectionCloseButton(discord.ui.Button):
 
 
 class CollectionAlbumView(_OwnedCollectionView):
-    def __init__(self, core, trainer_id: int, album, albums=None) -> None:
-        super().__init__(core, trainer_id)
+    def __init__(
+        self, core, trainer_id: int, album, albums=None, emoji_index=None
+    ) -> None:
+        super().__init__(core, trainer_id, emoji_index=emoji_index)
         self.album = album
         self.albums = albums or (album,)
         self.add_item(CollectionEntriesButton())
@@ -167,7 +180,7 @@ class CollectionAlbumView(_OwnedCollectionView):
                 status = "Available"
             milestones.append(
                 f"{status}: **{milestone.threshold}/{album.progress.total}** — "
-                f"{_reward_text(milestone)}"
+                f"{_reward_text(milestone, self.emoji_index)}"
             )
         return discord.Embed(
             title=album.definition.name,
@@ -210,10 +223,16 @@ class CollectionAlbumView(_OwnedCollectionView):
             result.album if item.definition.id == result.album.definition.id else item
             for item in self.albums
         )
-        view = CollectionAlbumView(self.core, self.trainer_id, result.album, albums)
+        view = CollectionAlbumView(
+            self.core,
+            self.trainer_id,
+            result.album,
+            albums,
+            self.emoji_index,
+        )
         view.message = self.message
         content = (
-            f"Claimed {_reward_text(result.milestone)}."
+            f"Claimed {_reward_text(result.milestone, self.emoji_index)}."
             if result.claimed
             else "That collection reward was already claimed."
         )
@@ -222,7 +241,12 @@ class CollectionAlbumView(_OwnedCollectionView):
         )
 
     async def back(self, interaction: discord.Interaction) -> None:
-        view = CollectionsOverviewView(self.core, self.trainer_id, self.albums)
+        view = CollectionsOverviewView(
+            self.core,
+            self.trainer_id,
+            self.albums,
+            self.emoji_index,
+        )
         view.message = self.message
         await interaction.response.edit_message(embed=view.embed(), view=view)
 

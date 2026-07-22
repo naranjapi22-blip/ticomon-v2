@@ -215,6 +215,7 @@ class TradeView(discord.ui.View):
             interaction.followup.send,
             getattr(result, "achievements_by_trainer", {}).get(interaction.user.id, ()),
             context="trade",
+            bot=interaction.client,
         )
 
         await self._reload_trade_display()
