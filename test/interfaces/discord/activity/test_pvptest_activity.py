@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import make_mocked_request
 
 from application.pvp.models import PvpAction, PvpActionKind, PvpEvent, PvpLegalActions
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
@@ -11,6 +15,7 @@ from interfaces.discord.activity.pvptest_registry import (
     legal_actions_to_dto,
     pokemon_to_dto,
 )
+from interfaces.discord.activity.server import PvptestActivityServer
 
 
 class FakeService:
@@ -184,3 +189,41 @@ def test_activity_event_and_pokemon_dtos_are_serializable():
     pokemon = pokemon_to_dto(_snapshot().player_active, player_side=True)
     assert pokemon["name"] == "Pikachu"
     assert pokemon["sprite_url"].endswith("/PVP/back/pikachu.gif")
+
+
+@pytest.mark.asyncio
+async def test_rejected_activity_origin_logs_only_safe_request_metadata(
+    monkeypatch, caplog
+):
+    monkeypatch.setenv("ACTIVITY_ALLOWED_ORIGINS", "https://allowed.example")
+    server = PvptestActivityServer(object())
+    request = make_mocked_request(
+        "POST",
+        "/api/activity/auth",
+        headers={
+            "Origin": "https://blocked.example",
+            "Authorization": "Bearer session-token",
+            "Cookie": "session=session-token",
+        },
+    )
+    handler_called = False
+
+    async def handler(_request):
+        nonlocal handler_called
+        handler_called = True
+        return web.json_response({"unexpected": True})
+
+    with caplog.at_level(logging.WARNING, logger="interfaces.discord.activity.server"):
+        response = await server._cors_middleware(request, handler)
+
+    assert response.status == 403
+    assert not handler_called
+    assert response.text == '{"error": "Origin is not allowed."}'
+    assert len(caplog.records) == 1
+    message = caplog.records[0].message
+    assert "method=POST" in message
+    assert "path=/api/activity/auth" in message
+    assert "'https://blocked.example'" in message
+    assert "{'https://allowed.example'}" in message
+    assert "session-token" not in message
+    assert "unexpected" not in message

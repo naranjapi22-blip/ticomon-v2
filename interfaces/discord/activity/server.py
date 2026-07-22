@@ -52,6 +52,14 @@ class PvptestActivityServer:
         allowed = self._allowed_origins()
         origin = request.headers.get("Origin")
         if origin and origin not in allowed:
+            logger.warning(
+                "Rejected Activity origin: method=%s path=%s origin=%r "
+                "allowed_origins=%r",
+                request.method,
+                request.path,
+                origin,
+                allowed,
+            )
             return web.json_response({"error": "Origin is not allowed."}, status=403)
         if request.method == "OPTIONS":
             response = web.Response(status=204)
