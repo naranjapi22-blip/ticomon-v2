@@ -5,7 +5,7 @@ import discord
 import requests
 
 from core.creature.creature import Creature
-from interfaces.discord.pokemon_mapping import get_gif_id
+from interfaces.discord.pokemon_mapping import POKEMON_MAPPING, get_gif_id
 from rendering.gif_urls import BASE_GIF_URL, version_gif_url
 from rendering.variant_assets import get_variant_gif_url
 
@@ -31,6 +31,14 @@ def get_spawn_species_gif(
     shiny: bool,
 ) -> str:
     folder = "shiny" if shiny else "regular"
+
+    if 906 <= species_id <= 1025:
+        mapped_id = POKEMON_MAPPING.get(str(species_id))
+        if mapped_id is not None:
+            return version_gif_url(
+                f"{BASE_GIF_URL}/gifs/calidad/{folder}/{mapped_id}.gif"
+            )
+
     return version_gif_url(f"{BASE_GIF_URL}/gifs_pokeapi/{folder}/{species_id}.gif")
 
 

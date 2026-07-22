@@ -253,18 +253,22 @@ async def test_opportunity_button_sends_spawn_without_image_when_unavailable(
     assert "image" not in kwargs["embed"].to_dict()
 
 
-def test_spawn_species_gif_uses_the_pokeapi_collection_for_base_species() -> None:
+def test_spawn_species_gif_uses_quality_collection_for_gen9_base_species() -> None:
     assert get_spawn_species_gif(25, False) == (f"{BASE}/gifs_pokeapi/regular/25.gif")
     assert get_spawn_species_gif(25, True) == (f"{BASE}/gifs_pokeapi/shiny/25.gif")
     assert get_spawn_species_gif(37, False) == (f"{BASE}/gifs_pokeapi/regular/37.gif")
     assert get_spawn_species_gif(37, True) == (f"{BASE}/gifs_pokeapi/shiny/37.gif")
-    assert get_spawn_species_gif(906, False) == (f"{BASE}/gifs_pokeapi/regular/906.gif")
-    assert get_spawn_species_gif(906, True) == (f"{BASE}/gifs_pokeapi/shiny/906.gif")
-    assert get_spawn_species_gif(959, False) == (f"{BASE}/gifs_pokeapi/regular/959.gif")
+    assert get_spawn_species_gif(906, False) == (
+        f"{BASE}/gifs/calidad/regular/1044.gif"
+    )
+    assert get_spawn_species_gif(906, True) == (f"{BASE}/gifs/calidad/shiny/1044.gif")
+    assert get_spawn_species_gif(959, False) == (
+        f"{BASE}/gifs/calidad/regular/1142.gif"
+    )
     assert get_spawn_species_gif(1007, False) == (
-        f"{BASE}/gifs_pokeapi/regular/1007.gif"
+        f"{BASE}/gifs/calidad/regular/1138.gif"
     )
     assert get_spawn_species_gif(1024, False) == (
-        f"{BASE}/gifs_pokeapi/regular/1024.gif"
+        f"{BASE}/gifs/calidad/regular/1186.gif"
     )
     assert "mapped_id" not in get_spawn_species_gif(906, False)

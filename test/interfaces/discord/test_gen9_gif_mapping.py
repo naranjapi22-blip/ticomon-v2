@@ -25,8 +25,18 @@ def test_gen9_regular_and_shiny_urls_use_the_mapped_ids():
 def test_spawn_and_capture_resolvers_stay_separate():
     assert get_spawn_species_gif(25, False) == (f"{BASE}/gifs_pokeapi/regular/25.gif")
     assert get_spawn_species_gif(25, True) == (f"{BASE}/gifs_pokeapi/shiny/25.gif")
-    assert get_spawn_species_gif(906, False) == (f"{BASE}/gifs_pokeapi/regular/906.gif")
-    assert get_spawn_species_gif(906, True) == (f"{BASE}/gifs_pokeapi/shiny/906.gif")
+    assert get_spawn_species_gif(906, False) == (
+        f"{BASE}/gifs/calidad/regular/1044.gif"
+    )
+    assert get_spawn_species_gif(906, True) == (f"{BASE}/gifs/calidad/shiny/1044.gif")
+    assert get_spawn_species_gif(1000, False) == (
+        f"{BASE}/gifs/calidad/regular/1117.gif"
+    )
+    assert get_spawn_species_gif(1000, True) == (f"{BASE}/gifs/calidad/shiny/1117.gif")
+    assert get_spawn_species_gif(1025, False) == (
+        f"{BASE}/gifs_pokeapi/regular/1025.gif"
+    )
+    assert get_spawn_species_gif(1025, True) == (f"{BASE}/gifs_pokeapi/shiny/1025.gif")
     assert get_capture_species_gif(25, False) == (f"{BASE}/regular/25.gif")
     assert get_capture_species_gif(25, True) == (f"{BASE}/shiny/25.gif")
     assert get_capture_species_gif(906, False) == (f"{BASE}/regular/906.gif")
