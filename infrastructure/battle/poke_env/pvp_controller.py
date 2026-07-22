@@ -17,6 +17,7 @@ from poke_env.player.battle_order import SingleBattleOrder
 from poke_env.ps_client import ServerConfiguration
 from poke_env.ps_client.account_configuration import AccountConfiguration
 from poke_env.teambuilder import Teambuilder, TeambuilderPokemon
+from websockets.exceptions import ConnectionClosedOK
 
 from application.pvp.models import (
     PvpAction,
@@ -218,7 +219,18 @@ class ManualPvpPlayer(Player):
 
     async def _handle_battle_message(self, split_messages):
         await self._callbacks.on_protocol(self.trainer_id, split_messages)
-        await super()._handle_battle_message(split_messages)
+        try:
+            await super()._handle_battle_message(split_messages)
+        except ConnectionClosedOK:
+            if not any(
+                getattr(battle, "finished", False) for battle in self.battles.values()
+            ):
+                raise
+            logger.debug(
+                "Showdown socket closed normally after battle completion "
+                "trainer_id=%s",
+                self.trainer_id,
+            )
         for battle in self.battles.values():
             if self._callbacks.on_snapshot is not None:
                 await self._callbacks.on_snapshot(
