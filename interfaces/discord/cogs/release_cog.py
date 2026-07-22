@@ -1,5 +1,7 @@
 from discord.ext import commands
 
+from application.release.exceptions import ReleaseCreatureAssignedToTeam
+from interfaces.discord.release_messages import assigned_creatures_message
 from interfaces.discord.views.release_confirm_view import (
     ReleaseConfirmView,
 )
@@ -36,6 +38,14 @@ class ReleaseCog(commands.Cog):
                 trainer_id=ctx.author.id,
                 collection_numbers=list(collection_numbers),
             )
+
+        except ReleaseCreatureAssignedToTeam as error:
+
+            await ctx.send(
+                await assigned_creatures_message(self._core, ctx.author.id, error),
+            )
+
+            return
 
         except ValueError:
 

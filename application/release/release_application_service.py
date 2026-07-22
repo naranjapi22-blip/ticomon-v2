@@ -1,9 +1,11 @@
+from application.release.exceptions import ReleaseCreatureAssignedToTeam
 from application.release.release_result import ReleaseResult
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_repository import CandyRepository
 from core.candy.reward_policy import RewardPolicy
 from core.creature.creature_repository import CreatureRepository
 from core.release.release_unit_of_work import ReleaseUnitOfWork
+from core.team.team_repository import TeamRepository
 
 
 class ReleaseApplicationService:
@@ -17,11 +19,13 @@ class ReleaseApplicationService:
         candy_repository: CandyRepository,
         reward_policy: RewardPolicy,
         unit_of_work: ReleaseUnitOfWork | None = None,
+        team_repository: TeamRepository | None = None,
     ) -> None:
         self._creature_repository = creature_repository
         self._candy_repository = candy_repository
         self._reward_policy = reward_policy
         self._unit_of_work = unit_of_work
+        self._team_repository = team_repository
 
     async def release(
         self,
@@ -40,6 +44,11 @@ class ReleaseApplicationService:
                         collection_numbers,
                     )
                 )
+                assigned_ids = await transaction.get_assigned_creature_ids(
+                    trainer_id,
+                    [creature.id for creature in released_creatures],
+                )
+                self._raise_if_assigned(released_creatures, assigned_ids)
                 inventory = await transaction.get_candy_inventory(trainer_id)
                 reward_bundle = CandyBundle()
 
@@ -61,6 +70,12 @@ class ReleaseApplicationService:
             trainer_id,
             collection_numbers,
         )
+        if self._team_repository is not None:
+            assigned_ids = await self._team_repository.get_assigned_creature_ids(
+                trainer_id,
+                [creature.id for creature in creatures],
+            )
+            self._raise_if_assigned(creatures, assigned_ids)
         inventory = await self._candy_repository.get(trainer_id)
 
         released_creatures = creatures
@@ -92,3 +107,13 @@ class ReleaseApplicationService:
             released_creatures=released_creatures,
             reward_bundle=reward_bundle,
         )
+
+    @staticmethod
+    def _raise_if_assigned(creatures, assigned_ids: set[int]) -> None:
+        collection_numbers = [
+            creature.collection_number
+            for creature in creatures
+            if creature.id in assigned_ids
+        ]
+        if collection_numbers:
+            raise ReleaseCreatureAssignedToTeam(collection_numbers)

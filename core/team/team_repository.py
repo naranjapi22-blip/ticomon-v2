@@ -30,6 +30,15 @@ class TeamRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_assigned_creature_ids(
+        self,
+        trainer_id: int,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> set[int]:
+        """Returns the selected creature ids currently assigned to the team."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def count_by_trainer(
         self,
         trainer_id: int,

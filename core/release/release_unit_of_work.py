@@ -21,6 +21,15 @@ class ReleaseTransaction(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_assigned_creature_ids(
+        self,
+        trainer_id: int,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> set[int]:
+        """Returns selected creature ids assigned to the trainer team."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_creatures(
         self,
         trainer_id: int,

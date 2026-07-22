@@ -118,6 +118,27 @@ class _NeonReleaseTransaction(ReleaseTransaction):
         )
         return self._candy_mapper.from_rows(rows)
 
+    async def get_assigned_creature_ids(
+        self,
+        trainer_id: int,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> set[int]:
+        if not creature_ids:
+            return set()
+
+        rows = await self._connection.fetch(
+            """
+            SELECT creature_id
+            FROM trainer_team_slots
+            WHERE trainer_id = $1
+              AND creature_id = ANY($2::bigint[])
+            FOR UPDATE
+            """,
+            trainer_id,
+            list(creature_ids),
+        )
+        return {row["creature_id"] for row in rows}
+
     async def delete_creatures(
         self,
         trainer_id: int,

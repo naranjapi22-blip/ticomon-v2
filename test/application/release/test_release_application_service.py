@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 
+from application.release.exceptions import ReleaseCreatureAssignedToTeam
 from application.release.preview_release_application_service import (
     PreviewReleaseApplicationService,
 )
@@ -30,10 +31,12 @@ class _FailingRewardPolicy:
 
 
 class _AtomicReleaseUnitOfWork:
-    def __init__(self, *creatures, fail_on_save=False):
+    def __init__(self, *creatures, fail_on_save=False, assigned_ids=()):
         self.creatures = list(creatures)
         self.inventory = CandyInventory()
         self.fail_on_save = fail_on_save
+        self.assigned_ids = set(assigned_ids)
+        self.assignment_queries = 0
 
     @asynccontextmanager
     async def transaction(self):
@@ -62,6 +65,10 @@ class _AtomicReleaseTransaction:
 
     async def get_candy_inventory(self, trainer_id):
         return CandyInventory(dict(self._unit_of_work.inventory._candies))
+
+    async def get_assigned_creature_ids(self, trainer_id, creature_ids):
+        self._unit_of_work.assignment_queries += 1
+        return self._unit_of_work.assigned_ids.intersection(creature_ids)
 
     async def delete_creatures(self, trainer_id, creatures):
         released_ids = {creature.id for creature in creatures}
@@ -270,3 +277,43 @@ async def test_release_and_preview_share_stage_reward_for_multiple_evolutions():
 
     assert dict(preview.reward_bundle.items()) == dict(released.reward_bundle.items())
     assert released.reward_bundle.get(CandyType.FIRE) == 12
+
+
+@pytest.mark.asyncio
+async def test_release_rejects_team_creature_without_mutating_or_rewarding():
+    creature = CreatureBuilder().with_collection_number(1).build()
+    unit_of_work = _AtomicReleaseUnitOfWork(creature, assigned_ids=[creature.id])
+    service = ReleaseApplicationService(
+        creature_repository=None,
+        candy_repository=None,
+        reward_policy=RewardPolicy(),
+        unit_of_work=unit_of_work,
+    )
+
+    with pytest.raises(ReleaseCreatureAssignedToTeam) as error:
+        await service.release(creature.trainer_id, [1])
+
+    assert error.value.collection_numbers == [1]
+    assert unit_of_work.creatures == [creature]
+    assert unit_of_work.inventory.is_empty()
+    assert unit_of_work.assignment_queries == 1
+
+
+@pytest.mark.asyncio
+async def test_release_rejects_entire_batch_when_one_creature_is_on_team():
+    first = CreatureBuilder().with_id(101).with_collection_number(1).build()
+    second = CreatureBuilder().with_id(102).with_collection_number(2).build()
+    unit_of_work = _AtomicReleaseUnitOfWork(second, first, assigned_ids=[second.id])
+    service = ReleaseApplicationService(
+        creature_repository=None,
+        candy_repository=None,
+        reward_policy=RewardPolicy(),
+        unit_of_work=unit_of_work,
+    )
+
+    with pytest.raises(ReleaseCreatureAssignedToTeam) as error:
+        await service.release(first.trainer_id, [1, 2])
+
+    assert error.value.collection_numbers == [2]
+    assert unit_of_work.creatures == [second, first]
+    assert unit_of_work.inventory.is_empty()

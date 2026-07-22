@@ -64,6 +64,29 @@ class NeonTeamRepository(TeamRepository):
             creature_id=row["creature_id"],
         )
 
+    async def get_assigned_creature_ids(
+        self,
+        trainer_id: int,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> set[int]:
+        if not creature_ids:
+            return set()
+
+        pool = await get_pool()
+        async with pool.acquire() as connection:
+            rows = await connection.fetch(
+                """
+                SELECT creature_id
+                FROM trainer_team_slots
+                WHERE trainer_id = $1
+                  AND creature_id = ANY($2::bigint[])
+                """,
+                trainer_id,
+                list(creature_ids),
+            )
+
+        return {row["creature_id"] for row in rows}
+
     async def count_by_trainer(
         self,
         trainer_id: int,

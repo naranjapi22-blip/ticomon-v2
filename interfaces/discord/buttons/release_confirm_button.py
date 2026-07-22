@@ -1,4 +1,11 @@
+import logging
+
 import discord
+
+from application.release.exceptions import ReleaseCreatureAssignedToTeam
+from interfaces.discord.release_messages import assigned_creatures_message
+
+logger = logging.getLogger(__name__)
 
 
 class ReleaseConfirmButton(discord.ui.Button):
@@ -25,10 +32,30 @@ class ReleaseConfirmButton(discord.ui.Button):
 
         await interaction.response.defer()
 
-        result = await self._core.release_application.release(
-            trainer_id=self._trainer_id,
-            collection_numbers=self._collection_numbers,
-        )
+        try:
+            result = await self._core.release_application.release(
+                trainer_id=self._trainer_id,
+                collection_numbers=self._collection_numbers,
+            )
+        except ReleaseCreatureAssignedToTeam as error:
+            self.view.stop()
+            await interaction.edit_original_response(
+                content=await assigned_creatures_message(
+                    self._core,
+                    self._trainer_id,
+                    error,
+                ),
+                view=None,
+            )
+            return
+        except Exception:
+            self.view.stop()
+            logger.exception("Unexpected error while releasing creatures")
+            await interaction.edit_original_response(
+                content="❌ The Pokémon could not be released. Please try again later.",
+                view=None,
+            )
+            return
 
         released = "\n".join(
             f"• #{creature.collection_number} {creature.species.name.title()}"

@@ -10,6 +10,7 @@ class FakeTeamRepository(TeamRepository):
     def __init__(self) -> None:
         self._slots: dict[tuple[int, int], TeamSlot] = {}
         self._next_id = 1
+        self.assigned_queries: list[tuple[int, list[int]]] = []
 
     async def get_by_trainer(
         self,
@@ -36,6 +37,20 @@ class FakeTeamRepository(TeamRepository):
             ):
                 return team_slot
         return None
+
+    async def get_assigned_creature_ids(
+        self,
+        trainer_id: int,
+        creature_ids: list[int] | tuple[int, ...],
+    ) -> set[int]:
+        requested_ids = list(creature_ids)
+        self.assigned_queries.append((trainer_id, requested_ids))
+        requested = set(requested_ids)
+        return {
+            team_slot.creature_id
+            for team_slot in self._slots.values()
+            if team_slot.trainer_id == trainer_id and team_slot.creature_id in requested
+        }
 
     async def count_by_trainer(
         self,

@@ -416,12 +416,14 @@ def build_core(
         candy_repository=candy_repository,
         reward_policy=reward_policy,
         unit_of_work=NeonReleaseUnitOfWork(),
+        team_repository=team_repository,
     )
 
     preview_release_application = PreviewReleaseApplicationService(
         creature_repository=creature_repository,
         candy_repository=candy_repository,
         reward_policy=reward_policy,
+        team_repository=team_repository,
     )
     duplicate_application = DuplicateApplicationService(
         creature_repository=creature_repository,
