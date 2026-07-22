@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import pytest
+
+from application.pvp.models import PvpAction, PvpActionKind, PvpEvent, PvpLegalActions
+from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
+from core.pvp.session import PvpSessionRegistry
+from interfaces.discord.activity.pvptest_registry import (
+    PvptestActivityRegistry,
+    event_to_dto,
+    legal_actions_to_dto,
+    pokemon_to_dto,
+)
+
+
+class FakeService:
+    def __init__(self):
+        self.registry = PvpSessionRegistry()
+        self.legal = {}
+        self.submitted = []
+
+    def legal_actions_for(self, session_id, trainer_id):
+        return self.legal[(session_id, trainer_id)]
+
+    async def submit_action(self, session_id, trainer_id, action):
+        self.submitted.append((session_id, trainer_id, action))
+        return True
+
+
+def _snapshot(player_id=10):
+    pokemon = PvpPokemonSnapshot(
+        species_name="Pikachu",
+        form_name=None,
+        current_hp=80,
+        max_hp=100,
+        hp_fraction=0.8,
+        status=None,
+        fainted=False,
+        sprite_identifier="pikachu",
+    )
+    return PvpBattleSnapshot(
+        turn=2,
+        player_id=player_id,
+        opponent_id=20,
+        player_active=pokemon,
+        opponent_active=pokemon,
+        player_remaining=2,
+        opponent_remaining=1,
+        force_switch_player=False,
+        force_switch_opponent=False,
+        finished=False,
+        winner_id=None,
+        tie=False,
+        player_team=(pokemon,),
+        opponent_team=(pokemon,),
+    )
+
+
+@pytest.mark.asyncio
+async def test_activity_registry_matches_channel_instance_and_rejects_unrelated_user():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+    sent = []
+
+    async def send(payload):
+        sent.append(payload)
+
+    assert (
+        await registry.connect(
+            session_id=session.id,
+            user_id=10,
+            guild_id=1,
+            channel_id=99,
+            instance_id="activity-1",
+            send_json=send,
+        )
+        == "player1"
+    )
+    assert (
+        await registry.connect(
+            session_id=session.id,
+            user_id=30,
+            guild_id=1,
+            channel_id=99,
+            instance_id="activity-1",
+            send_json=send,
+        )
+        == "unauthorized"
+    )
+    with pytest.raises(PermissionError):
+        await registry.connect(
+            session_id=session.id,
+            user_id=20,
+            guild_id=1,
+            channel_id=99,
+            instance_id="activity-2",
+            send_json=send,
+        )
+    assert sent[0]["role"] == "player1"
+    assert sent[-1]["role"] == "unauthorized"
+
+
+@pytest.mark.asyncio
+async def test_registry_rejects_second_active_battle_in_one_channel():
+    service = FakeService()
+    registry = PvptestActivityRegistry(service)
+    first = service.registry.create(10, 20)
+    second = service.registry.create(30, 40)
+    await registry.bind(
+        session_id=first.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={},
+    )
+    with pytest.raises(ValueError, match="already active"):
+        await registry.bind(
+            session_id=second.id,
+            guild_id=1,
+            channel_id=99,
+            player_ids=(30, 40),
+            display_names={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_registry_cleanup_removes_channel_mapping():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={},
+    )
+
+    await registry.cleanup(session.id)
+
+    assert registry.find_for_channel(99) is None
+
+
+def test_activity_dtos_do_not_expose_internal_action_identifiers():
+    action = PvpAction(
+        kind=PvpActionKind.MOVE,
+        identifier="internal-showdown-id",
+        label="Thunderbolt",
+        detail="PP 15/15",
+        move_type="electric",
+        category="special",
+    )
+    dto = legal_actions_to_dto(PvpLegalActions(moves=(action,)))
+    assert dto["moves"] == [
+        {
+            "slot": 1,
+            "kind": "move",
+            "name": "Thunderbolt",
+            "detail": "PP 15/15",
+            "type": "electric",
+            "category": "special",
+            "pp": "PP 15/15",
+            "hp_current": None,
+            "hp_max": None,
+            "fainted": False,
+        }
+    ]
+    assert "identifier" not in dto["moves"][0]
+
+
+def test_activity_event_and_pokemon_dtos_are_serializable():
+    event = event_to_dto(
+        PvpEvent(move_name="Thunderbolt", damage=25, actor="player1", target="player2")
+    )
+    assert event["kind"] == "move"
+    pokemon = pokemon_to_dto(_snapshot().player_active, player_side=True)
+    assert pokemon["name"] == "Pikachu"
+    assert pokemon["sprite_url"].endswith("/PVP/back/pikachu.gif")

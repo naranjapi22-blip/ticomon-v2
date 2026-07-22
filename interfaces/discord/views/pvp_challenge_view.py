@@ -46,7 +46,14 @@ def _truncate_turn_event(message: str) -> str:
 
 class PvpChallengeView(discord.ui.View):
     def __init__(
-        self, core, session, display_names: dict[int, str] | None = None
+        self,
+        core,
+        session,
+        display_names: dict[int, str] | None = None,
+        *,
+        activity_registry=None,
+        on_activity_ready=None,
+        on_activity_finished=None,
     ) -> None:
         super().__init__(timeout=180)
         self.core = core
@@ -55,6 +62,9 @@ class PvpChallengeView(discord.ui.View):
         self.display_names = dict(display_names or {})
         self.message: discord.Message | None = None
         self.superseded = False
+        self.activity_registry = activity_registry
+        self.on_activity_ready = on_activity_ready
+        self.on_activity_finished = on_activity_finished
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.opponent_id:
@@ -78,7 +88,14 @@ class PvpChallengeView(discord.ui.View):
             await interaction.response.send_message(str(error), ephemeral=True)
             return
 
-        view = PvpTeamSelectionView(self.core, session, self.display_names)
+        view = PvpTeamSelectionView(
+            self.core,
+            session,
+            self.display_names,
+            activity_registry=self.activity_registry,
+            on_activity_ready=self.on_activity_ready,
+            on_activity_finished=self.on_activity_finished,
+        )
         view.message = self.message
         for child in self.children:
             child.disabled = True
@@ -165,9 +182,15 @@ class PvpTeamConfirmView(discord.ui.View):
                 ephemeral=True,
             )
             return
-        get_board = getattr(self.team_view, "_get_board", None)
+        if getattr(self.team_view, "activity_registry", None) is None:
+            get_board = getattr(self.team_view, "_get_board", None)
+        else:
+            get_board = None
         if get_board is not None:
             await get_board()
+        on_activity_ready = getattr(self.team_view, "on_activity_ready", None)
+        if on_activity_ready is not None:
+            await on_activity_ready(self.team_view)
         await interaction.followup.send(
             "Both teams are confirmed. Starting PvP…", ephemeral=True
         )
@@ -175,7 +198,14 @@ class PvpTeamConfirmView(discord.ui.View):
 
 class PvpTeamSelectionView(discord.ui.View):
     def __init__(
-        self, core, session, display_names: dict[int, str] | None = None
+        self,
+        core,
+        session,
+        display_names: dict[int, str] | None = None,
+        *,
+        activity_registry=None,
+        on_activity_ready=None,
+        on_activity_finished=None,
     ) -> None:
         super().__init__(timeout=600)
         self.core = core
@@ -185,6 +215,9 @@ class PvpTeamSelectionView(discord.ui.View):
         self.message: discord.Message | None = None
         self.superseded = False
         self.board: PvpBoardView | None = None
+        self.activity_registry = activity_registry
+        self.on_activity_ready = on_activity_ready
+        self.on_activity_finished = on_activity_finished
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id not in self.player_ids:
@@ -237,15 +270,31 @@ class PvpTeamSelectionView(discord.ui.View):
             on_event=self._on_event,
             on_finished=self._on_finished,
             on_snapshot=self._on_snapshot,
+            on_actions=(
+                self.activity_registry.handle_actions
+                if self.activity_registry is not None
+                else None
+            ),
+            on_cleanup=(
+                self.activity_registry.handle_pvp_cleanup
+                if self.activity_registry is not None
+                else None
+            ),
         )
 
     async def _on_event(self, step: PvpPresentationStep | str) -> None:
+        if self.activity_registry is not None:
+            await self.activity_registry.handle_event(self.session_id, step)
+            return
         if self.message is None:
             return
         board = await self._get_board()
         await board.set_event(step)
 
     async def _on_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
+        if self.activity_registry is not None:
+            await self.activity_registry.handle_snapshot(self.session_id, snapshot)
+            return
         if self.message is None:
             return
         board = await self._get_board()
@@ -257,6 +306,9 @@ class PvpTeamSelectionView(discord.ui.View):
         return self.board
 
     async def _on_finished(self, battle: object) -> None:
+        if self.on_activity_finished is not None:
+            await self.on_activity_finished(self, battle)
+            return
         if self.message is None:
             return
         board = await self._get_board()
@@ -265,6 +317,8 @@ class PvpTeamSelectionView(discord.ui.View):
     async def on_timeout(self) -> None:
         if self.superseded:
             return
+        if self.activity_registry is not None:
+            await self.activity_registry.cleanup(self.session_id)
         await self.core.pvp_application_service.cleanup(self.session_id)
         for child in self.children:
             child.disabled = True

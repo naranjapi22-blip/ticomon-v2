@@ -1,0 +1,16 @@
+{
+  "name": "ticomon-activity-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@discord/embedded-app-sdk": "latest",
+    "vite": "latest"
+  }
+}

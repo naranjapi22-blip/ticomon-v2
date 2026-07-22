@@ -150,6 +150,10 @@ class PvpApplicationService:
         self._snapshot_handlers: dict[
             UUID, Callable[[PvpBattleSnapshot], Awaitable[None]]
         ] = {}
+        self._action_handlers: dict[
+            UUID, Callable[[int, PvpLegalActions], Awaitable[None]]
+        ] = {}
+        self._cleanup_handlers: dict[UUID, Callable[[UUID], Awaitable[None]]] = {}
         self._finished_sessions: set[UUID] = set()
         self._finalizing_sessions: set[UUID] = set()
         self._event_translators: dict[UUID, PvpEventTranslator] = {}
@@ -231,6 +235,8 @@ class PvpApplicationService:
         on_event: Callable[[str], Awaitable[None]] | None = None,
         on_finished: Callable[[object], Awaitable[None]] | None = None,
         on_snapshot: Callable[[PvpBattleSnapshot], Awaitable[None]] | None = None,
+        on_actions: Callable[[int, PvpLegalActions], Awaitable[None]] | None = None,
+        on_cleanup: Callable[[UUID], Awaitable[None]] | None = None,
     ) -> bool:
         session = self.registry.get(session_id)
         async with session.lock:
@@ -302,6 +308,10 @@ class PvpApplicationService:
                 self._finish_handlers[session_id] = on_finished
             if on_snapshot is not None:
                 self._snapshot_handlers[session_id] = on_snapshot
+            if on_actions is not None:
+                self._action_handlers[session_id] = on_actions
+            if on_cleanup is not None:
+                self._cleanup_handlers[session_id] = on_cleanup
             session.begin_battle()
             session.phase = PvpPhase.STARTING
 
@@ -430,6 +440,9 @@ class PvpApplicationService:
                 if legal.forced_switch
                 else ACTION_TIMEOUT_SECONDS
             )
+            action_handler = self._action_handlers.get(session_id)
+        if action_handler is not None:
+            await action_handler(trainer_id, legal)
         try:
             return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
         except asyncio.TimeoutError:
@@ -928,9 +941,14 @@ class PvpApplicationService:
             if session.phase is not PvpPhase.FINISHED:
                 session.cancel()
             session.mark_cleaned_up()
+            cleanup_handler = self._cleanup_handlers.get(session_id)
+            if cleanup_handler is not None:
+                await cleanup_handler(session_id)
             self._event_handlers.pop(session_id, None)
             self._finish_handlers.pop(session_id, None)
             self._snapshot_handlers.pop(session_id, None)
+            self._action_handlers.pop(session_id, None)
+            self._cleanup_handlers.pop(session_id, None)
             self._event_translators.pop(session_id, None)
             self._latest_snapshots.pop(session_id, None)
             self._protocol_event_keys.pop(session_id, None)

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TicoMon PvP Activity</title>
+</head>
+<body>
+  <main class="battle" aria-live="polite">
+    <div id="runtime-status" class="runtime-status">Initializing...</div>
+
+    <section id="setup-screen" class="setup-screen">
+      <h1>TicoMon PvP Activity</h1>
+      <p id="setup-message">Connecting to Discord Activity...</p>
+      <p id="setup-detail" class="muted">The backend is authoritative for every battle action.</p>
+    </section>
+
+    <section id="battle-screen" class="battle-screen" hidden>
+      <section class="hud opponent-hud">
+        <div class="trainer-line">
+          <strong id="opponent-name">Opponent</strong>
+          <span id="opponent-status" class="status"></span>
+        </div>
+        <div class="hp-line"><span>HP</span><span id="opponent-hp-text">—</span></div>
+        <div class="hp-track"><div id="opponent-hp" class="hp-fill"></div></div>
+        <div id="opponent-team" class="team-indicator" aria-label="Opponent remaining team"></div>
+      </section>
+
+      <img id="opponent" class="pokemon opponent" src="/charizard.gif" alt="Opponent Pokémon">
+      <img id="player" class="pokemon player" src="/pikachu-back.gif" alt="Your Pokémon">
+
+      <section class="hud player-hud">
+        <div class="trainer-line">
+          <strong id="player-name">You</strong>
+          <span id="player-status" class="status"></span>
+        </div>
+        <div class="hp-line"><span>HP</span><span id="player-hp-text">—</span></div>
+        <div class="hp-track"><div id="player-hp" class="hp-fill"></div></div>
+        <div id="player-team" class="team-indicator" aria-label="Your remaining team"></div>
+      </section>
+
+      <div id="flash" class="flash"></div>
+
+      <section class="controls">
+        <div class="battle-meta">
+          <span id="turn-label">Turn —</span>
+          <span id="timer-label">Waiting</span>
+          <span id="presence-label">0/2 players connected</span>
+        </div>
+        <p id="message">Waiting for the battle snapshot.</p>
+        <div id="moves" class="action-grid" aria-label="Available moves"></div>
+        <div id="switches" class="switch-grid" aria-label="Available switches"></div>
+        <button id="forfeit" class="danger-button" type="button">Forfeit</button>
+        <p id="error-message" class="error-message" role="alert" hidden></p>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

@@ -1,9 +1,12 @@
 import logging
+import os
 import sys
 
 import discord
 from discord.ext import commands
 
+from interfaces.discord.activity.pvptest_registry import PvptestActivityRegistry
+from interfaces.discord.activity.server import PvptestActivityServer
 from interfaces.discord.bootstrap import build_discord
 from interfaces.discord.cogs.achievements_cog import AchievementsCog
 from interfaces.discord.cogs.battle_cog import BattleCog
@@ -48,6 +51,14 @@ class TicoMonBot(commands.Bot):
         )
 
         self.core = build_discord()
+        self.activity_registry = PvptestActivityRegistry(
+            self.core.pvp_application_service
+        )
+        self.activity_server = (
+            PvptestActivityServer(self.activity_registry)
+            if os.getenv("ACTIVITY_API_ENABLED", "false").casefold() == "true"
+            else None
+        )
         self._ready_announced = False
 
     async def setup_hook(self):
@@ -76,7 +87,17 @@ class TicoMonBot(commands.Bot):
             (TradeCog, (self.core,)),
             (TeamCog, (self.core,)),
             (BattleCog, (self.core,)),
-            (PvpCog, (self.core,)),
+            (
+                PvpCog,
+                (
+                    self.core,
+                    (
+                        self.activity_registry
+                        if self.activity_server is not None
+                        else None
+                    ),
+                ),
+            ),
             (SafariCog, (self.core,)),
             (ShopCog, (self.core,)),
             (CommandsCog, ()),
@@ -90,6 +111,13 @@ class TicoMonBot(commands.Bot):
             loaded_count += 1
 
         logger.debug("Discord cogs loaded: %s", loaded_count)
+        if self.activity_server is not None:
+            await self.activity_server.start()
+
+    async def close(self) -> None:
+        if self.activity_server is not None:
+            await self.activity_server.stop()
+        await super().close()
 
     async def on_ready(self) -> None:
         if self._ready_announced:

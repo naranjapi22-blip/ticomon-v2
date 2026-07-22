@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "poetry install --no-interaction --no-root",
+    "watchPatterns": [
+      "/application/**",
+      "/core/**",
+      "/infrastructure/**",
+      "/interfaces/**",
+      "/rendering/**",
+      "/main.py",
+      "/pyproject.toml",
+      "/poetry.lock"
+    ]
+  },
+  "deploy": {
+    "startCommand": "poetry run python main.py",
+    "healthcheckPath": "/health",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
