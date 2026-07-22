@@ -10,6 +10,7 @@ from uuid import UUID
 from application.pvp.models import (
     PvpAction,
     PvpEvent,
+    PvpLegalActions,
     PvpPresentationStep,
 )
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
@@ -101,6 +102,14 @@ class PvptestActivityRegistry:
     def find_for_channel(self, channel_id: int) -> ActivityBattleRecord | None:
         session_id = self._channel_sessions.get(channel_id)
         return self._records.get(session_id) if session_id is not None else None
+
+    def action_handler(
+        self, session_id: UUID
+    ) -> Callable[[int, PvpLegalActions], Awaitable[None]]:
+        async def handle(trainer_id: int, legal: PvpLegalActions) -> None:
+            await self.handle_actions(session_id, trainer_id, legal)
+
+        return handle
 
     async def connect(
         self,

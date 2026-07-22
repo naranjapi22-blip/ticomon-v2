@@ -271,7 +271,7 @@ class PvpTeamSelectionView(discord.ui.View):
             on_finished=self._on_finished,
             on_snapshot=self._on_snapshot,
             on_actions=(
-                self.activity_registry.handle_actions
+                self.activity_registry.action_handler(self.session_id)
                 if self.activity_registry is not None
                 else None
             ),

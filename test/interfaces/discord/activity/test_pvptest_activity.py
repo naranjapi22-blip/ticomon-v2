@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import make_mocked_request
 
-from application.pvp.models import PvpAction, PvpActionKind, PvpEvent, PvpLegalActions
+from application.pvp.models import (
+    PvpAction,
+    PvpActionKind,
+    PvpEvent,
+    PvpLegalActions,
+)
+from application.pvp.pvp_application_service import PvpApplicationService
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
-from core.pvp.session import PvpSessionRegistry
+from core.pvp.session import PvpPhase, PvpSessionRegistry
 from interfaces.discord.activity.pvptest_registry import (
     PvptestActivityRegistry,
     event_to_dto,
@@ -189,6 +197,91 @@ def test_activity_event_and_pokemon_dtos_are_serializable():
     pokemon = pokemon_to_dto(_snapshot().player_active, player_side=True)
     assert pokemon["name"] == "Pikachu"
     assert pokemon["sprite_url"].endswith("/PVP/back/pikachu.gif")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "legal",
+    [
+        PvpLegalActions(
+            moves=(PvpAction(PvpActionKind.MOVE, "move:tackle", "Tackle"),)
+        ),
+        PvpLegalActions(
+            switches=(PvpAction(PvpActionKind.SWITCH, "switch:bench", "Bench"),),
+            forced_switch=True,
+        ),
+    ],
+)
+async def test_activity_action_handler_matches_request_action_contract(legal):
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(10, 20)
+    session.phase = (
+        PvpPhase.FORCED_SWITCH if legal.forced_switch else PvpPhase.WAITING_FOR_ACTIONS
+    )
+    activity = PvptestActivityRegistry(service)
+    await activity.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=100,
+        player_ids=(10, 20),
+        display_names={},
+    )
+    service._action_handlers[session.id] = activity.action_handler(session.id)
+
+    request = asyncio.create_task(service.request_action(session.id, 10, legal))
+    await asyncio.sleep(0)
+
+    assert set(activity.get(session.id).deadlines) == {10}
+    request.cancel()
+    with suppress(asyncio.CancelledError):
+        await request
+
+
+@pytest.mark.asyncio
+async def test_activity_action_handlers_keep_sessions_isolated():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    first = service.challenge(10, 20)
+    second = service.challenge(30, 40)
+    first.phase = PvpPhase.WAITING_FOR_ACTIONS
+    second.phase = PvpPhase.FORCED_SWITCH
+    activity = PvptestActivityRegistry(service)
+    await activity.bind(
+        session_id=first.id,
+        guild_id=1,
+        channel_id=100,
+        player_ids=(10, 20),
+        display_names={},
+    )
+    await activity.bind(
+        session_id=second.id,
+        guild_id=1,
+        channel_id=200,
+        player_ids=(30, 40),
+        display_names={},
+    )
+    service._action_handlers[first.id] = activity.action_handler(first.id)
+    service._action_handlers[second.id] = activity.action_handler(second.id)
+    first_legal = PvpLegalActions(
+        moves=(PvpAction(PvpActionKind.MOVE, "move:tackle", "Tackle"),)
+    )
+    second_legal = PvpLegalActions(
+        switches=(PvpAction(PvpActionKind.SWITCH, "switch:bench", "Bench"),),
+        forced_switch=True,
+    )
+
+    requests = [
+        asyncio.create_task(service.request_action(first.id, 10, first_legal)),
+        asyncio.create_task(service.request_action(second.id, 30, second_legal)),
+    ]
+    await asyncio.sleep(0)
+
+    assert set(activity.get(first.id).deadlines) == {10}
+    assert set(activity.get(second.id).deadlines) == {30}
+    for request in requests:
+        request.cancel()
+    for request in requests:
+        with suppress(asyncio.CancelledError):
+            await request
 
 
 @pytest.mark.asyncio
