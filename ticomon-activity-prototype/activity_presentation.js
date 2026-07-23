@@ -40,6 +40,18 @@ export function presentationKey(item) {
   return `event:${item.sequence}:${item.index ?? 0}`;
 }
 
+function presentationOrder(item) {
+  return [item.sequence ?? Number.MAX_SAFE_INTEGER, item.index ?? -1];
+}
+
+function comesBefore(left, right) {
+  const [leftSequence, leftIndex] = presentationOrder(left);
+  const [rightSequence, rightIndex] = presentationOrder(right);
+  return leftSequence < rightSequence || (
+    leftSequence === rightSequence && leftIndex < rightIndex
+  );
+}
+
 export function shouldRestoreSnapshotImmediately({ reconnecting, hasSnapshot }) {
   return reconnecting && hasSnapshot;
 }
@@ -88,6 +100,7 @@ export class ActivityPresentationQueue {
     this.items = [];
     this.keys = new Set();
     this.running = false;
+    this.startPromise = null;
   }
 
   clearPending() {
@@ -99,8 +112,20 @@ export class ActivityPresentationQueue {
     const key = presentationKey(item);
     if (this.keys.has(key)) return false;
     this.keys.add(key);
-    this.items.push({ ...item, key });
-    if (!this.running) this.drainPromise = this.drain();
+    const queued = { ...item, key };
+    const insertionIndex = this.items.findIndex((current) =>
+      comesBefore(queued, current)
+    );
+    if (insertionIndex === -1) this.items.push(queued);
+    else this.items.splice(insertionIndex, 0, queued);
+    if (!this.running && this.startPromise === null) {
+      this.startPromise = Promise.resolve().then(() => {
+        this.startPromise = null;
+        if (!this.running && this.items.length) return this.drain();
+        return undefined;
+      });
+      this.drainPromise = this.startPromise;
+    }
     return true;
   }
 

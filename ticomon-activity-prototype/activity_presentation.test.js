@@ -88,6 +88,23 @@ test("duplicate snapshots do not replay animations", async () => {
   assert.equal(presentations, 1);
 });
 
+test("a snapshot received before its event is presented after that event", async () => {
+  const order = [];
+  const queue = new ActivityPresentationQueue({
+    present: async (item) => order.push(item.type),
+    wait: async () => {},
+  });
+  queue.enqueue({ type: "battle_snapshot", sequence: 12, phase: "resolving" });
+  queue.enqueue({
+    type: "battle_events",
+    sequence: 11,
+    index: 0,
+    event: { kind: "move", move_name: "Tackle" },
+  });
+  await queue.drainPromise;
+  assert.deepEqual(order, ["battle_events", "battle_snapshot"]);
+});
+
 test("terminal result is presented after the final snapshot", async () => {
   const order = [];
   const queue = new ActivityPresentationQueue({

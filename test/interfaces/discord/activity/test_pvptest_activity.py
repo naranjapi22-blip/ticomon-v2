@@ -123,6 +123,74 @@ async def test_activity_registry_matches_channel_instance_and_rejects_unrelated_
 
 
 @pytest.mark.asyncio
+async def test_activity_presence_is_broadcast_to_both_connected_clients():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+    first, second = [], []
+
+    async def send_first(payload):
+        first.append(payload)
+
+    async def send_second(payload):
+        second.append(payload)
+
+    await registry.connect(
+        session_id=session.id,
+        user_id=10,
+        guild_id=1,
+        channel_id=99,
+        instance_id="activity-1",
+        send_json=send_first,
+    )
+    await registry.connect(
+        session_id=session.id,
+        user_id=20,
+        guild_id=1,
+        channel_id=99,
+        instance_id="activity-1",
+        send_json=send_second,
+    )
+
+    assert registry.get(session.id).connected_count() == 2
+    assert any(payload.get("players_connected") == 2 for payload in first)
+    assert any(payload.get("players_connected") == 2 for payload in second)
+    await registry.wait_until_ready(session.id)
+
+
+@pytest.mark.asyncio
+async def test_activity_wait_timeout_cleans_up_the_session(monkeypatch):
+    service = FakeService()
+    registry = PvptestActivityRegistry(service)
+    session = service.registry.create(10, 20)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=987,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+
+    async def fail_wait(awaitable, timeout):
+        awaitable.close()
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(asyncio, "wait_for", fail_wait)
+
+    with pytest.raises(ValueError, match="Both players must join"):
+        await registry.wait_until_ready(session.id)
+
+    assert registry.find_for_channel(987) is None
+
+
+@pytest.mark.asyncio
 async def test_registry_rejects_second_active_battle_in_one_channel():
     service = FakeService()
     registry = PvptestActivityRegistry(service)

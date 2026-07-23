@@ -49,6 +49,7 @@ const elements = {
   timerLabel: document.querySelector("#timer-label"),
   presenceLabel: document.querySelector("#presence-label"),
   message: document.querySelector("#message"),
+  actionPrompt: document.querySelector("#action-prompt"),
   moves: document.querySelector("#moves"),
   switches: document.querySelector("#switches"),
   forfeit: document.querySelector("#forfeit"),
@@ -66,6 +67,7 @@ const state = {
   deadline: null,
   phase: "initializing",
   snapshot: null,
+  authoritativeSnapshot: null,
   timer: null,
   reconnecting: false,
   reconnectAttempt: 0,
@@ -76,6 +78,8 @@ const state = {
   restoringSnapshot: false,
   snapshotReceived: false,
   pendingSwitchSide: null,
+  pendingFaintSide: null,
+  preserveSnapshotMessage: false,
   hpValues: { player: null, opponent: null },
 };
 
@@ -87,7 +91,9 @@ const presentationQueue = new ActivityPresentationQueue({
   },
   onIdle: () => {
     state.presentationBusy = false;
-    renderControls(state.snapshot?.legal_actions);
+    renderControls(
+      state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
+    );
   },
 });
 
@@ -171,6 +177,7 @@ function connectSocket() {
   state.reconnecting = false;
   if (wasReconnecting) {
     presentationQueue.clearPending();
+    state.preserveSnapshotMessage = false;
   }
   state.restoringSnapshot = wasReconnecting && Boolean(state.snapshot);
   if (!wasReconnecting && !state.snapshot) {
@@ -275,10 +282,8 @@ function handleServerMessage(message) {
   ) {
     return;
   }
-  if (message.sequence !== undefined) {
-    state.sequence = message.sequence;
-  }
   if (message.type === "battle_snapshot") {
+    state.authoritativeSnapshot = message;
     if (shouldRestoreSnapshotImmediately({
       reconnecting: state.restoringSnapshot,
       hasSnapshot: Boolean(state.snapshot),
@@ -316,6 +321,9 @@ async function presentQueuedMessage(item) {
       : `Battle finished. Reason: ${item.reason}.`;
     hideActionControls();
   }
+  if (item.sequence !== undefined) {
+    state.sequence = Math.max(state.sequence, item.sequence);
+  }
 }
 
 async function presentSnapshot(snapshot, { restore = false } = {}) {
@@ -325,6 +333,9 @@ async function presentSnapshot(snapshot, { restore = false } = {}) {
   state.pendingAction = false;
   clearActivityOverlay("");
   await renderSnapshot(snapshot, { animate: !restore });
+  if (snapshot.sequence !== undefined) {
+    state.sequence = Math.max(state.sequence, snapshot.sequence);
+  }
   if (restore) {
     renderControls(snapshot.legal_actions);
   }
@@ -333,16 +344,31 @@ async function presentSnapshot(snapshot, { restore = false } = {}) {
 async function renderSnapshot(snapshot, { animate = true } = {}) {
   showBattle();
   elements.turnLabel.textContent = `Turn ${snapshot.turn}`;
-  elements.message.textContent = snapshot.message?.message || phaseMessage(snapshot.phase);
+  if (!state.preserveSnapshotMessage) {
+    elements.message.textContent = snapshot.message?.message || phaseMessage(snapshot.phase);
+  }
   await Promise.all([
-    renderPokemon(elements.player, snapshot.self, "player", animate),
-    renderPokemon(elements.opponent, snapshot.opponent, "opponent", animate),
+    renderPokemon(elements.player, snapshot.self, "player", false),
+    renderPokemon(elements.opponent, snapshot.opponent, "opponent", false),
   ]);
   await Promise.all([
     renderHp(elements.playerHp, elements.playerHpText, snapshot.self, "player", animate),
     renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent, "opponent", animate),
   ]);
+  if (state.pendingSwitchSide) {
+    const switched = elementForSide(state.pendingSwitchSide);
+    if (switched) {
+      switched.hidden = false;
+      await playAnimation(switched, "switching-in", ANIMATION_TIMINGS.switchIn);
+    }
+  }
+  if (state.pendingFaintSide) {
+    const fainted = elementForSide(state.pendingFaintSide);
+    if (fainted) fainted.hidden = true;
+  }
   state.pendingSwitchSide = null;
+  state.pendingFaintSide = null;
+  state.preserveSnapshotMessage = false;
   elements.playerStatus.textContent = snapshot.self?.status || "";
   elements.opponentStatus.textContent = snapshot.opponent?.status || "";
   renderTeam(elements.playerTeam, snapshot.self_team, snapshot.self_remaining);
@@ -356,6 +382,13 @@ async function renderPokemon(element, pokemon, side, animate) {
   }
   try {
     await replaceSpriteAfterPreload(element, sprite.source);
+    element.classList.remove("fainting", "switching-out", "switching-in");
+    if (
+      state.pendingSwitchSide === side ||
+      state.pendingFaintSide === side
+    ) {
+      element.hidden = true;
+    }
     element.alt = sprite.alt;
     element.classList.remove("sprite-missing");
     element.removeAttribute("data-sprite-error");
@@ -421,9 +454,23 @@ function renderControls(legal = { moves: [], switches: [], forced_switch: false 
   elements.moves.replaceChildren();
   elements.switches.replaceChildren();
   const controlsDisabled = state.role === "unauthorized" || state.pendingAction || state.phase === "finished";
+  renderActionPrompt(legal, controlsDisabled);
   legal.moves?.forEach((move) => elements.moves.append(actionButton(move, "choose_move", controlsDisabled)));
   legal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", controlsDisabled)));
   elements.forfeit.disabled = controlsDisabled;
+}
+
+function renderActionPrompt(legal, controlsDisabled) {
+  if (controlsDisabled || state.phase === "finished") {
+    elements.actionPrompt.textContent = "";
+    return;
+  }
+  const canAct = Boolean(legal.moves?.length || legal.switches?.length);
+  if (canAct) {
+    elements.actionPrompt.textContent = `${elements.playerName.textContent || "You"}, choose your action`;
+  } else {
+    elements.actionPrompt.textContent = `${elements.opponentName.textContent || "Opponent"} is choosing...`;
+  }
 }
 
 function hideActionControls() {
@@ -466,6 +513,10 @@ async function presentBattleEvent(event) {
   if (event.switch) {
     state.pendingSwitchSide = resolveSide(event.target_side || event.source_side || event.target);
   }
+  if (event.fainted) {
+    state.pendingFaintSide = resolveSide(event.target_side || event.target);
+  }
+  state.preserveSnapshotMessage = true;
   try {
     for (let index = 0; index < plan.length; index += 1) {
       const step = plan[index];

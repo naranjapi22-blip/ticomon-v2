@@ -171,6 +171,14 @@ class PvpTeamConfirmView(discord.ui.View):
     @discord.ui.button(label="Confirm team", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
+        on_activity_ready = getattr(self.team_view, "on_activity_ready", None)
+        if (
+            getattr(self.team_view, "activity_registry", None) is not None
+            and on_activity_ready is not None
+            and not getattr(self.team_view, "_activity_registered", False)
+        ):
+            await on_activity_ready(self.team_view)
+            self.team_view._activity_registered = True
         try:
             ready = await self.team_view.confirm(interaction.user.id)
         except Exception as error:
@@ -188,9 +196,6 @@ class PvpTeamConfirmView(discord.ui.View):
             get_board = None
         if get_board is not None:
             await get_board()
-        on_activity_ready = getattr(self.team_view, "on_activity_ready", None)
-        if on_activity_ready is not None:
-            await on_activity_ready(self.team_view)
         await interaction.followup.send(
             "Both teams are confirmed. Starting PvP…", ephemeral=True
         )
@@ -218,6 +223,7 @@ class PvpTeamSelectionView(discord.ui.View):
         self.activity_registry = activity_registry
         self.on_activity_ready = on_activity_ready
         self.on_activity_finished = on_activity_finished
+        self._activity_registered = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id not in self.player_ids:
@@ -277,6 +283,11 @@ class PvpTeamSelectionView(discord.ui.View):
             ),
             on_cleanup=(
                 self.activity_registry.handle_pvp_cleanup
+                if self.activity_registry is not None
+                else None
+            ),
+            start_gate=(
+                self.activity_registry.wait_until_ready
                 if self.activity_registry is not None
                 else None
             ),

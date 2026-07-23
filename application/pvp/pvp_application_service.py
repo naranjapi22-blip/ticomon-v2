@@ -237,6 +237,7 @@ class PvpApplicationService:
         on_snapshot: Callable[[PvpBattleSnapshot], Awaitable[None]] | None = None,
         on_actions: Callable[[int, PvpLegalActions], Awaitable[None]] | None = None,
         on_cleanup: Callable[[UUID], Awaitable[None]] | None = None,
+        start_gate: Callable[[UUID], Awaitable[None]] | None = None,
     ) -> bool:
         session = self.registry.get(session_id)
         async with session.lock:
@@ -291,6 +292,14 @@ class PvpApplicationService:
             )
             session.phase = PvpPhase.STARTING
             session.startup_claimed = True
+            if start_gate is not None:
+                try:
+                    await start_gate(session_id)
+                except Exception:
+                    session.startup_claimed = False
+                    session.phase = PvpPhase.WAITING_FOR_ACTIONS
+                    await self.cleanup(session_id)
+                    raise
             try:
                 controller = self._controller_factory()
             except Exception:

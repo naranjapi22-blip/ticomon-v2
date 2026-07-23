@@ -46,6 +46,7 @@ class ActivityBattleRecord:
     result_posted: bool = False
     deadlines: dict[int, str] = field(default_factory=dict)
     cleanup_task: asyncio.Task | None = None
+    ready_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
 
     def role_for(self, user_id: int) -> str:
         if user_id == self.player_ids[0]:
@@ -85,6 +86,8 @@ class PvptestActivityRegistry:
                 raise ValueError(
                     "An Activity PvP test is already active in this channel."
                 )
+            if existing_id == session_id:
+                return self._records[session_id]
             record = ActivityBattleRecord(
                 session_id=session_id,
                 guild_id=guild_id,
@@ -145,9 +148,14 @@ class PvptestActivityRegistry:
         if role == "unauthorized":
             await send_json(self._state_message(record, role))
             return role
-        record.connections[1 if role == "player1" else 2].add(send_json)
+        connections = record.connections[1 if role == "player1" else 2]
+        connections.clear()
+        connections.add(send_json)
         await send_json(self._state_message(record, role))
         await self._send_snapshot(record, user_id, send_json)
+        if record.connected_count() == 2:
+            record.ready_event.set()
+        await self._broadcast_state(record)
         await self._publish_status(record)
         return role
 
@@ -160,7 +168,18 @@ class PvptestActivityRegistry:
         role = record.role_for(user_id)
         if role in {"player1", "player2"}:
             record.connections[1 if role == "player1" else 2].discard(send_json)
+            await self._broadcast_state(record)
             await self._publish_status(record)
+
+    async def wait_until_ready(self, session_id: UUID) -> None:
+        record = self.get(session_id)
+        try:
+            await asyncio.wait_for(record.ready_event.wait(), timeout=180)
+        except asyncio.TimeoutError as error:
+            await self.cleanup(session_id)
+            raise ValueError(
+                "Both players must join the PvP Activity before the battle starts."
+            ) from error
 
     async def handle_event(
         self, session_id: UUID, step: PvpPresentationStep | str
@@ -343,6 +362,16 @@ class PvptestActivityRegistry:
         if record.public_status is not None:
             await record.public_status(
                 f"Activity status: {record.connected_count()}/2 connected"
+            )
+
+    async def _broadcast_state(self, record: ActivityBattleRecord) -> None:
+        for role, connections in record.connections.items():
+            await self._broadcast_to(
+                connections,
+                self._state_message(
+                    record,
+                    "player1" if role == 1 else "player2",
+                ),
             )
 
     def _state_message(self, record: ActivityBattleRecord, role: str) -> dict:

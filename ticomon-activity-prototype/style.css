@@ -288,6 +288,13 @@ button:disabled {
   font-size: 0.75em;
 }
 
+.action-prompt {
+  margin: 4px 0 0;
+  color: #fef08a;
+  font-weight: 700;
+  min-height: 1.2em;
+}
+
 .player-attacking {
   animation: player-attack 450ms ease-in-out;
 }
