@@ -1,21 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   ACTIVITY_BACKGROUND_DIRECTORY,
   DEFAULT_ACTIVITY_BACKGROUND,
+  applyActivityBackground,
   activityBackgroundUrl,
   selectActivityBackground,
 } from "./activity_background.js";
 
+const publicBackground = new URL(
+  "./public/activity-backgrounds/bg-aquacordetown.jpg",
+  import.meta.url,
+);
+
 test("an existing shared battle background is selected through a relative URL", () => {
-  const source = resolve(
-    process.cwd(),
-    "../rendering/assets/battle_bacgrounds",
-    DEFAULT_ACTIVITY_BACKGROUND,
-  );
-  assert.equal(existsSync(source), true);
+  assert.equal(existsSync(publicBackground), true);
   assert.equal(
     selectActivityBackground([DEFAULT_ACTIVITY_BACKGROUND]),
     "/activity-backgrounds/bg-aquacordetown.jpg",
@@ -29,6 +29,17 @@ test("missing shared background falls back to a neutral Activity background", ()
   const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
   assert.match(css, /background-color:\s*#334155/);
   assert.equal(ACTIVITY_BACKGROUND_DIRECTORY, "/activity-backgrounds");
+});
+
+test("public background URL is not resolved as a Vite source import", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /activity-backgrounds/);
+  assert.doesNotMatch(css, /url\(["']\.\//);
+  const documentRef = {
+    documentElement: { style: { setProperty: (_name, value) => { documentRef.value = value; } } },
+  };
+  applyActivityBackground(documentRef);
+  assert.equal(documentRef.value, 'url("/activity-backgrounds/bg-aquacordetown.jpg")');
 });
 
 test("Activity sprites cannot be enlarged beyond intrinsic dimensions", () => {

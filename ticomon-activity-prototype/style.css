@@ -41,9 +41,12 @@ button:disabled {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background-color: #334155;
-  background:
+  background-image:
     linear-gradient(rgb(0 0 0 / 5%), rgb(0 0 0 / 20%)),
-    url("/activity-backgrounds/bg-aquacordetown.jpg") center / cover;
+    var(--activity-background-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 .runtime-status {

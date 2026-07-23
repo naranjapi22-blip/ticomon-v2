@@ -5,6 +5,13 @@ export function activityBackgroundUrl(name = DEFAULT_ACTIVITY_BACKGROUND) {
   return `${ACTIVITY_BACKGROUND_DIRECTORY}/${name}`;
 }
 
+export function applyActivityBackground(documentRef = globalThis.document) {
+  documentRef.documentElement.style.setProperty(
+    "--activity-background-image",
+    `url("${activityBackgroundUrl()}")`,
+  );
+}
+
 export function selectActivityBackground(available, preferred = DEFAULT_ACTIVITY_BACKGROUND) {
   if (available.includes(preferred)) return activityBackgroundUrl(preferred);
   const fallback = [...available].sort().find((name) => name.endsWith(".jpg"));

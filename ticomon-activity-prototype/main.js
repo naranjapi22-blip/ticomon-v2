@@ -13,7 +13,10 @@ import {
   shouldRestoreSnapshotImmediately,
   shouldExposeControls,
 } from "./activity_presentation.js";
+import { applyActivityBackground } from "./activity_background.js";
 import "./style.css";
+
+applyActivityBackground();
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
 const apiOrigin = import.meta.env.VITE_ACTIVITY_API_ORIGIN?.trim() || "";
