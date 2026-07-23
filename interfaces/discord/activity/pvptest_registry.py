@@ -368,10 +368,18 @@ class PvptestActivityRegistry:
                 record.connections[role],
                 self._snapshot_message(record, snapshot, record.sequence),
                 context=self._context(record),
+                record=record,
             )
         if legal.forced_switch:
             await self._broadcast_state(record)
         role = 1 if trainer_id == record.player_ids[0] else 2
+        set_prompt_client_connected = getattr(
+            self._pvp_service, "set_prompt_client_connected", None
+        )
+        if set_prompt_client_connected is not None:
+            set_prompt_client_connected(
+                session_id, trainer_id, bool(record.connections[role])
+            )
         if not record.connections[role]:
             logger.warning(
                 "pvp_activity_prompt_waiting_for_client %s request_id=%s "
@@ -621,24 +629,38 @@ class PvptestActivityRegistry:
                 },
             )
             await self._broadcast_to(
-                connections, payload, context=self._context(record)
+                connections, payload, context=self._context(record), record=record
             )
 
     async def _broadcast(self, record: ActivityBattleRecord, payload: dict) -> None:
         for connections in record.connections.values():
             await self._broadcast_to(
-                connections, payload, context=self._context(record)
+                connections, payload, context=self._context(record), record=record
             )
 
     async def _broadcast_to(
-        self, connections: set[SendJson], payload: dict, *, context="session_id=-"
+        self,
+        connections: set[SendJson],
+        payload: dict,
+        *,
+        context="session_id=-",
+        record: ActivityBattleRecord | None = None,
     ) -> None:
         if not connections:
-            logger.warning(
-                "pvp_activity_publish_no_clients %s type=%s sequence=%s",
+            log = (
+                logger.warning
+                if record is not None and record.battle_started
+                else logger.info
+            )
+            log(
+                "pvp_activity_publish_no_clients %s type=%s sequence=%s "
+                "phase=%s battle_started=%s request_id=%s",
                 context,
                 payload.get("type"),
                 payload.get("sequence"),
+                self._record_phase(record),
+                record.battle_started if record is not None else False,
+                payload.get("request_id"),
             )
         for send_json in tuple(connections):
             try:
@@ -655,6 +677,14 @@ class PvptestActivityRegistry:
                     safe_error_message(error),
                     safe_traceback(error),
                 )
+
+    def _record_phase(self, record: ActivityBattleRecord | None) -> str:
+        if record is None:
+            return "unknown"
+        try:
+            return self._pvp_service.registry.get(record.session_id).phase.value
+        except ValueError:
+            return "unknown"
 
     async def _publish_status(self, record: ActivityBattleRecord) -> None:
         if record.public_status is not None:
@@ -681,6 +711,7 @@ class PvptestActivityRegistry:
                     "player1" if role == 1 else "player2",
                 ),
                 context=self._context(record),
+                record=record,
             )
 
     def _state_message(self, record: ActivityBattleRecord, role: str) -> dict:

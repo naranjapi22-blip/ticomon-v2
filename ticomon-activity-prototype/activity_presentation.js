@@ -18,6 +18,9 @@ export const PRESENTATION_TIMINGS = Object.freeze({
   defaultEvent: 600,
 });
 
+export const PRESENTATION_TIMEOUT_MS = 10000;
+export const SPRITE_PRELOAD_TIMEOUT_MS = 4000;
+
 export function presentationDelayFor(item, previous = null) {
   if (item.type === "battle_finished") return PRESENTATION_TIMINGS.finished;
   if (item.type === "battle_snapshot") {
@@ -46,6 +49,19 @@ export function presentationKey(item) {
   if (item.type === "battle_snapshot") return `snapshot:${item.sequence}`;
   if (item.type === "battle_finished") return `finished:${item.sequence}`;
   return `event:${item.sequence}:${item.index ?? 0}`;
+}
+
+export function shouldDiscardSequence({
+  sequence,
+  currentSequence,
+  type,
+  restoringSnapshot = false,
+}) {
+  return (
+    sequence !== undefined &&
+    sequence <= currentSequence &&
+    !(type === "battle_snapshot" && restoringSnapshot)
+  );
 }
 
 function presentationOrder(item) {
@@ -140,8 +156,16 @@ export function preloadSprite(source, ImageConstructor = globalThis.Image) {
       return;
     }
     const image = new ImageConstructor();
-    image.onload = () => resolve(source);
-    image.onerror = () => reject(new Error(`Unable to load sprite: ${source}`));
+    const timeout = setTimeout(
+      () => reject(new Error("Activity sprite preload timed out.")),
+      SPRITE_PRELOAD_TIMEOUT_MS,
+    );
+    const finish = (callback) => {
+      clearTimeout(timeout);
+      callback();
+    };
+    image.onload = () => finish(() => resolve(source));
+    image.onerror = () => finish(() => reject(new Error("Unable to load battle sprite.")));
     image.src = source;
   });
 }
@@ -165,11 +189,15 @@ export class ActivityPresentationQueue {
     }),
     onStart = () => {},
     onIdle = () => {},
+    onError = () => {},
+    presentationTimeout = PRESENTATION_TIMEOUT_MS,
   }) {
     this.present = present;
     this.wait = wait;
     this.onStart = onStart;
     this.onIdle = onIdle;
+    this.onError = onError;
+    this.presentationTimeout = presentationTimeout;
     this.items = [];
     this.keys = new Set();
     this.running = false;
@@ -206,13 +234,32 @@ export class ActivityPresentationQueue {
     this.running = true;
     this.onStart();
     let previous = null;
-    while (this.items.length) {
-      const item = this.items.shift();
-      await this.present(item);
-      await this.wait(presentationDelayFor(item, previous));
-      previous = item;
+    try {
+      while (this.items.length) {
+        const item = this.items.shift();
+        let timeout;
+        try {
+          await Promise.race([
+            this.present(item),
+            new Promise((_, reject) => {
+              timeout = setTimeout(
+                () => reject(new Error("Activity presentation timed out.")),
+                this.presentationTimeout,
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(timeout);
+        }
+        await this.wait(presentationDelayFor(item, previous));
+        previous = item;
+      }
+    } catch (error) {
+      this.clearPending();
+      this.onError(error);
+    } finally {
+      this.running = false;
+      this.onIdle();
     }
-    this.running = false;
-    this.onIdle();
   }
 }

@@ -17,6 +17,7 @@ import {
   controlOptionsFor,
   controlRenderKey,
   promptReadyTypeFor,
+  shouldDiscardSequence,
 } from "./activity_presentation.js";
 import { applyActivityBackground } from "./activity_background.js";
 import {
@@ -31,6 +32,7 @@ applyActivityBackground();
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
 const apiOrigin = import.meta.env.VITE_ACTIVITY_API_ORIGIN?.trim() || "";
+const SNAPSHOT_RENDER_TIMEOUT_MS = 5000;
 const elements = {
   runtimeStatus: document.querySelector("#runtime-status"),
   connectionStatus: document.querySelector("#connection-status"),
@@ -70,7 +72,7 @@ const state = {
   socket: null,
   sessionToken: null,
   role: "unauthorized",
-  sequence: 0,
+  sequence: -1,
   pendingAction: false,
   deadline: null,
   phase: "initializing",
@@ -101,20 +103,30 @@ const state = {
   noticeUntil: 0,
   noticePromise: null,
   pendingImpactSide: null,
+  snapshotRenderTimer: null,
+  renderedSnapshotSequence: null,
 };
 
 const presentationQueue = new ActivityPresentationQueue({
   present: presentQueuedMessage,
   onStart: () => {
     state.presentationBusy = true;
+    logActivity("activity_visual_queue_started");
     updateControlPresentation("presentation_start");
   },
   onIdle: () => {
     state.presentationBusy = false;
+    logActivity("activity_visual_queue_finished");
     renderControls(
       state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
       "presentation_idle",
     );
+  },
+  onError: (error) => {
+    clearSnapshotRenderWatchdog();
+    logActivity("activity_error", { error_type: error?.name || "Error" }, "error");
+    showBattle();
+    showError("The battle presentation failed. Reconnect to continue.");
   },
 });
 
@@ -203,7 +215,8 @@ function connectSocket() {
   }
   state.restoringSnapshot = wasReconnecting && Boolean(state.snapshot);
   if (!wasReconnecting && !state.snapshot) {
-    state.sequence = 0;
+    state.sequence = -1;
+    state.renderedSnapshotSequence = null;
   }
   if (state.snapshot) {
     showConnectionState("Reconnecting to the battle...");
@@ -214,6 +227,7 @@ function connectSocket() {
   state.socket = socket;
   socket.addEventListener("open", () => {
     if (state.socket !== socket) return;
+    logActivity("activity_socket_open");
     if (state.snapshot) {
       showConnectionState("Syncing the current battle...");
     }
@@ -228,8 +242,11 @@ function connectSocket() {
   socket.addEventListener("message", (event) => {
     if (state.socket !== socket) return;
     try {
-      handleServerMessage(JSON.parse(event.data));
+      const message = JSON.parse(event.data);
+      logActivity("activity_socket_message", message);
+      handleServerMessage(message);
     } catch (error) {
+      logActivity("activity_error", { error_type: error?.name || "InvalidMessage" }, "error");
       showError("The Activity received an invalid server update.");
       console.error("Invalid Activity server message.", error);
     }
@@ -255,6 +272,7 @@ function connectSocket() {
   });
   socket.addEventListener("error", () => {
     if (state.socket !== socket) return;
+    logActivity("activity_error", { error_type: "WebSocketError" }, "error");
     setRuntime("Reconnecting");
   });
 }
@@ -298,6 +316,7 @@ function handleServerMessage(message) {
     return;
   }
   if (message.type === "connection_ready") {
+    logActivity("activity_authentication_succeeded", message);
     state.role = message.role;
     if (isAuthorizedRole(state.role)) {
       clearActivityOverlay("Connected to the battle.");
@@ -308,6 +327,7 @@ function handleServerMessage(message) {
     return;
   }
   if (message.type === "session_state") {
+    logActivity("activity_session_state_received", message);
     state.role = message.role;
     state.phase = message.phase;
     state.playersConnected = message.players_connected || 0;
@@ -343,24 +363,37 @@ function handleServerMessage(message) {
     }
     return;
   }
-  if (
-    message.sequence !== undefined &&
-    message.sequence <= state.sequence &&
-    !(message.type === "battle_snapshot" && state.restoringSnapshot)
-  ) {
+  if (shouldDiscardSequence({
+    sequence: message.sequence,
+    currentSequence: state.sequence,
+    type: message.type,
+    restoringSnapshot: state.restoringSnapshot,
+  })) {
+    logActivity("activity_snapshot_discarded", message, "warn", {
+      discard_reason: "sequence_not_newer",
+    });
     return;
   }
   if (message.type === "battle_snapshot") {
+    logActivity("activity_snapshot_received", message);
     state.authoritativeSnapshot = message;
     if (shouldRestoreSnapshotImmediately({
       reconnecting: state.restoringSnapshot,
       hasSnapshot: Boolean(state.snapshot),
     })) {
       state.restoringSnapshot = false;
-      presentSnapshot(message, { restore: true });
+      logActivity("activity_snapshot_accepted", message, "debug", { restore: true });
+      armSnapshotRenderWatchdog(message);
+      presentSnapshot(message, { restore: true }).catch(handlePresentationError);
     } else {
-      presentationQueue.enqueue({ ...message, initial: !state.snapshotReceived });
-      state.snapshotReceived = true;
+      const accepted = presentationQueue.enqueue({ ...message, initial: !state.snapshotReceived });
+      logActivity(accepted ? "activity_snapshot_accepted" : "activity_snapshot_discarded", message, accepted ? "debug" : "warn", {
+        discard_reason: accepted ? undefined : "presentation_duplicate",
+      });
+      if (accepted) {
+        state.snapshotReceived = true;
+        armSnapshotRenderWatchdog(message);
+      }
     }
   } else if (message.type === "battle_events") {
     message.events?.forEach((event, index) => {
@@ -402,6 +435,9 @@ async function presentSnapshot(snapshot, { restore = false } = {}) {
   state.pendingAction = false;
   clearActivityOverlay("");
   await renderSnapshot(snapshot, { animate: !restore });
+  state.renderedSnapshotSequence = snapshot.sequence;
+  clearSnapshotRenderWatchdog();
+  logActivity("activity_snapshot_rendered", snapshot);
   if (snapshot.sequence !== undefined) {
     state.sequence = Math.max(state.sequence, snapshot.sequence);
   }
@@ -559,6 +595,10 @@ function renderControls(legal = { moves: [], switches: [], forced_switch: false 
     controlsLegal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", false)));
     state.controlsRenderKey = key;
     state.controlsSessionId = state.authoritativeSnapshot?.session_id || state.snapshot?.session_id || null;
+    logActivity("activity_controls_rendered", {
+      ...state.authoritativeSnapshot || state.snapshot || {},
+      legal_actions: legal,
+    }, "debug", { render_key: key });
   }
   updateControlPresentation(reason, phase);
   if (
@@ -567,6 +607,11 @@ function renderControls(legal = { moves: [], switches: [], forced_switch: false 
     key !== state.promptAckKey
   ) {
     state.promptAckKey = key;
+    logActivity("activity_prompt_ready_sent", {
+      ...state.authoritativeSnapshot || state.snapshot || {},
+      request_id: state.authoritativeSnapshot?.request_id || state.snapshot?.request_id,
+      legal_actions: legal,
+    });
     send({
       type: promptReadyTypeFor(legal),
       request_id: state.authoritativeSnapshot?.request_id || state.snapshot?.request_id,
@@ -615,16 +660,14 @@ function updateControlPresentation(reason, phaseOverride = null) {
   }
   renderActionPrompt(legal, controlsDisabled, phase);
   if (changed) {
-    console.debug("pvp_activity_control_state", {
+    logActivity("activity_control_state", {
+      ...state.authoritativeSnapshot || state.snapshot || {},
+      actor_id: state.requiredUserId,
+      legal_actions: legal,
+    }, "debug", {
       control_state: phase,
       render_key: state.controlsRenderKey,
-      actor_id: state.requiredUserId,
-      local_user_id: state.localUserId,
-      legal_moves_count: legal.moves?.length || 0,
-      legal_switches_count: legal.switches?.length || 0,
-      presentation_busy: state.presentationBusy,
-      reason_for_render: phase === "waiting_for_local_action" ? reason : null,
-      reason_for_hide_or_disable: phase === "waiting_for_local_action" ? null : reason,
+      reason,
     });
   }
 }
@@ -836,6 +879,58 @@ function wait(milliseconds) {
 function setRuntime(label) {
   elements.runtimeStatus.textContent = label;
   elements.runtimeStatus.dataset.mode = label === "Discord Activity" ? "activity" : "preview";
+}
+
+function logActivity(eventName, message = {}, level = "debug", extra = {}) {
+  const snapshot = state.authoritativeSnapshot || state.snapshot || {};
+  const legal = message.legal_actions || {};
+  const metadata = {
+    type: message.type,
+    session_id: message.session_id || snapshot.session_id,
+    sequence: message.sequence ?? snapshot.sequence,
+    request_id: message.request_id ?? snapshot.request_id,
+    turn: message.turn ?? snapshot.turn,
+    phase: message.phase || state.phase,
+    actor_id: message.actor_id ?? message.required_user_id ?? state.requiredUserId,
+    local_user_id: state.localUserId,
+    presentation_busy: state.presentationBusy,
+    control_phase: state.controlPhase,
+    legal_moves_count: legal.moves?.length,
+    legal_switches_count: legal.switches?.length,
+    ...extra,
+  };
+  const output = console[level] || console.debug;
+  output(eventName, metadata);
+}
+
+function armSnapshotRenderWatchdog(snapshot) {
+  clearSnapshotRenderWatchdog();
+  state.snapshotRenderTimer = window.setTimeout(() => {
+    if (state.renderedSnapshotSequence === snapshot.sequence) return;
+    logActivity("activity_snapshot_render_timeout", snapshot, "warn", {
+      queue_running: presentationQueue.running,
+      queue_pending: presentationQueue.items.length,
+      queue_start_promise: presentationQueue.startPromise !== null,
+    });
+    showBattle();
+    showError("The battle state was received but could not be rendered. Reconnect to continue.");
+  }, SNAPSHOT_RENDER_TIMEOUT_MS);
+}
+
+function clearSnapshotRenderWatchdog() {
+  if (state.snapshotRenderTimer !== null) {
+    window.clearTimeout(state.snapshotRenderTimer);
+    state.snapshotRenderTimer = null;
+  }
+}
+
+function handlePresentationError(error) {
+  clearSnapshotRenderWatchdog();
+  state.presentationBusy = false;
+  logActivity("activity_error", { error_type: error?.name || "PresentationError" }, "error");
+  showBattle();
+  showError("The battle presentation failed. Reconnect to continue.");
+  updateControlPresentation("presentation_error");
 }
 
 function setSetup(message, detail) {
