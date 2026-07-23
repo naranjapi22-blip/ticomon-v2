@@ -40,9 +40,10 @@ button:disabled {
   width: min(100vw, 960px);
   aspect-ratio: 16 / 9;
   overflow: hidden;
+  background-color: #334155;
   background:
     linear-gradient(rgb(0 0 0 / 5%), rgb(0 0 0 / 20%)),
-    url("./battle-background.png") center / cover;
+    url("/activity-backgrounds/bg-aquacordetown.jpg") center / cover;
 }
 
 .runtime-status {
@@ -114,7 +115,10 @@ button:disabled {
 .pokemon {
   position: absolute;
   z-index: 1;
-  width: 30%;
+  width: auto;
+  height: auto;
+  max-width: 42%;
+  max-height: 42%;
   object-fit: contain;
   image-rendering: pixelated;
 }
@@ -127,7 +131,7 @@ button:disabled {
 .player {
   bottom: 22%;
   left: 13%;
-  width: 34%;
+  max-width: 46%;
 }
 
 .hud {

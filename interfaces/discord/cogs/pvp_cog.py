@@ -114,6 +114,9 @@ class PvpCog(commands.Cog):
                         "Unable to update experimental Activity status", exc_info=True
                     )
 
+            async def public_result(result: str) -> None:
+                await ctx.send(result)
+
             try:
                 await self._activity_registry.bind(
                     session_id=session.id,
@@ -122,6 +125,7 @@ class PvpCog(commands.Cog):
                     player_ids=(ctx.author.id, opponent.id),
                     display_names=display_names,
                     public_status=public_status,
+                    public_result=public_result,
                 )
             except Exception:
                 await self._core.pvp_application_service.cleanup(session.id)

@@ -285,12 +285,7 @@ function handleServerMessage(message) {
       });
     });
   } else if (message.type === "battle_finished") {
-    state.phase = "finished";
-    state.pendingAction = true;
-    elements.message.textContent = message.winner
-      ? `${message.winner.display_name || "The winner"} won. Reason: ${message.reason}.`
-      : `Battle finished. Reason: ${message.reason}.`;
-    renderControls();
+    presentationQueue.enqueue(message);
   }
 }
 
@@ -300,6 +295,13 @@ async function presentQueuedMessage(item) {
   } else if (item.type === "battle_events") {
     elements.message.textContent = item.event.message || item.event.kind;
     animateEvent(item.event);
+  } else if (item.type === "battle_finished") {
+    state.phase = "finished";
+    state.pendingAction = true;
+    elements.message.textContent = item.winner
+      ? `${item.winner.display_name || "The winner"} won. Reason: ${item.reason}.`
+      : `Battle finished. Reason: ${item.reason}.`;
+    hideActionControls();
   }
 }
 

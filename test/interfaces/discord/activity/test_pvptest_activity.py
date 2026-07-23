@@ -163,6 +163,75 @@ async def test_registry_cleanup_removes_channel_mapping():
     assert registry.find_for_channel(99) is None
 
 
+@pytest.mark.asyncio
+async def test_activity_finish_posts_result_once_keeps_snapshot_and_releases_channel():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    session.final_winner_id = 10
+    registry = PvptestActivityRegistry(service)
+    results = []
+
+    async def post_result(message):
+        results.append(message)
+
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Jorroco", 20: "Orange"},
+        public_result=post_result,
+    )
+    record = registry.get(session.id)
+    record.latest_snapshots[10] = _snapshot(player_id=10)
+
+    sent = []
+
+    async def send(payload):
+        sent.append(payload)
+
+    record.connections[1].add(send)
+    await registry.handle_finished(session.id, object())
+    await registry.handle_finished(session.id, object())
+
+    assert results == ["Jorroco defeated Orange!"]
+    assert any(payload["type"] == "battle_finished" for payload in sent)
+    assert registry.find_for_channel(99) is None
+    assert registry.completed(session.id).latest_snapshots[10] is not None
+
+    replacement = service.registry.create(30, 40)
+    await registry.bind(
+        session_id=replacement.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(30, 40),
+        display_names={},
+    )
+
+
+@pytest.mark.asyncio
+async def test_activity_finish_send_failure_still_cleans_up():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+
+    async def failing_result(_message):
+        raise RuntimeError("Discord unavailable")
+
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Jorroco", 20: "Orange"},
+        public_result=failing_result,
+    )
+    await registry.handle_finished(session.id, object())
+
+    assert registry.find_for_channel(99) is None
+    assert registry.completed(session.id).finished
+
+
 def test_activity_dtos_do_not_expose_internal_action_identifiers():
     action = PvpAction(
         kind=PvpActionKind.MOVE,

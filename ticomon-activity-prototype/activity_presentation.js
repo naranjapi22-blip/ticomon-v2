@@ -5,11 +5,13 @@ export const PRESENTATION_TIMINGS = Object.freeze({
   switch: 900,
   forcedSwitch: 800,
   snapshot: 650,
+  finished: 0,
   initialSnapshot: 0,
   defaultEvent: 650,
 });
 
 export function presentationDelayFor(item) {
+  if (item.type === "battle_finished") return PRESENTATION_TIMINGS.finished;
   if (item.type === "battle_snapshot") {
     return item.initial
       ? PRESENTATION_TIMINGS.initialSnapshot
@@ -23,6 +25,7 @@ export function presentationDelayFor(item) {
 export function presentationKey(item) {
   if (item.key) return item.key;
   if (item.type === "battle_snapshot") return `snapshot:${item.sequence}`;
+  if (item.type === "battle_finished") return `finished:${item.sequence}`;
   return `event:${item.sequence}:${item.index ?? 0}`;
 }
 

@@ -34,6 +34,7 @@ class ActivityBattleRecord:
     player_ids: tuple[int, int]
     display_names: dict[int, str]
     public_status: Callable[[str], Awaitable[None]] | None = None
+    public_result: Callable[[str], Awaitable[None]] | None = None
     instance_id: str | None = None
     connections: dict[int, set[SendJson]] = field(
         default_factory=lambda: {1: set(), 2: set()}
@@ -42,6 +43,7 @@ class ActivityBattleRecord:
     sequence: int = 0
     finished: bool = False
     last_event: dict | None = None
+    result_posted: bool = False
     deadlines: dict[int, str] = field(default_factory=dict)
     cleanup_task: asyncio.Task | None = None
 
@@ -63,6 +65,7 @@ class PvptestActivityRegistry:
         self._pvp_service = pvp_service
         self._records: dict[UUID, ActivityBattleRecord] = {}
         self._channel_sessions: dict[int, UUID] = {}
+        self._completed_records: dict[UUID, ActivityBattleRecord] = {}
         self._lock = asyncio.Lock()
 
     async def bind(
@@ -74,6 +77,7 @@ class PvptestActivityRegistry:
         player_ids: tuple[int, int],
         display_names: dict[int, str],
         public_status: Callable[[str], Awaitable[None]] | None = None,
+        public_result: Callable[[str], Awaitable[None]] | None = None,
     ) -> ActivityBattleRecord:
         async with self._lock:
             existing_id = self._channel_sessions.get(channel_id)
@@ -88,6 +92,7 @@ class PvptestActivityRegistry:
                 player_ids=player_ids,
                 display_names=dict(display_names),
                 public_status=public_status,
+                public_result=public_result,
             )
             self._records[session_id] = record
             self._channel_sessions[channel_id] = session_id
@@ -102,6 +107,14 @@ class PvptestActivityRegistry:
     def find_for_channel(self, channel_id: int) -> ActivityBattleRecord | None:
         session_id = self._channel_sessions.get(channel_id)
         return self._records.get(session_id) if session_id is not None else None
+
+    def completed(self, session_id: UUID) -> ActivityBattleRecord:
+        try:
+            return self._completed_records[session_id]
+        except KeyError as error:
+            raise ValueError(
+                "The completed Activity PvP test was not found."
+            ) from error
 
     def action_handler(
         self, session_id: UUID
@@ -202,7 +215,7 @@ class PvptestActivityRegistry:
 
     async def handle_finished(self, session_id: UUID, _battle: object) -> None:
         record = self._records.get(session_id)
-        if record is None:
+        if record is None or record.finished:
             return
         record.finished = True
         session = self._pvp_service.registry.get(session_id)
@@ -222,16 +235,49 @@ class PvptestActivityRegistry:
         }
         record.sequence += 1
         await self._broadcast(record, payload)
+        await self._post_result(record, session)
         if record.public_status is not None:
-            await record.public_status(
-                "Battle finished. The final result is available in the Activity."
+            try:
+                await record.public_status(
+                    "Battle finished. The final result is available in the Activity."
+                )
+            except Exception:
+                logger.debug(
+                    "Unable to publish completed Activity status session_id=%s",
+                    session_id,
+                    exc_info=True,
+                )
+        await self.cleanup(session_id)
+
+    async def _post_result(self, record: ActivityBattleRecord, session) -> None:
+        if record.public_result is None or record.result_posted:
+            return
+        winner_id = session.final_winner_id
+        if session.final_tie or winner_id is None:
+            result = "The PvP battle ended in a tie."
+        else:
+            loser_id = next(
+                player_id for player_id in record.player_ids if player_id != winner_id
             )
-        record.cleanup_task = asyncio.create_task(self._delayed_cleanup(session_id))
+            winner = record.display_names.get(winner_id, "The winner")
+            loser = record.display_names.get(loser_id, "the opponent")
+            result = f"{winner} defeated {loser}!"
+        record.result_posted = True
+        try:
+            await record.public_result(result)
+        except Exception:
+            logger.warning(
+                "Unable to post Activity PvP result session_id=%s",
+                record.session_id,
+                exc_info=True,
+            )
 
     async def cleanup(self, session_id: UUID) -> None:
         record = self._records.pop(session_id, None)
         if record is None:
             return
+        if record.finished:
+            self._completed_records[session_id] = record
         if (
             record.cleanup_task is not asyncio.current_task()
             and record.cleanup_task is not None

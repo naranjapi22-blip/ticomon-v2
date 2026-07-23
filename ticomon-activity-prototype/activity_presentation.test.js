@@ -88,6 +88,23 @@ test("duplicate snapshots do not replay animations", async () => {
   assert.equal(presentations, 1);
 });
 
+test("terminal result is presented after the final snapshot", async () => {
+  const order = [];
+  const queue = new ActivityPresentationQueue({
+    present: async (item) => { order.push(item.type); },
+    wait: async () => {},
+  });
+  queue.enqueue({ type: "battle_snapshot", sequence: 10, phase: "finalizing" });
+  queue.enqueue({
+    type: "battle_finished",
+    sequence: 11,
+    reason: "normal",
+    winner: { display_name: "Jorroco" },
+  });
+  await queue.drainPromise;
+  assert.deepEqual(order, ["battle_snapshot", "battle_finished"]);
+});
+
 test("reconnect restores the current snapshot without replaying old turns", () => {
   assert.equal(
     shouldRestoreSnapshotImmediately({ reconnecting: true, hasSnapshot: true }),
