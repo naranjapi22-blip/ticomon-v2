@@ -10,6 +10,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -39,7 +40,9 @@ button:disabled {
   position: relative;
   width: min(100vw, 960px);
   height: 100vh;
+  height: 100dvh;
   max-height: 100vh;
+  max-height: 100dvh;
   min-height: 0;
   overflow: hidden;
   background-color: #334155;
@@ -553,6 +556,117 @@ button:disabled {
   .switch-grid button {
     padding-top: 5px;
     padding-bottom: 5px;
+  }
+}
+
+
+@media (orientation: portrait) and (max-width: 520px) {
+  .battle {
+    width: 100vw;
+  }
+
+  .battle-shell {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .battle-stage {
+    min-height: 360px;
+  }
+
+  .hud {
+    width: min(50%, 205px);
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: clamp(0.72rem, 2.8vw, 0.9rem);
+  }
+
+  .opponent-hud {
+    top: max(10px, env(safe-area-inset-top));
+    left: 4%;
+  }
+
+  .player-hud {
+    right: 4%;
+    bottom: 4%;
+  }
+
+  .pokemon {
+    max-width: 46%;
+    max-height: clamp(96px, 22vw, 132px);
+  }
+
+  .opponent {
+    top: 23%;
+    right: 13%;
+  }
+
+  .player {
+    bottom: 17%;
+    left: 13%;
+    max-width: 48%;
+  }
+
+  .impact-message {
+    max-width: 64%;
+    font-size: clamp(0.9rem, 3.8vw, 1.15rem);
+  }
+
+  .impact-message[data-side="opponent"] {
+    top: 20%;
+    left: 4%;
+  }
+
+  .impact-message[data-side="player"] {
+    right: 4%;
+    bottom: 20%;
+  }
+
+  .action-panel {
+    max-height: min(36dvh, 300px);
+    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    font-size: clamp(0.76rem, 3.2vw, 0.95rem);
+  }
+
+  .battle-meta {
+    font-size: 0.76em;
+  }
+
+  .action-prompt {
+    font-size: clamp(1rem, 4vw, 1.2rem);
+  }
+
+  .battle-message,
+  .battle-message.message-move,
+  .battle-message.message-result {
+    font-size: clamp(1rem, 4.2vw, 1.25rem);
+    line-height: 1.25;
+  }
+
+  .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .switch-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .action-grid button,
+  .switch-grid button {
+    min-height: 42px;
+    font-size: 0.9em;
+  }
+
+  .battle-shell[data-phase="finished"] {
+    grid-template-rows: minmax(300px, 60dvh) minmax(0, 1fr);
+  }
+
+  .battle-shell[data-phase="finished"] .action-panel {
+    max-height: none;
+  }
+
+  .battle-shell[data-phase="finished"] .battle-message {
+    margin-top: 8px;
+    font-size: clamp(1.15rem, 5vw, 1.45rem);
   }
 }
 

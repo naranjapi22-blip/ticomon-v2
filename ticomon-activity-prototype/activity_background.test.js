@@ -112,3 +112,23 @@ test("short viewports keep separate sprite anchors while retaining a stage", () 
   assert.match(css, /\.player\s*\{[^}]*bottom:/s);
   assert.match(css, /\.action-panel\s*\{[^}]*overflow-y:\s*auto/s);
 });
+
+test("portrait mobile uses a dedicated composition with safe areas", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const portrait = css.match(
+    /@media \(orientation: portrait\) and \(max-width: 520px\)\s*\{([\s\S]*?)\n\}\n\n@media \(max-height: 460px\)/,
+  )?.[1] || "";
+  assert.match(portrait, /\.battle-stage\s*\{[\s\S]*min-height:\s*360px/);
+  assert.match(portrait, /\.pokemon\s*\{[\s\S]*max-height:\s*clamp\(96px,\s*22vw,\s*132px\)/);
+  assert.match(portrait, /\.opponent\s*\{[\s\S]*top:\s*23%[\s\S]*right:\s*13%/);
+  assert.match(portrait, /\.player\s*\{[\s\S]*bottom:\s*17%[\s\S]*left:\s*13%/);
+  assert.match(portrait, /safe-area-inset-bottom/);
+  assert.match(css, /height:\s*100dvh/);
+  assert.match(portrait, /\.battle-shell\[data-phase="finished"\]/);
+});
+
+test("finished presentation hides forfeit and exposes the phase on the shell", () => {
+  const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(main, /elements\.battleScreen\.dataset\.phase\s*=\s*phase/);
+  assert.match(main, /elements\.forfeit\.hidden\s*=\s*phase\s*===\s*"finished"/);
+});

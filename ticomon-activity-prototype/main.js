@@ -601,6 +601,8 @@ function updateControlPresentation(reason, phaseOverride = null) {
   state.controlPhase = phase;
   const controlsDisabled = phase !== "waiting_for_local_action" || state.role === "unauthorized";
   elements.actionPanel.dataset.controlPhase = phase;
+  elements.battleScreen.dataset.phase = phase;
+  elements.forfeit.hidden = phase === "finished";
   [elements.moves, elements.switches].forEach((element) => {
     element.classList.toggle("controls-disabled", controlsDisabled);
     element.querySelectorAll("button").forEach((button) => { button.disabled = controlsDisabled; });
