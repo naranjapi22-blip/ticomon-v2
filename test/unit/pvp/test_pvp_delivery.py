@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -100,31 +99,6 @@ async def test_forced_switch_timeout_applies_only_a_legal_switch(monkeypatch):
 
     assert action in legal.switches
     assert session.selected_actions == {1: action.identifier}
-
-
-@pytest.mark.asyncio
-async def test_auto_selection_log_contains_request_and_reason(monkeypatch, caplog):
-    monkeypatch.setattr(pvp_service_module, "ACTION_TIMEOUT_SECONDS", 0.01)
-    service = PvpApplicationService(registry=PvpSessionRegistry())
-    session = service.challenge(1, 2)
-    session.phase = PvpPhase.WAITING_FOR_ACTIONS
-    legal = PvpLegalActions(
-        moves=(PvpAction(PvpActionKind.MOVE, "move:tackle", "Tackle"),)
-    )
-    caplog.set_level(logging.WARNING)
-
-    await service.request_action(session.id, 1, legal)
-
-    record = next(
-        record
-        for record in caplog.records
-        if record.message.startswith("pvp_action_auto_selected")
-    )
-    assert f"session_id={session.id}" in record.getMessage()
-    assert "request_id=" in record.getMessage()
-    assert "action_type=normal_action" in record.getMessage()
-    assert "reason=normal_action_timeout" in record.getMessage()
-    assert "legal_moves_count=1" in record.getMessage()
 
 
 @pytest.mark.asyncio

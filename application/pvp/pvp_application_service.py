@@ -426,13 +426,13 @@ class PvpApplicationService:
             session.cancel()
             await self.cleanup(session_id)
             raise
-        if hasattr(controller, "set_log_context"):
-            controller.set_log_context(self._session_log_context(session_id))
-        logger.info(
-            "pvp_showdown_controller_created %s controller=%s",
-            self._session_log_context(session_id),
-            type(controller).__name__,
-        )
+            if hasattr(controller, "set_log_context"):
+                controller.set_log_context(self._session_log_context(session_id))
+            logger.info(
+                "pvp_showdown_controller_created %s controller=%s",
+                self._session_log_context(session_id),
+                type(controller).__name__,
+            )
         session.startup_task = task
         session.timeout_tasks.add(task)
         task.add_done_callback(self._consume_start_task)
@@ -625,14 +625,12 @@ class PvpApplicationService:
         if action_handler is not None:
             prompt_ready = await action_handler(trainer_id, legal)
         metadata = self._action_prompt_metadata[key]
-        prompt_acknowledged = prompt_ready and action_handler is not None
         metadata["prompt_acknowledged_at"] = (
-            datetime.now(timezone.utc).isoformat() if prompt_acknowledged else None
+            datetime.now(timezone.utc).isoformat() if prompt_ready else None
         )
-        if action_handler is None:
-            metadata["client_connected"] = False
+        metadata["client_connected"] = prompt_ready
         metadata["timeout_started_at"] = (
-            datetime.now(timezone.utc).isoformat() if prompt_acknowledged else None
+            datetime.now(timezone.utc).isoformat() if prompt_ready else None
         )
         if not prompt_ready:
             return await self._apply_automatic_action(
@@ -640,11 +638,7 @@ class PvpApplicationService:
                 key,
                 future,
                 legal,
-                reason=(
-                    "prompt_not_acknowledged"
-                    if metadata.get("client_connected", False)
-                    else "disconnected_player_fallback"
-                ),
+                reason="disconnected_player_fallback",
             )
         try:
             return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
@@ -726,13 +720,6 @@ class PvpApplicationService:
         self, session, key, future, legal, *, reason: str
     ) -> PvpAction:
         action = self._automatic_action(legal)
-        metadata = self._action_prompt_metadata.get(key) or {}
-        role = (
-            session.role_for(key[1])
-            if hasattr(session, "role_for")
-            else ("player1" if key[1] == session.initiator_id else "player2")
-        )
-        context = self._session_log_context(session.id)
         async with session.lock:
             request_id = self._request_ids.get(key)
             applied = request_id is not None and session.try_choose_action(
@@ -743,25 +730,15 @@ class PvpApplicationService:
                     future.set_result(action)
                 self._begin_resolution_if_ready(session, session.id)
                 logger.warning(
-                    "pvp_action_auto_selected %s trainer_id=%s role=%s "
-                    "request_id=%s turn=%s action_type=%s forced_switch=%s "
-                    "reason=%s client_connected=%s prompt_published_at=%s "
-                    "prompt_acknowledged_at=%s timeout_started_at=%s "
-                    "legal_moves_count=%s legal_switches_count=%s",
-                    context,
-                    key[1],
-                    role,
-                    request_id,
-                    session.turn_number,
-                    "forced_switch" if legal.forced_switch else "normal_action",
-                    legal.forced_switch,
-                    reason,
-                    metadata.get("client_connected", False),
-                    metadata.get("prompt_published_at"),
-                    metadata.get("prompt_acknowledged_at"),
-                    metadata.get("timeout_started_at"),
-                    len(legal.moves),
-                    len(legal.switches),
+                    "pvp_action_auto_selected",
+                    extra=self._log_context(
+                        session,
+                        key[1],
+                        request_id,
+                        legal,
+                        reason,
+                        self._action_prompt_metadata.get(key),
+                    ),
                 )
                 return action
             logger.info(
@@ -784,13 +761,6 @@ class PvpApplicationService:
             return self._request_ids[(session_id, trainer_id)]
         except KeyError as error:
             raise ValueError("PvP action request is no longer active.") from error
-
-    def set_prompt_client_connected(
-        self, session_id: UUID, trainer_id: int, connected: bool
-    ) -> None:
-        metadata = self._action_prompt_metadata.get((session_id, trainer_id))
-        if metadata is not None:
-            metadata["client_connected"] = connected
 
     def legal_actions_for(self, session_id: UUID, trainer_id: int) -> PvpLegalActions:
         self.registry.get(session_id)._require_player(trainer_id)

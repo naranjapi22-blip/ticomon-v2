@@ -161,12 +161,6 @@ class PvptestActivityServer:
                 return websocket
             session_id = record.session_id
             user_id = identity.user_id
-            logger.info(
-                "pvp_activity_socket_authenticated %s user_id=%s role=%s",
-                self.registry._context(record),
-                user_id,
-                record.role_for(user_id),
-            )
             role = await self.registry.connect(
                 session_id=session_id,
                 user_id=identity.user_id,
@@ -176,12 +170,6 @@ class PvptestActivityServer:
                 send_json=send_json,
             )
             await send_json({"type": "connection_ready", "role": role})
-            logger.info(
-                "pvp_activity_connection_ready %s user_id=%s role=%s",
-                self.registry._context(record),
-                user_id,
-                role,
-            )
             async for incoming in websocket:
                 if incoming.type is WSMsgType.TEXT:
                     try:

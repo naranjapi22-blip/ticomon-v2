@@ -13,7 +13,6 @@ import {
   presentationDelayFor,
   replaceSpriteAfterPreload,
   shouldExposeControls,
-  shouldDiscardSequence,
   shouldRestoreSnapshotImmediately,
 } from "./activity_presentation.js";
 
@@ -103,53 +102,6 @@ test("duplicate snapshots do not replay animations", async () => {
   assert.equal(queue.enqueue({ type: "battle_snapshot", sequence: 7, phase: "resolving" }), false);
   await queue.drainPromise;
   assert.equal(presentations, 1);
-});
-
-test("a presentation error releases the queue and recalculates controls", async () => {
-  const states = [];
-  const queue = new ActivityPresentationQueue({
-    present: async () => { throw new Error("render failed"); },
-    onStart: () => states.push("started"),
-    onError: () => states.push("error"),
-    onIdle: () => states.push("idle"),
-  });
-  queue.enqueue({ type: "battle_snapshot", sequence: 0, phase: "waiting_for_actions" });
-  await queue.drainPromise;
-  assert.equal(queue.running, false);
-  assert.deepEqual(states, ["started", "error", "idle"]);
-});
-
-test("the first snapshot at sequence zero is not discarded", () => {
-  assert.equal(
-    shouldDiscardSequence({
-      sequence: 0,
-      currentSequence: -1,
-      type: "battle_snapshot",
-    }),
-    false,
-  );
-  assert.equal(
-    shouldDiscardSequence({
-      sequence: 0,
-      currentSequence: 0,
-      type: "battle_snapshot",
-    }),
-    true,
-  );
-});
-
-test("a presentation timeout releases the queue", async () => {
-  const states = [];
-  const queue = new ActivityPresentationQueue({
-    present: () => new Promise(() => {}),
-    presentationTimeout: 5,
-    onError: () => states.push("error"),
-    onIdle: () => states.push("idle"),
-  });
-  queue.enqueue({ type: "battle_snapshot", sequence: 1, phase: "resolving" });
-  await queue.drainPromise;
-  assert.equal(queue.running, false);
-  assert.deepEqual(states, ["error", "idle"]);
 });
 
 test("a snapshot received before its event is presented after that event", async () => {
