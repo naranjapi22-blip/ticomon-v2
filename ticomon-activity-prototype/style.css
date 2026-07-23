@@ -293,7 +293,51 @@ button:disabled {
 }
 
 .screen-flash {
-  animation: flash 300ms ease-out;
+  animation: flash 250ms ease-out;
+}
+
+.screen-flash.flash-heavy {
+  --flash-opacity: 0.85;
+}
+
+.screen-flash.flash-light {
+  --flash-opacity: 0.3;
+}
+
+.attack-physical {
+  animation: attack-physical 300ms ease-in-out;
+}
+
+.attack-special {
+  animation: attack-special 300ms ease-in-out;
+}
+
+.hit-recoil {
+  animation: hit-recoil 400ms ease-out;
+}
+
+.hit-recoil.hit-heavy {
+  animation: hit-heavy 400ms ease-out;
+}
+
+.hit-recoil.hit-light {
+  animation: hit-light 400ms ease-out;
+}
+
+.hit-recoil.special-impact {
+  animation: special-impact 400ms ease-out;
+}
+
+.fainting {
+  animation: fainting 800ms ease-in forwards;
+}
+
+.switching-out {
+  animation: switching-out 450ms ease-in forwards;
+}
+
+.switching-in {
+  animation: switching-in 500ms ease-out;
 }
 
 @keyframes player-attack {
@@ -311,7 +355,7 @@ button:disabled {
 
 @keyframes flash {
   0%, 100% { opacity: 0; }
-  35% { opacity: 1; }
+  35% { opacity: var(--flash-opacity, 0.65); }
 }
 
 @media (max-width: 520px) {
@@ -326,6 +370,54 @@ button:disabled {
   .action-panel p { margin: 3px 0 5px; }
   .action-grid button,
   .switch-grid button { padding: 5px 2px; }
+}
+
+@keyframes attack-physical {
+  0%, 100% { transform: translate(0, 0); }
+  45% { transform: translate(24px, -5px); }
+}
+
+@keyframes attack-special {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
+  45% { filter: brightness(1.5) drop-shadow(0 0 12px rgb(255 255 255 / 85%)); }
+}
+
+@keyframes hit-recoil {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  50% { transform: translateX(8px); }
+  75% { transform: translateX(-4px); }
+}
+
+@keyframes hit-heavy {
+  0%, 100% { transform: translateX(0); filter: brightness(1); }
+  20% { transform: translateX(-14px); filter: brightness(1.7); }
+  40% { transform: translateX(14px); }
+  65% { transform: translateX(-8px); filter: brightness(1.4); }
+}
+
+@keyframes hit-light {
+  0%, 100% { transform: translateX(0); }
+  35% { transform: translateX(-3px); }
+  70% { transform: translateX(3px); }
+}
+
+@keyframes special-impact {
+  0%, 100% { filter: brightness(1); }
+  35% { filter: brightness(1.8) drop-shadow(0 0 10px rgb(255 255 255 / 80%)); }
+}
+
+@keyframes fainting {
+  to { opacity: 0; transform: translateY(18px); }
+}
+
+@keyframes switching-out {
+  to { opacity: 0; transform: translateY(8px) scale(0.96); }
+}
+
+@keyframes switching-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-height: 620px), (max-width: 520px) {

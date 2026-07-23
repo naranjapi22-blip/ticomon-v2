@@ -39,6 +39,10 @@ def _stat_change_text(target: str, stat: str, direction: str, amount: int) -> st
     )
 
 
+def _normalize_move_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).casefold())
+
+
 def _classify_damage(details: list[str]) -> str:
     text = " ".join(str(item) for item in details).casefold()
     if "weather" in text or "sandstorm" in text or "hail" in text or "snow" in text:
@@ -75,7 +79,18 @@ class PvpEventTranslator:
         self._player_id = player_id
         self._opponent_id = opponent_id
         self._active_ids: dict[str, str] = {}
+        self._move_categories: dict[str, str] = {}
         self.last_damage_diagnostic: dict[str, object] | None = None
+
+    def set_move_categories(self, actions) -> None:
+        """Cache categories from authoritative legal move actions."""
+        self._move_categories.update(
+            {
+                _normalize_move_name(action.label): action.category
+                for action in actions.moves
+                if action.category
+            }
+        )
 
     def observe_snapshot(self, snapshot: PvpBattleSnapshot) -> None:
         if self._player_id is not None and snapshot.player_id != self._player_id:
@@ -120,6 +135,9 @@ class PvpEventTranslator:
                     structured = PvpEvent(
                         actor=_pokemon_name(values[0]),
                         move_name=_safe_protocol_text(values[1]),
+                        category=self._move_categories.get(
+                            _normalize_move_name(values[1])
+                        ),
                         target=(_pokemon_name(values[2]) if len(values) >= 3 else None),
                     )
                     continue

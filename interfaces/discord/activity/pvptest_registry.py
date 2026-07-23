@@ -492,6 +492,9 @@ def event_to_dto(event: PvpPresentationStep | PvpEvent | str | None) -> dict:
         "message": message,
         "turn": turn,
         "move_name": source.move_name,
+        # Legacy events had no category; keep their historical physical
+        # presentation explicitly instead of inferring from move data.
+        "category": source.category or "physical",
         "source_side": source.actor,
         "target_side": source.target,
         "damage": source.damage,

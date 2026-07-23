@@ -14,6 +14,12 @@ import {
   shouldExposeControls,
 } from "./activity_presentation.js";
 import { applyActivityBackground } from "./activity_background.js";
+import {
+  ANIMATION_TIMINGS,
+  clearImpactFlash,
+  eventAnimationPlan,
+  reduceAnimationPlan,
+} from "./activity_animation.js";
 import "./style.css";
 
 applyActivityBackground();
@@ -69,6 +75,8 @@ const state = {
   presentationBusy: false,
   restoringSnapshot: false,
   snapshotReceived: false,
+  pendingSwitchSide: null,
+  hpValues: { player: null, opponent: null },
 };
 
 const presentationQueue = new ActivityPresentationQueue({
@@ -296,8 +304,7 @@ async function presentQueuedMessage(item) {
   if (item.type === "battle_snapshot") {
     await presentSnapshot(item);
   } else if (item.type === "battle_events") {
-    elements.message.textContent = item.event.message || item.event.kind;
-    animateEvent(item.event);
+    await presentBattleEvent(item.event);
   } else if (item.type === "battle_finished") {
     state.phase = "finished";
     state.pendingAction = true;
@@ -314,29 +321,32 @@ async function presentSnapshot(snapshot, { restore = false } = {}) {
   state.deadline = snapshot.deadline;
   state.pendingAction = false;
   clearActivityOverlay("");
-  await renderSnapshot(snapshot);
+  await renderSnapshot(snapshot, { animate: !restore });
   if (restore) {
     renderControls(snapshot.legal_actions);
   }
 }
 
-async function renderSnapshot(snapshot) {
+async function renderSnapshot(snapshot, { animate = true } = {}) {
   showBattle();
   elements.turnLabel.textContent = `Turn ${snapshot.turn}`;
   elements.message.textContent = snapshot.message?.message || phaseMessage(snapshot.phase);
   await Promise.all([
-    renderPokemon(elements.player, snapshot.self),
-    renderPokemon(elements.opponent, snapshot.opponent),
+    renderPokemon(elements.player, snapshot.self, "player", animate),
+    renderPokemon(elements.opponent, snapshot.opponent, "opponent", animate),
   ]);
-  renderHp(elements.playerHp, elements.playerHpText, snapshot.self);
-  renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent);
+  await Promise.all([
+    renderHp(elements.playerHp, elements.playerHpText, snapshot.self, "player", animate),
+    renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent, "opponent", animate),
+  ]);
+  state.pendingSwitchSide = null;
   elements.playerStatus.textContent = snapshot.self?.status || "";
   elements.opponentStatus.textContent = snapshot.opponent?.status || "";
   renderTeam(elements.playerTeam, snapshot.self_team, snapshot.self_remaining);
   renderTeam(elements.opponentTeam, snapshot.opponent_team, snapshot.opponent_remaining);
 }
 
-async function renderPokemon(element, pokemon) {
+async function renderPokemon(element, pokemon, side, animate) {
   const sprite = resolveActivitySprite(pokemon);
   if (!sprite.source) {
     return;
@@ -346,6 +356,9 @@ async function renderPokemon(element, pokemon) {
     element.alt = sprite.alt;
     element.classList.remove("sprite-missing");
     element.removeAttribute("data-sprite-error");
+    if (animate && state.pendingSwitchSide === side) {
+      await playAnimation(element, "switching-in", ANIMATION_TIMINGS.switchIn);
+    }
   } catch (error) {
     if (!element.src) element.hidden = true;
     console.debug("Activity sprite preload failed.", error);
@@ -358,17 +371,27 @@ function markSpriteMissing(element) {
   showError(`Could not load ${element.alt || "battle sprite"}.`);
 }
 
-function renderHp(fill, text, pokemon) {
+async function renderHp(fill, text, pokemon, side, animate) {
   if (!pokemon) {
     fill.style.width = "0";
     fill.classList.remove("critical");
     text.textContent = "—";
+    state.hpValues[side] = null;
     return;
   }
   const current = pokemon?.hp_current ?? 0;
   const maximum = pokemon?.hp_max || 1;
   const percent = Math.max(0, Math.min(100, (current / maximum) * 100));
-  fill.style.width = `${percent}%`;
+  const previous = state.hpValues[side];
+  if (animate && previous !== null && previous !== percent) {
+    fill.style.width = `${previous}%`;
+    void fill.offsetWidth;
+    fill.style.width = `${percent}%`;
+    await wait(ANIMATION_TIMINGS.hp);
+  } else {
+    fill.style.width = `${percent}%`;
+  }
+  state.hpValues[side] = percent;
   fill.classList.toggle("critical", percent <= 25);
   text.textContent = `${current}/${maximum}`;
 }
@@ -433,19 +456,75 @@ function send(message) {
   state.socket.send(JSON.stringify(message));
 }
 
-function animateEvent(event) {
-  restartAnimation(elements.flash, "screen-flash");
-  if (["move", "damage", "faint"].includes(event.kind)) {
-    restartAnimation(elements.player, "player-attacking");
-    restartAnimation(elements.opponent, "opponent-hit");
+async function presentBattleEvent(event) {
+  elements.message.textContent = event.message || event.kind;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+  const plan = reduceAnimationPlan(eventAnimationPlan(event), reducedMotion);
+  if (event.switch) {
+    state.pendingSwitchSide = resolveSide(event.target_side || event.source_side || event.target);
+  }
+  try {
+    for (const step of plan) {
+      if (step.target === "notice") {
+        elements.message.textContent = step.text;
+        await wait(step.duration);
+        elements.message.textContent = event.message || event.kind;
+        continue;
+      }
+      const element = animationElement(step.target, event);
+      if (element) {
+        await playAnimation(element, step.className, step.duration);
+        if (step.className.includes("fainting") || step.className.includes("switching-out")) {
+          element.hidden = true;
+        }
+      }
+    }
+  } finally {
+    clearImpactFlash(elements.flash);
+  }
+  if (event.fainted || event.switch) {
+    const endingElement = animationElement("defender", event);
+    if (endingElement) endingElement.hidden = true;
   }
 }
 
-function restartAnimation(element, className) {
-  element.classList.remove(className);
+function animationElement(target, event) {
+  if (target === "flash") {
+    return elements.flash;
+  }
+  if (target === "attacker") {
+    return elementForSide(resolveSide(event.source_side || event.actor)) || elements.player;
+  }
+  if (target === "defender") {
+    return elementForSide(resolveSide(event.target_side || event.target)) || elements.opponent;
+  }
+  return null;
+}
+
+function resolveSide(side) {
+  if (!side) return null;
+  return side === state.role ? "player" : "opponent";
+}
+
+function elementForSide(side) {
+  return side === "player" ? elements.player : side === "opponent" ? elements.opponent : null;
+}
+
+function playAnimation(element, className, duration) {
+  const classes = className.split(" ");
+  element.classList.remove(...classes);
   void element.offsetWidth;
-  element.classList.add(className);
-  element.addEventListener("animationend", () => element.classList.remove(className), { once: true });
+  element.classList.add(...classes);
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      element.classList.remove(...classes);
+      resolve();
+    }, duration);
+  });
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 function setRuntime(label) {

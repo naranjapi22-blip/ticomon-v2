@@ -276,6 +276,35 @@ def test_event_translator_ignores_unknown_protocol_events():
     assert "p2a:" not in steps[0].message
 
 
+def test_event_translator_preserves_authoritative_move_category():
+    translator = PvpEventTranslator()
+    translator.set_move_categories(
+        PvpLegalActions(
+            moves=(
+                PvpAction(
+                    PvpActionKind.MOVE,
+                    "move:surf",
+                    "Surf",
+                    category="Special",
+                ),
+                PvpAction(
+                    PvpActionKind.MOVE,
+                    "move:tackle",
+                    "Tackle",
+                    category="Physical",
+                ),
+            )
+        )
+    )
+    steps = translator.translate(
+        [
+            ["battle", "move", "p1a: Pikachu", "Surf"],
+            ["battle", "-damage", "p2a: Gyarados", "50/100"],
+        ]
+    )
+    assert steps[0].event.category == "Special"
+
+
 def test_event_translator_compacts_initial_entries_and_weather():
     translator = PvpEventTranslator()
 

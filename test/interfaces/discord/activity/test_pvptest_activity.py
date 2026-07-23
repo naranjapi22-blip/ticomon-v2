@@ -269,6 +269,16 @@ def test_activity_event_and_pokemon_dtos_are_serializable():
     assert pokemon["sprite_url"].endswith("/back/25.gif")
 
 
+def test_activity_event_dto_carries_physical_and_special_categories():
+    physical = event_to_dto(PvpEvent(move_name="Tackle", category="Physical"))
+    special = event_to_dto(PvpEvent(move_name="Surf", category="Special"))
+    legacy = event_to_dto(PvpEvent(move_name="Tackle"))
+    assert physical["category"] == "Physical"
+    assert special["category"] == "Special"
+    assert physical["category"] != special["category"]
+    assert legacy["category"] == "physical"
+
+
 @pytest.mark.parametrize(
     ("name", "pokeapi_id", "opponent_url", "player_url"),
     [

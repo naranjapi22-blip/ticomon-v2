@@ -1,13 +1,13 @@
 export const PRESENTATION_TIMINGS = Object.freeze({
-  move: 1800,
-  damage: 750,
-  faint: 900,
-  switch: 900,
+  move: 150,
+  damage: 150,
+  faint: 150,
+  switch: 150,
   forcedSwitch: 800,
   snapshot: 650,
   finished: 0,
   initialSnapshot: 0,
-  defaultEvent: 650,
+  defaultEvent: 150,
 });
 
 export function presentationDelayFor(item) {

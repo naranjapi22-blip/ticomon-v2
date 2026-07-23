@@ -433,6 +433,9 @@ class PvpApplicationService:
             request_id = str(uuid4())
             self._action_waiters[key] = future
             self._legal_actions[key] = legal
+            translator = self._event_translators.get(session_id)
+            if translator is not None:
+                translator.set_move_categories(legal)
             self._request_ids[key] = request_id
             session.register_action_request(trainer_id, request_id)
             timeout = (

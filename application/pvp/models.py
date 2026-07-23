@@ -65,6 +65,7 @@ class PvpEvent:
     actor: str | None = None
     target: str | None = None
     move_name: str | None = None
+    category: str | None = None
     damage: int | None = None
     direct_damage: int | None = None
     damage_source: str | None = None
