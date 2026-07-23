@@ -33,6 +33,11 @@ def _player_for_message(monkeypatch, error):
     player._pending_finished_battles = []
     player._capture_sprite_urls = {}
     player._pokeapi_ids = {}
+    player._closing = False
+    player._log_context = ""
+    player._first_message_logged = False
+    player._first_request_logged = False
+    player._first_snapshot_logged = False
     player._schedule_callback = lambda coroutine: asyncio.create_task(coroutine)
     player._callbacks.on_snapshot = AsyncMock(side_effect=snapshots.append)
     player._callbacks.on_finished = AsyncMock(side_effect=finished.append)
