@@ -8,6 +8,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from application.pvp.events import PvpEventTranslator
@@ -152,6 +153,7 @@ class PvpApplicationService:
         self._action_waiters: dict[tuple[UUID, int], asyncio.Future[PvpAction]] = {}
         self._legal_actions: dict[tuple[UUID, int], PvpLegalActions] = {}
         self._request_ids: dict[tuple[UUID, int], str] = {}
+        self._action_prompt_metadata: dict[tuple[UUID, int], dict[str, object]] = {}
         self._event_handlers: dict[UUID, Callable[[str], Awaitable[None]]] = {}
         self._finish_handlers: dict[UUID, Callable[[object], Awaitable[None]]] = {}
         self._snapshot_handlers: dict[
@@ -606,6 +608,12 @@ class PvpApplicationService:
             if translator is not None:
                 translator.set_move_categories(legal)
             self._request_ids[key] = request_id
+            self._action_prompt_metadata[key] = {
+                "prompt_published_at": datetime.now(timezone.utc).isoformat(),
+                "prompt_acknowledged_at": None,
+                "timeout_started_at": None,
+                "client_connected": False,
+            }
             session.register_action_request(trainer_id, request_id)
             timeout = (
                 FORCED_SWITCH_TIMEOUT_SECONDS
@@ -613,49 +621,45 @@ class PvpApplicationService:
                 else ACTION_TIMEOUT_SECONDS
             )
             action_handler = self._action_handlers.get(session_id)
+        prompt_ready = True
         if action_handler is not None:
-            await action_handler(trainer_id, legal)
+            prompt_ready = await action_handler(trainer_id, legal)
+        metadata = self._action_prompt_metadata[key]
+        metadata["prompt_acknowledged_at"] = (
+            datetime.now(timezone.utc).isoformat() if prompt_ready else None
+        )
+        metadata["client_connected"] = prompt_ready
+        metadata["timeout_started_at"] = (
+            datetime.now(timezone.utc).isoformat() if prompt_ready else None
+        )
+        if not prompt_ready:
+            return await self._apply_automatic_action(
+                session,
+                key,
+                future,
+                legal,
+                reason="disconnected_player_fallback",
+            )
         try:
             return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
         except asyncio.TimeoutError:
-            action = self._automatic_action(legal)
-            if legal.forced_switch:
-                logger.warning(
-                    "PvP forced switch timed out; applying automatic selection "
-                    "session_id=%s trainer_id=%s policy=automatic_selection",
-                    session_id,
-                    trainer_id,
-                )
-            async with session.lock:
-                request_id = self._request_ids.get(key)
-                applied = request_id is not None and session.try_choose_action(
-                    trainer_id, request_id, action.identifier
-                )
-                if applied:
-                    if not future.done():
-                        future.set_result(action)
-                    self._begin_resolution_if_ready(session, session_id)
-                    logger.info(
-                        "Applied PvP action timeout",
-                        extra=self._log_context(
-                            session, trainer_id, request_id, legal, "applied"
-                        ),
-                    )
-                    return action
-                logger.info(
-                    "Discarded obsolete PvP action timeout",
-                    extra=self._log_context(
-                        session, trainer_id, request_id, legal, "discarded"
-                    ),
-                )
-                if future.done() and not future.cancelled():
-                    return future.result()
-                raise asyncio.CancelledError
+            return await self._apply_automatic_action(
+                session,
+                key,
+                future,
+                legal,
+                reason=(
+                    "forced_switch_timeout"
+                    if legal.forced_switch
+                    else "normal_action_timeout"
+                ),
+            )
         finally:
             if self._action_waiters.get(key) is future:
                 self._action_waiters.pop(key, None)
                 self._legal_actions.pop(key, None)
                 self._request_ids.pop(key, None)
+                self._action_prompt_metadata.pop(key, None)
 
     async def submit_action(
         self,
@@ -694,15 +698,69 @@ class PvpApplicationService:
             session.begin_resolution()
 
     @staticmethod
-    def _log_context(session, trainer_id, request_id, legal, timeout_status):
+    def _log_context(
+        session, trainer_id, request_id, legal, timeout_status, metadata=None
+    ):
         return {
             "session_id": str(session.id),
             "trainer_id": trainer_id,
             "request_id": request_id,
-            "request_type": "forced_switch" if legal.forced_switch else "move",
+            "action_type": "forced_switch" if legal.forced_switch else "normal_action",
             "session_state": session.phase.value,
             "timeout_status": timeout_status,
+            "legal_moves_count": len(legal.moves),
+            "legal_switches_count": len(legal.switches),
+            "prompt_published_at": (metadata or {}).get("prompt_published_at"),
+            "prompt_acknowledged_at": (metadata or {}).get("prompt_acknowledged_at"),
+            "timeout_started_at": (metadata or {}).get("timeout_started_at"),
+            "client_connected": (metadata or {}).get("client_connected", False),
         }
+
+    async def _apply_automatic_action(
+        self, session, key, future, legal, *, reason: str
+    ) -> PvpAction:
+        action = self._automatic_action(legal)
+        async with session.lock:
+            request_id = self._request_ids.get(key)
+            applied = request_id is not None and session.try_choose_action(
+                key[1], request_id, action.identifier
+            )
+            if applied:
+                if not future.done():
+                    future.set_result(action)
+                self._begin_resolution_if_ready(session, session.id)
+                logger.warning(
+                    "pvp_action_auto_selected",
+                    extra=self._log_context(
+                        session,
+                        key[1],
+                        request_id,
+                        legal,
+                        reason,
+                        self._action_prompt_metadata.get(key),
+                    ),
+                )
+                return action
+            logger.info(
+                "Discarded obsolete PvP action timeout",
+                extra=self._log_context(
+                    session,
+                    key[1],
+                    request_id,
+                    legal,
+                    "discarded",
+                    self._action_prompt_metadata.get(key),
+                ),
+            )
+            if future.done() and not future.cancelled():
+                return future.result()
+            raise asyncio.CancelledError
+
+    def action_request_id(self, session_id: UUID, trainer_id: int) -> str:
+        try:
+            return self._request_ids[(session_id, trainer_id)]
+        except KeyError as error:
+            raise ValueError("PvP action request is no longer active.") from error
 
     def legal_actions_for(self, session_id: UUID, trainer_id: int) -> PvpLegalActions:
         self.registry.get(session_id)._require_player(trainer_id)

@@ -222,6 +222,95 @@ async def test_first_snapshot_is_delivered_to_each_connected_client():
 
 
 @pytest.mark.asyncio
+async def test_forced_switch_prompt_ack_starts_timeout_after_render_delivery():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    session.phase = PvpPhase.FORCED_SWITCH
+    session.active_action_requests[10] = "forced-request-1"
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=992,
+        player_ids=(10, 20),
+        display_names={10: "Orange", 20: "Gin"},
+    )
+    record = registry.get(session.id)
+    record.latest_snapshots[10] = _snapshot(player_id=10)
+    legal = PvpLegalActions(
+        switches=(PvpAction(PvpActionKind.SWITCH, "switch:bench", "Bench"),),
+        forced_switch=True,
+    )
+    service.legal[(session.id, 10)] = legal
+    sent = []
+
+    async def send(payload):
+        sent.append(payload)
+        if payload["type"] == "battle_snapshot" and payload.get("request_id"):
+            await registry.prompt_ready(session.id, 10, payload["request_id"])
+
+    await registry.connect(
+        session_id=session.id,
+        user_id=10,
+        guild_id=1,
+        channel_id=992,
+        instance_id="activity-1",
+        send_json=send,
+    )
+    prompt = asyncio.create_task(registry.handle_actions(session.id, 10, legal))
+    assert await prompt
+
+    snapshot = next(payload for payload in sent if payload["type"] == "battle_snapshot")
+    assert snapshot["request_id"] == "forced-request-1"
+    assert snapshot["legal_actions"]["forced_switch"] is True
+    assert snapshot["legal_actions"]["moves"] == []
+    assert snapshot["legal_actions"]["switches"][0]["name"] == "Bench"
+    assert set(record.deadlines) == {10}
+
+
+@pytest.mark.asyncio
+async def test_selecting_forced_switch_completes_before_automatic_fallback():
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(10, 20)
+    session.phase = PvpPhase.FORCED_SWITCH
+    activity = PvptestActivityRegistry(service)
+    await activity.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=993,
+        player_ids=(10, 20),
+        display_names={10: "Orange", 20: "Gin"},
+    )
+    record = activity.get(session.id)
+    record.latest_snapshots[10] = _snapshot(player_id=10)
+    legal = PvpLegalActions(
+        switches=(PvpAction(PvpActionKind.SWITCH, "switch:bench", "Bench"),),
+        forced_switch=True,
+    )
+    service._action_handlers[session.id] = activity.action_handler(session.id)
+    service._legal_actions[(session.id, 10)] = legal
+    sent = []
+
+    async def send(payload):
+        sent.append(payload)
+        if payload["type"] == "battle_snapshot" and payload.get("request_id"):
+            await activity.prompt_ready(session.id, 10, payload["request_id"])
+
+    await activity.connect(
+        session_id=session.id,
+        user_id=10,
+        guild_id=1,
+        channel_id=993,
+        instance_id="activity-1",
+        send_json=send,
+    )
+    request = asyncio.create_task(service.request_action(session.id, 10, legal))
+    await asyncio.sleep(0)
+    assert await service.submit_action(session.id, 10, legal.switches[0])
+    assert await request == legal.switches[0]
+
+
+@pytest.mark.asyncio
 async def test_activity_wait_timeout_cleans_up_the_session(monkeypatch):
     service = FakeService()
     registry = PvptestActivityRegistry(service)
@@ -319,7 +408,8 @@ async def test_forced_switch_disconnect_broadcasts_waiting_state():
     )
     legal = PvpLegalActions(moves=(), switches=(), forced_switch=True)
     service.legal[(session.id, 20)] = legal
-    await registry.handle_actions(session.id, 20, legal)
+    prompt = asyncio.create_task(registry.handle_actions(session.id, 20, legal))
+    await asyncio.sleep(0)
     waiting = [payload for payload in first if payload["type"] == "session_state"][-1]
     assert waiting["waiting_for_reconnect"] is True
     assert waiting["required_user_id"] == 20
@@ -332,6 +422,8 @@ async def test_forced_switch_disconnect_broadcasts_waiting_state():
         instance_id="activity-1",
         send_json=send_second,
     )
+    assert await registry.prompt_ready(session.id, 20, "switch-request")
+    assert await prompt
     assert second[-1]["type"] == "session_state"
     assert second[-1]["waiting_for_reconnect"] is False
 
@@ -595,7 +687,7 @@ async def test_activity_action_handler_matches_request_action_contract(legal):
     request = asyncio.create_task(service.request_action(session.id, 10, legal))
     await asyncio.sleep(0)
 
-    assert set(activity.get(session.id).deadlines) == {10}
+    assert set(activity.get(session.id).deadlines) == set()
     request.cancel()
     with suppress(asyncio.CancelledError):
         await request
@@ -639,8 +731,8 @@ async def test_activity_action_handlers_keep_sessions_isolated():
     ]
     await asyncio.sleep(0)
 
-    assert set(activity.get(first.id).deadlines) == {10}
-    assert set(activity.get(second.id).deadlines) == {30}
+    assert set(activity.get(first.id).deadlines) == set()
+    assert set(activity.get(second.id).deadlines) == set()
     for request in requests:
         request.cancel()
     for request in requests:

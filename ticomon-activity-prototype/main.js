@@ -14,7 +14,9 @@ import {
   replaceSpriteAfterPreload,
   shouldRestoreSnapshotImmediately,
   controlPhaseFor,
+  controlOptionsFor,
   controlRenderKey,
+  promptReadyTypeFor,
 } from "./activity_presentation.js";
 import { applyActivityBackground } from "./activity_background.js";
 import {
@@ -88,6 +90,7 @@ const state = {
   pendingSwitchSide: null,
   pendingFaintSide: null,
   preserveSnapshotMessage: false,
+  promptAckKey: null,
   controlPhase: "waiting_for_start",
   controlsRenderKey: null,
   controlsSessionId: null,
@@ -190,6 +193,7 @@ function connectSocket() {
   if (wasReconnecting) {
     presentationQueue.clearPending();
     state.preserveSnapshotMessage = false;
+    state.promptAckKey = null;
   }
   state.restoringSnapshot = wasReconnecting && Boolean(state.snapshot);
   if (!wasReconnecting && !state.snapshot) {
@@ -521,15 +525,27 @@ function renderControls(legal = { moves: [], switches: [], forced_switch: false 
     legal,
   });
   const shouldBuild = phase === "waiting_for_local_action" && key !== state.controlsRenderKey;
+  const controlsLegal = controlOptionsFor(legal);
   if (shouldBuild) {
     elements.moves.replaceChildren();
     elements.switches.replaceChildren();
-    legal.moves?.forEach((move) => elements.moves.append(actionButton(move, "choose_move", false)));
-    legal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", false)));
+    controlsLegal.moves?.forEach((move) => elements.moves.append(actionButton(move, "choose_move", false)));
+    controlsLegal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", false)));
     state.controlsRenderKey = key;
     state.controlsSessionId = state.authoritativeSnapshot?.session_id || state.snapshot?.session_id || null;
   }
   updateControlPresentation(reason, phase);
+  if (
+    phase === "waiting_for_local_action" &&
+    (state.authoritativeSnapshot?.request_id || state.snapshot?.request_id) &&
+    key !== state.promptAckKey
+  ) {
+    state.promptAckKey = key;
+    send({
+      type: promptReadyTypeFor(legal),
+      request_id: state.authoritativeSnapshot?.request_id || state.snapshot?.request_id,
+    });
+  }
 }
 
 function updateControlPresentation(reason, phaseOverride = null) {

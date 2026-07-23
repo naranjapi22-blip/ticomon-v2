@@ -28,6 +28,8 @@ from interfaces.discord.activity.sprite_urls import activity_sprite_url
 
 logger = logging.getLogger(__name__)
 
+PROMPT_DELIVERY_TIMEOUT_SECONDS = 30
+
 SendJson = Callable[[dict], Awaitable[None]]
 
 
@@ -53,6 +55,14 @@ class ActivityBattleRecord:
     cleanup_task: asyncio.Task | None = None
     ready_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     battle_started: bool = False
+    prompt_ready_events: dict[str, asyncio.Event] = field(
+        default_factory=dict, repr=False
+    )
+    prompt_connection_events: dict[int, asyncio.Event] = field(
+        default_factory=lambda: {1: asyncio.Event(), 2: asyncio.Event()}, repr=False
+    )
+    prompt_published_at: dict[str, str] = field(default_factory=dict, repr=False)
+    prompt_acknowledged_at: dict[str, str] = field(default_factory=dict, repr=False)
 
     def role_for(self, user_id: int) -> str:
         if user_id == self.player_ids[0]:
@@ -63,6 +73,10 @@ class ActivityBattleRecord:
 
     def connected_count(self) -> int:
         return sum(bool(connections) for connections in self.connections.values())
+
+    def connected_for(self, trainer_id: int) -> bool:
+        role = 1 if trainer_id == self.player_ids[0] else 2
+        return bool(self.connections[role])
 
 
 class PvptestActivityRegistry:
@@ -144,9 +158,9 @@ class PvptestActivityRegistry:
 
     def action_handler(
         self, session_id: UUID
-    ) -> Callable[[int, PvpLegalActions], Awaitable[None]]:
-        async def handle(trainer_id: int, legal: PvpLegalActions) -> None:
-            await self.handle_actions(session_id, trainer_id, legal)
+    ) -> Callable[[int, PvpLegalActions], Awaitable[bool]]:
+        async def handle(trainer_id: int, legal: PvpLegalActions) -> bool:
+            return await self.handle_actions(session_id, trainer_id, legal)
 
         return handle
 
@@ -190,6 +204,7 @@ class PvptestActivityRegistry:
         )
         await send_json(self._state_message(record, role))
         await self._send_snapshot(record, user_id, send_json)
+        record.prompt_connection_events[1 if role == "player1" else 2].set()
         if record.connected_count() == 2 and not record.battle_started:
             record.ready_event.set()
         elif record.connected_count() < 2 and not record.battle_started:
@@ -207,6 +222,9 @@ class PvptestActivityRegistry:
         role = record.role_for(user_id)
         if role in {"player1", "player2"}:
             record.connections[1 if role == "player1" else 2].discard(send_json)
+            role_number = 1 if role == "player1" else 2
+            if not record.connections[role_number]:
+                record.prompt_connection_events[role_number].clear()
             if record.connected_count() < 2 and not record.battle_started:
                 record.ready_event.clear()
             logger.info(
@@ -320,10 +338,64 @@ class PvptestActivityRegistry:
         )
         await self._broadcast_snapshot(record, sequence=record.sequence)
 
-    async def handle_actions(self, session_id: UUID, trainer_id: int, legal) -> None:
+    async def handle_actions(self, session_id: UUID, trainer_id: int, legal) -> bool:
         record = self._records.get(session_id)
         if record is None:
-            return
+            return False
+        request_id = self._action_request_id(session_id, trainer_id)
+        prompt_event = asyncio.Event()
+        record.prompt_ready_events[request_id] = prompt_event
+        record.prompt_published_at[request_id] = datetime.now(timezone.utc).isoformat()
+        snapshot = record.latest_snapshots.get(trainer_id)
+        if snapshot is not None:
+            record.sequence += 1
+            role = 1 if trainer_id == record.player_ids[0] else 2
+            logger.info(
+                "pvp_activity_prompt_published %s request_id=%s trainer_id=%s "
+                "forced_switch=%s actor_id=%s sequence=%s clients=%s "
+                "legal_moves_count=%s legal_switches_count=%s",
+                self._context(record),
+                request_id,
+                trainer_id,
+                legal.forced_switch,
+                trainer_id,
+                record.sequence,
+                len(record.connections[role]),
+                len(legal.moves),
+                len(legal.switches),
+            )
+            await self._broadcast_to(
+                record.connections[role],
+                self._snapshot_message(record, snapshot, record.sequence),
+                context=self._context(record),
+            )
+        if legal.forced_switch:
+            await self._broadcast_state(record)
+        role = 1 if trainer_id == record.player_ids[0] else 2
+        if not record.connections[role]:
+            logger.warning(
+                "pvp_activity_prompt_waiting_for_client %s request_id=%s "
+                "trainer_id=%s forced_switch=%s",
+                self._context(record),
+                request_id,
+                trainer_id,
+                legal.forced_switch,
+            )
+        delivered = await self._wait_for_prompt_ready(
+            record, trainer_id, request_id, prompt_event
+        )
+        record.prompt_ready_events.pop(request_id, None)
+        if not delivered:
+            logger.warning(
+                "pvp_activity_prompt_delivery_timeout %s request_id=%s "
+                "trainer_id=%s forced_switch=%s clients=%s",
+                self._context(record),
+                request_id,
+                trainer_id,
+                legal.forced_switch,
+                record.connected_count(),
+            )
+            return False
         timeout = (
             FORCED_SWITCH_TIMEOUT_SECONDS
             if legal.forced_switch
@@ -333,16 +405,77 @@ class PvptestActivityRegistry:
         record.deadlines[trainer_id] = datetime.fromtimestamp(
             deadline, timezone.utc
         ).isoformat()
-        snapshot = record.latest_snapshots.get(trainer_id)
-        if snapshot is not None:
-            record.sequence += 1
-            await self._broadcast_to(
-                record.connections[1 if trainer_id == record.player_ids[0] else 2],
-                self._snapshot_message(record, snapshot, record.sequence),
-                context=self._context(record),
-            )
-        if legal.forced_switch:
-            await self._broadcast_state(record)
+        logger.info(
+            "pvp_activity_prompt_acknowledged %s request_id=%s trainer_id=%s "
+            "forced_switch=%s timeout_started=true",
+            self._context(record),
+            request_id,
+            trainer_id,
+            legal.forced_switch,
+        )
+        return True
+
+    async def _wait_for_prompt_ready(
+        self,
+        record: ActivityBattleRecord,
+        trainer_id: int,
+        request_id: str,
+        prompt_event: asyncio.Event,
+    ) -> bool:
+        role = 1 if trainer_id == record.player_ids[0] else 2
+        deadline = asyncio.get_running_loop().time() + PROMPT_DELIVERY_TIMEOUT_SECONDS
+        while True:
+            if prompt_event.is_set():
+                return True
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                return False
+            if not record.connections[role]:
+                try:
+                    await asyncio.wait_for(
+                        record.prompt_connection_events[role].wait(), remaining
+                    )
+                except asyncio.TimeoutError:
+                    return False
+                continue
+            try:
+                await asyncio.wait_for(prompt_event.wait(), remaining)
+            except asyncio.TimeoutError:
+                return False
+
+    async def prompt_ready(
+        self, session_id: UUID, trainer_id: int, request_id: str
+    ) -> bool:
+        record = self._records.get(session_id)
+        if record is None or record.role_for(trainer_id) == "unauthorized":
+            return False
+        event = record.prompt_ready_events.get(request_id)
+        if event is None:
+            return False
+        current_request = self._action_request_id(session_id, trainer_id)
+        if current_request != request_id or not record.connected_for(trainer_id):
+            return False
+        record.prompt_acknowledged_at[request_id] = datetime.now(
+            timezone.utc
+        ).isoformat()
+        event.set()
+        logger.info(
+            "pvp_activity_prompt_ack %s request_id=%s trainer_id=%s "
+            "forced_switch=%s",
+            self._context(record),
+            request_id,
+            trainer_id,
+            self._pvp_service.legal_actions_for(session_id, trainer_id).forced_switch,
+        )
+        return True
+
+    def _action_request_id(self, session_id: UUID, trainer_id: int) -> str:
+        request_id = getattr(self._pvp_service, "action_request_id", None)
+        if request_id is not None:
+            return request_id(session_id, trainer_id)
+        return self._pvp_service.registry.get(session_id).active_action_requests[
+            trainer_id
+        ]
 
     async def handle_finished(self, session_id: UUID, _battle: object) -> None:
         record = self._records.get(session_id)

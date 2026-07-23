@@ -259,6 +259,23 @@ class PvptestActivityServer:
         if message.get("type") == "forfeit":
             await self.registry._pvp_service.forfeit(record.session_id, user_id)
             return
+        if message.get("type") in {
+            "action_prompt_ready",
+            "forced_switch_prompt_ready",
+        }:
+            acknowledged = await self.registry.prompt_ready(
+                record.session_id,
+                user_id,
+                str(message.get("request_id", "")),
+            )
+            if not acknowledged:
+                await send_json(
+                    {
+                        "type": "action_rejected",
+                        "reason": "The action prompt is obsolete.",
+                    }
+                )
+            return
         if message.get("type") not in {"choose_move", "choose_switch"}:
             await send_json({"type": "error", "message": "Unknown Activity action."})
             return

@@ -5,7 +5,9 @@ import {
   ActivityPresentationQueue,
   actionPromptFor,
   controlPhaseFor,
+  controlOptionsFor,
   controlRenderKey,
+  promptReadyTypeFor,
   preSnapshotMessage,
   PRESENTATION_TIMINGS,
   presentationDelayFor,
@@ -212,6 +214,18 @@ test("only local action phase exposes controls", () => {
   assert.equal(controlPhaseFor({ ...common, presentationBusy: false, pendingAction: true }), "waiting_for_opponent");
   assert.equal(controlPhaseFor({ ...common, presentationBusy: false, pendingAction: false }), "waiting_for_local_action");
   assert.equal(controlPhaseFor({ hasSnapshot: true, presentationBusy: false, pendingAction: false, legal: {} }), "waiting_for_opponent");
+});
+
+test("forced switch controls contain only valid replacement options", () => {
+  const options = controlOptionsFor({
+    forced_switch: true,
+    moves: [{ name: "should not appear" }],
+    switches: [{ name: "Bench" }],
+  });
+  assert.deepEqual(options.moves, []);
+  assert.deepEqual(options.switches, [{ name: "Bench" }]);
+  assert.equal(promptReadyTypeFor(options), "forced_switch_prompt_ready");
+  assert.equal(promptReadyTypeFor({ moves: [{ name: "Tackle" }] }), "action_prompt_ready");
 });
 
 test("a new legal action key is required before controls can be rebuilt", () => {

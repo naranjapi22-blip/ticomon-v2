@@ -90,6 +90,18 @@ export function controlPhaseFor({
   return "waiting_for_opponent";
 }
 
+export function controlOptionsFor(legal = {}) {
+  return legal.forced_switch
+    ? { moves: [], switches: legal.switches || [], forced_switch: true }
+    : { moves: legal.moves || [], switches: legal.switches || [], forced_switch: false };
+}
+
+export function promptReadyTypeFor(legal = {}) {
+  return legal.forced_switch
+    ? "forced_switch_prompt_ready"
+    : "action_prompt_ready";
+}
+
 export function actionPromptFor({
   legal = {},
   phase,
