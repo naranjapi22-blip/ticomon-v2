@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+import discord
 import pytest
 
 from core.achievement.unlock_result import AchievementUnlockResult
@@ -9,7 +10,90 @@ from core.candy.candy_amount import CandyAmount
 from core.candy.candy_bundle import CandyBundle
 from core.candy.candy_type import CandyType
 from core.capture.application.capture_application_result import CaptureApplicationResult
-from interfaces.discord.buttons.capture_button import CaptureButton
+from interfaces.discord.buttons.capture_button import (
+    CaptureButton,
+    _acknowledge_capture,
+)
+
+
+def _expired_interaction_error(code: int) -> discord.NotFound:
+    error = discord.NotFound.__new__(discord.NotFound)
+    error.code = code
+    return error
+
+
+def _interaction(response) -> SimpleNamespace:
+    return SimpleNamespace(
+        message=SimpleNamespace(id=101),
+        channel_id=202,
+        user=SimpleNamespace(id=7),
+        response=response,
+    )
+
+
+@pytest.mark.asyncio
+async def test_capture_button_acknowledges_before_capture() -> None:
+    response = SimpleNamespace(defer=AsyncMock())
+    interaction = _interaction(response)
+    capture = AsyncMock()
+    button = CaptureButton(
+        SimpleNamespace(capture_application=SimpleNamespace(capture=capture))
+    )
+
+    acknowledged = await _acknowledge_capture(button, interaction)
+
+    assert acknowledged is True
+    response.defer.assert_awaited_once_with()
+    capture.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_capture_button_stops_when_interaction_expired(caplog) -> None:
+    response = SimpleNamespace(
+        defer=AsyncMock(side_effect=_expired_interaction_error(10062))
+    )
+    interaction = _interaction(response)
+    capture = AsyncMock()
+    button = CaptureButton(
+        SimpleNamespace(capture_application=SimpleNamespace(capture=capture))
+    )
+
+    await button.callback(interaction)
+
+    capture.assert_not_awaited()
+    assert "message_id=101 channel_id=202 user_id=7" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_capture_button_does_not_defer_twice_when_already_responded() -> None:
+    response = SimpleNamespace(
+        is_done=Mock(return_value=True),
+        defer=AsyncMock(),
+    )
+    interaction = _interaction(response)
+
+    acknowledged = await _acknowledge_capture(
+        CaptureButton(SimpleNamespace()), interaction
+    )
+
+    assert acknowledged is False
+    response.defer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_capture_button_does_not_capture_after_interaction_responded() -> None:
+    response = SimpleNamespace(
+        defer=AsyncMock(side_effect=discord.InteractionResponded(_interaction(None))),
+    )
+    interaction = _interaction(response)
+    capture = AsyncMock()
+    button = CaptureButton(
+        SimpleNamespace(capture_application=SimpleNamespace(capture=capture))
+    )
+
+    await button.callback(interaction)
+
+    capture.assert_not_awaited()
 
 
 @pytest.mark.asyncio

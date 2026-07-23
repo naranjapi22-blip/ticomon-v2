@@ -19,6 +19,72 @@ logger = logging.getLogger(__name__)
 _MISSING_CAPTURE_RESOURCES: set[tuple[int, int | None]] = set()
 
 
+def _interaction_ids(interaction: discord.Interaction) -> tuple[object, object, object]:
+    message = getattr(interaction, "message", None)
+    channel = getattr(interaction, "channel", None)
+    return (
+        getattr(message, "id", None),
+        getattr(interaction, "channel_id", getattr(channel, "id", None)),
+        getattr(getattr(interaction, "user", None), "id", None),
+    )
+
+
+def _stop_view(button: discord.ui.Button) -> None:
+    view = button.view
+    if view is None:
+        return
+
+    for item in view.children:
+        item.disabled = True
+    view.stop()
+
+
+async def _acknowledge_capture(
+    button: discord.ui.Button,
+    interaction: discord.Interaction,
+) -> bool:
+    response = interaction.response
+    is_done = getattr(response, "is_done", None)
+    if callable(is_done) and is_done():
+        _stop_view(button)
+        return False
+
+    try:
+        await response.defer()
+    except discord.NotFound as error:
+        if error.code != 10062:
+            raise
+        logger.warning(
+            "capture interaction expired message_id=%s channel_id=%s user_id=%s",
+            *_interaction_ids(interaction),
+        )
+        _stop_view(button)
+        return False
+    except discord.InteractionResponded:
+        _stop_view(button)
+        return False
+    except (asyncio.TimeoutError, ConnectionError, OSError):
+        logger.warning(
+            "capture interaction acknowledgment failed message_id=%s "
+            "channel_id=%s user_id=%s",
+            *_interaction_ids(interaction),
+        )
+        _stop_view(button)
+        return False
+    except discord.HTTPException as error:
+        if error.status < 500:
+            raise
+        logger.warning(
+            "capture interaction acknowledgment failed message_id=%s "
+            "channel_id=%s user_id=%s",
+            *_interaction_ids(interaction),
+        )
+        _stop_view(button)
+        return False
+
+    return True
+
+
 async def _capture_gif(creature, trainer, capture_ball: str):
     gif_url = get_capture_creature_gif(creature)
     fallback_url = get_capture_species_gif(
@@ -79,7 +145,8 @@ class CaptureButton(discord.ui.Button):
         self,
         interaction: discord.Interaction,
     ):
-        await interaction.response.defer()
+        if not await _acknowledge_capture(self, interaction):
+            return
 
         now = monotonic()
 
@@ -174,4 +241,5 @@ class CaptureButton(discord.ui.Button):
             bot=interaction.client,
         )
 
+        _stop_view(self)
         await interaction.delete_original_response()
