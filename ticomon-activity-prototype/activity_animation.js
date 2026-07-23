@@ -1,11 +1,11 @@
 export const ANIMATION_TIMINGS = Object.freeze({
   attacker: 400,
   defender: 400,
-  effectiveness: 800,
-  hp: 700,
-  faint: 700,
-  switchOut: 600,
-  switchIn: 600,
+  effectiveness: 900,
+  hp: 750,
+  faint: 750,
+  switchOut: 650,
+  switchIn: 650,
   impactFlash: 400,
 });
 

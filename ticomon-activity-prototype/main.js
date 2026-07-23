@@ -55,6 +55,9 @@ const elements = {
   presenceLabel: document.querySelector("#presence-label"),
   message: document.querySelector("#message"),
   actionPrompt: document.querySelector("#action-prompt"),
+  actionPanel: document.querySelector(".action-panel"),
+  battleStage: document.querySelector(".battle-stage"),
+  impactMessage: document.querySelector("#impact-message"),
   moves: document.querySelector("#moves"),
   switches: document.querySelector("#switches"),
   forfeit: document.querySelector("#forfeit"),
@@ -97,6 +100,7 @@ const state = {
   hpValues: { player: null, opponent: null },
   noticeUntil: 0,
   noticePromise: null,
+  pendingImpactSide: null,
 };
 
 const presentationQueue = new ActivityPresentationQueue({
@@ -380,9 +384,10 @@ async function presentQueuedMessage(item) {
   } else if (item.type === "battle_finished") {
     state.phase = "finished";
     state.pendingAction = true;
-    elements.message.textContent = item.winner
+    setBattleMessage(item.winner
       ? `${item.winner.display_name || "The winner"} won. Reason: ${item.reason}.`
-      : `Battle finished. Reason: ${item.reason}.`;
+      : `Battle finished. Reason: ${item.reason}.`, "result");
+    clearImpactMessage();
     updateControlPresentation("battle_finished");
   }
   if (item.sequence !== undefined) {
@@ -409,15 +414,17 @@ async function renderSnapshot(snapshot, { animate = true } = {}) {
   showBattle();
   elements.turnLabel.textContent = `Turn ${snapshot.turn}`;
   if (!state.preserveSnapshotMessage) {
-    elements.message.textContent = snapshot.message?.message || phaseMessage(snapshot.phase);
+    setBattleMessage(snapshot.message?.message || phaseMessage(snapshot.phase), "phase");
   }
   await Promise.all([
     renderPokemon(elements.player, snapshot.self, "player", false),
     renderPokemon(elements.opponent, snapshot.opponent, "opponent", false),
   ]);
+  elements.playerHp.classList.remove("hp-hit");
+  elements.opponentHp.classList.remove("hp-hit");
   await Promise.all([
-    renderHp(elements.playerHp, elements.playerHpText, snapshot.self, "player", animate),
-    renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent, "opponent", animate),
+    renderHp(elements.playerHp, elements.playerHpText, snapshot.self, "player", animate, state.pendingImpactSide === "player"),
+    renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent, "opponent", animate, state.pendingImpactSide === "opponent"),
   ]);
   await waitForActiveNotice();
   if (state.pendingFaintSide) {
@@ -444,6 +451,7 @@ async function renderSnapshot(snapshot, { animate = true } = {}) {
   }
   state.pendingSwitchSide = null;
   state.pendingFaintSide = null;
+  state.pendingImpactSide = null;
   state.preserveSnapshotMessage = false;
   elements.playerStatus.textContent = snapshot.self?.status || "";
   elements.opponentStatus.textContent = snapshot.opponent?.status || "";
@@ -483,7 +491,7 @@ function markSpriteMissing(element) {
   showError(`Could not load ${element.alt || "battle sprite"}.`);
 }
 
-async function renderHp(fill, text, pokemon, side, animate) {
+async function renderHp(fill, text, pokemon, side, animate, highlight) {
   if (!pokemon) {
     fill.style.width = "0";
     fill.classList.remove("critical");
@@ -498,8 +506,12 @@ async function renderHp(fill, text, pokemon, side, animate) {
   if (animate && previous !== null && previous !== percent) {
     fill.style.width = `${previous}%`;
     void fill.offsetWidth;
+    if (highlight) fill.classList.remove("hp-hit");
+    void fill.offsetWidth;
     fill.style.width = `${percent}%`;
+    if (highlight) fill.classList.add("hp-hit");
     await wait(ANIMATION_TIMINGS.hp);
+    if (highlight) fill.classList.remove("hp-hit");
   } else {
     fill.style.width = `${percent}%`;
   }
@@ -588,6 +600,7 @@ function updateControlPresentation(reason, phaseOverride = null) {
   const changed = state.controlPhase !== phase;
   state.controlPhase = phase;
   const controlsDisabled = phase !== "waiting_for_local_action" || state.role === "unauthorized";
+  elements.actionPanel.dataset.controlPhase = phase;
   [elements.moves, elements.switches].forEach((element) => {
     element.classList.toggle("controls-disabled", controlsDisabled);
     element.querySelectorAll("button").forEach((button) => { button.disabled = controlsDisabled; });
@@ -599,8 +612,8 @@ function updateControlPresentation(reason, phaseOverride = null) {
   } else {
     elements.moves.hidden = false;
     elements.switches.hidden = false;
-    renderActionPrompt(legal, false);
   }
+  renderActionPrompt(legal, controlsDisabled, phase);
   if (changed) {
     console.debug("pvp_activity_control_state", {
       control_state: phase,
@@ -616,10 +629,17 @@ function updateControlPresentation(reason, phaseOverride = null) {
   }
 }
 
-function renderActionPrompt(legal, controlsDisabled) {
+function renderActionPrompt(legal, controlsDisabled, phase = state.controlPhase) {
   legal ||= { moves: [], switches: [], forced_switch: false };
-  if (controlsDisabled || state.phase === "finished") {
-    elements.actionPrompt.textContent = "";
+  const phaseText = {
+    waiting_for_start: "Waiting for battle to start...",
+    presenting: "Resolving turn...",
+    waiting_for_opponent: "Opponent's turn",
+    reconnecting: "Reconnect required",
+    finished: "Battle finished",
+  }[phase];
+  if (phaseText) {
+    elements.actionPrompt.textContent = phaseText;
     return;
   }
   const requiredName = state.playerNames[state.requiredUserId]
@@ -633,10 +653,6 @@ function renderActionPrompt(legal, controlsDisabled) {
     localName: elements.playerName.textContent || "You",
     opponentName: elements.opponentName.textContent || "Opponent",
   });
-  const isForcedSwitch = state.phase === "forced_switch" || legal.forced_switch;
-  if (isForcedSwitch) {
-    elements.message.textContent = elements.actionPrompt.textContent;
-  }
 }
 
 function actionButton(action, type, disabled) {
@@ -651,7 +667,7 @@ function actionButton(action, type, disabled) {
     }
     state.pendingAction = true;
     updateControlPresentation("action_selected", "waiting_for_opponent");
-    elements.message.textContent = "Waiting for opponent...";
+    setBattleMessage("Waiting for opponent...", "phase");
     send({ type, slot: action.slot });
   });
   return button;
@@ -667,7 +683,8 @@ function send(message) {
 }
 
 async function presentBattleEvent(event) {
-  elements.message.textContent = event.move_name || event.message || event.kind;
+  setBattleMessage(event.move_name || event.message || event.kind, "move");
+  clearImpactMessage();
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
   const plan = reduceAnimationPlan(eventAnimationPlan(event), reducedMotion);
   if (event.switch) {
@@ -675,6 +692,9 @@ async function presentBattleEvent(event) {
   }
   if (event.fainted) {
     state.pendingFaintSide = resolveSide(event.target_side || event.target);
+  }
+  if (!event.switch) {
+    state.pendingImpactSide = resolveSide(event.target_side || event.target);
   }
   state.preserveSnapshotMessage = true;
   state.noticeUntil = 0;
@@ -684,7 +704,7 @@ async function presentBattleEvent(event) {
       for (let index = 0; index < plan.length; index += 1) {
       const step = plan[index];
       if (step.target === "notice") {
-        elements.message.textContent = step.text;
+        showImpactMessage(step.text, event);
         state.noticeUntil = Date.now() + step.duration;
         state.noticePromise = wait(step.duration);
         continue;
@@ -699,7 +719,7 @@ async function presentBattleEvent(event) {
       ) {
         const notice = plan[index + 2]?.target === "notice" ? plan[index + 2] : null;
         if (notice) {
-          elements.message.textContent = notice.text;
+          showImpactMessage(notice.text, event);
           state.noticeUntil = Date.now() + notice.duration;
           state.noticePromise = wait(notice.duration);
         }
@@ -744,6 +764,34 @@ async function waitForActiveNotice() {
   await state.noticePromise;
   state.noticePromise = null;
   state.noticeUntil = 0;
+  clearImpactMessage();
+}
+
+function setBattleMessage(text, kind = "phase") {
+  elements.message.textContent = text;
+  elements.message.classList.remove("message-move", "message-result");
+  if (kind === "move") elements.message.classList.add("message-move");
+  if (kind === "result") elements.message.classList.add("message-result");
+}
+
+function showImpactMessage(text, event) {
+  const side = resolveSide(event.target_side || event.target) || "opponent";
+  const message = elements.impactMessage;
+  message.textContent = text;
+  message.hidden = false;
+  message.dataset.side = side;
+  message.dataset.variant = /miss/i.test(text)
+    ? "miss"
+    : /super effective/i.test(text)
+      ? "super-effective"
+      : "resisted";
+}
+
+function clearImpactMessage() {
+  elements.impactMessage.textContent = "";
+  elements.impactMessage.hidden = true;
+  delete elements.impactMessage.dataset.side;
+  delete elements.impactMessage.dataset.variant;
 }
 
 function animationElement(target, event) {

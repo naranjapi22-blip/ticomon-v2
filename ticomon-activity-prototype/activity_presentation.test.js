@@ -23,6 +23,16 @@ test("startup markup has no fake Pokémon placeholders", () => {
   assert.match(html, /id="player"[^>]*hidden/);
 });
 
+test("visual hierarchy reserves one phase prompt and an affected-side result", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(html, /id="impact-message" class="impact-message"/);
+  assert.match(css, /\.action-panel\[data-control-phase="presenting"\]/);
+  assert.match(css, /\.action-panel\[data-control-phase="waiting_for_local_action"\]/);
+  assert.match(css, /\.battle-message\.message-move/);
+  assert.match(css, /\.impact-message\[data-side="opponent"\]/);
+});
+
 test("a real sprite replaces the neutral slot only after preload succeeds", async () => {
   const element = { src: "", hidden: true };
   class SuccessfulImage {
@@ -148,13 +158,20 @@ test("forced switches pause before controls return", () => {
 });
 
 test("action reading and result timings meet the pacing floor", () => {
-  assert.equal(PRESENTATION_TIMINGS.moveText, 800);
+  assert.equal(PRESENTATION_TIMINGS.moveText, 950);
   assert.equal(PRESENTATION_TIMINGS.attack, 400);
   assert.equal(PRESENTATION_TIMINGS.impact, 400);
-  assert.equal(PRESENTATION_TIMINGS.hp, 700);
-  assert.equal(PRESENTATION_TIMINGS.notice, 800);
-  assert.equal(PRESENTATION_TIMINGS.normalPause, 450);
-  assert.equal(PRESENTATION_TIMINGS.finished, 2000);
+  assert.equal(PRESENTATION_TIMINGS.hp, 750);
+  assert.equal(PRESENTATION_TIMINGS.notice, 900);
+  assert.equal(PRESENTATION_TIMINGS.normalPause, 500);
+  assert.equal(PRESENTATION_TIMINGS.finished, 2200);
+});
+
+test("pacing increases by roughly ten to fifteen percent without a dead pause", () => {
+  assert.ok(PRESENTATION_TIMINGS.moveText / 800 >= 1.1);
+  assert.ok(PRESENTATION_TIMINGS.notice / 800 >= 1.1);
+  assert.ok(PRESENTATION_TIMINGS.snapshot / 450 >= 1.1);
+  assert.equal(PRESENTATION_TIMINGS.impactToHp, 400);
 });
 
 test("effectiveness remains visible while HP is presented", () => {

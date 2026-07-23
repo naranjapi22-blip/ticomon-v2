@@ -210,6 +210,10 @@ button:disabled {
   background: #dc2626;
 }
 
+.hp-fill.hp-hit {
+  animation: hp-hit 450ms ease-out;
+}
+
 .team-indicator {
   display: flex;
   gap: 3px;
@@ -231,6 +235,46 @@ button:disabled {
   opacity: 0;
 }
 
+.impact-message {
+  position: absolute;
+  z-index: 6;
+  max-width: 44%;
+  padding: 6px 12px;
+  border: 2px solid rgb(255 255 255 / 86%);
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(15 23 42 / 92%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 32%);
+  font-size: clamp(0.85rem, 2.2vw, 1.25rem);
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+
+.impact-message[data-side="opponent"] {
+  top: 25%;
+  left: 8%;
+}
+
+.impact-message[data-side="player"] {
+  right: 8%;
+  bottom: 25%;
+}
+
+.impact-message[data-variant="super-effective"] {
+  border-color: #facc15;
+  font-size: clamp(1rem, 2.7vw, 1.5rem);
+}
+
+.impact-message[data-variant="resisted"] {
+  border-color: #cbd5e1;
+}
+
+.impact-message[data-variant="miss"] {
+  border-color: #f8fafc;
+}
+
 .action-panel {
   position: relative;
   z-index: 10;
@@ -242,6 +286,13 @@ button:disabled {
   padding: 8px 14px;
   background: rgb(10 15 25 / 92%);
   font-size: clamp(0.65rem, 1.5vw, 0.9rem);
+}
+
+.action-panel[data-control-phase="presenting"] .controls-disabled,
+.action-panel[data-control-phase="waiting_for_opponent"] .controls-disabled,
+.action-panel[data-control-phase="reconnecting"] .controls-disabled {
+  opacity: 0.38;
+  filter: saturate(0.45);
 }
 
 .battle-meta {
@@ -289,10 +340,45 @@ button:disabled {
 }
 
 .action-prompt {
-  margin: 4px 0 0;
+  min-height: 1.5em;
+  margin: 5px 0 2px;
   color: #fef08a;
+  font-size: 1em;
   font-weight: 700;
-  min-height: 1.2em;
+  line-height: 1.2;
+}
+
+.action-panel[data-control-phase="presenting"] .action-prompt,
+.action-panel[data-control-phase="waiting_for_opponent"] .action-prompt,
+.action-panel[data-control-phase="reconnecting"] .action-prompt {
+  color: #cbd5e1;
+  font-size: 0.9em;
+}
+
+.action-panel[data-control-phase="waiting_for_local_action"] .action-prompt {
+  color: #fef08a;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  font-weight: 900;
+}
+
+.battle-message {
+  min-height: 1.4em;
+  margin: 3px 0 7px;
+  color: #e2e8f0;
+  font-size: 0.9em;
+  font-weight: 650;
+}
+
+.battle-message.message-move {
+  color: #fff;
+  font-size: clamp(1rem, 2.3vw, 1.35rem);
+  font-weight: 900;
+}
+
+.battle-message.message-result {
+  color: #fef08a;
+  font-size: clamp(1rem, 2.2vw, 1.3rem);
+  font-weight: 900;
 }
 
 .player-attacking {
@@ -351,6 +437,11 @@ button:disabled {
   animation: switching-in 500ms ease-out;
 }
 
+@keyframes hp-hit {
+  0%, 100% { filter: brightness(1); }
+  35% { filter: brightness(1.45); }
+}
+
 @keyframes player-attack {
   0%, 100% { transform: translate(0, 0); }
   45% { transform: translate(70px, -25px); }
@@ -379,6 +470,9 @@ button:disabled {
   .hp-track { height: 7px; }
   .action-panel { padding: 6px 8px; }
   .action-panel p { margin: 3px 0 5px; }
+  .impact-message { max-width: 58%; padding: 5px 8px; }
+  .impact-message[data-side="opponent"] { left: 5%; }
+  .impact-message[data-side="player"] { right: 5%; }
   .action-grid button,
   .switch-grid button { padding: 5px 2px; }
 }
