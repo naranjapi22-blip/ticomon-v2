@@ -180,6 +180,8 @@ async def test_first_snapshot_is_delivered_to_each_connected_client():
     record = registry.get(session.id)
     record.latest_snapshots[10] = _snapshot(player_id=10)
     record.latest_snapshots[20] = _snapshot(player_id=20)
+    session.active_action_requests[10] = "request-player-1"
+    session.active_action_requests[20] = "request-player-2"
     service.legal[(session.id, 10)] = PvpLegalActions()
     service.legal[(session.id, 20)] = PvpLegalActions()
     first, second = [], []
@@ -209,6 +211,14 @@ async def test_first_snapshot_is_delivered_to_each_connected_client():
 
     assert any(payload["type"] == "battle_snapshot" for payload in first)
     assert any(payload["type"] == "battle_snapshot" for payload in second)
+    first_snapshot = next(
+        payload for payload in first if payload["type"] == "battle_snapshot"
+    )
+    second_snapshot = next(
+        payload for payload in second if payload["type"] == "battle_snapshot"
+    )
+    assert first_snapshot["request_id"] == "request-player-1"
+    assert second_snapshot["request_id"] == "request-player-2"
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import logging
 import re
+from contextlib import suppress
 from types import SimpleNamespace
 
 import pytest
@@ -574,6 +575,26 @@ async def test_controller_close_treats_listener_cancellation_as_expected():
     controller._players = (player,)
 
     await controller.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_battle_task_logs_shutdown_reason_and_phase(caplog):
+    controller = PokeEnvPvpController()
+    controller.set_log_context(
+        "session_id=s guild_id=g channel_id=c player1_id=1 player2_id=2"
+    )
+    controller.set_shutdown_reason("battle_finished", "finalizing")
+    task = asyncio.create_task(asyncio.Event().wait(), name="pvp-test-battle")
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+    caplog.set_level(logging.WARNING)
+    controller._battle_task_finished(task)
+
+    assert "pvp_showdown_battle_task_cancelled" in caplog.text
+    assert "reason=battle_finished" in caplog.text
+    assert "phase=finalizing" in caplog.text
 
 
 @pytest.mark.asyncio

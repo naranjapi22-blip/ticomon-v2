@@ -60,6 +60,36 @@ export function shouldExposeControls({ presentationBusy, pendingAction }) {
   return !presentationBusy && !pendingAction;
 }
 
+export function controlRenderKey({
+  sessionId = "-",
+  turn = "-",
+  requestId = "-",
+  sequence = "-",
+  actorId = "-",
+  legal = {},
+}) {
+  const moves = (legal.moves || []).map((action) => action.slot ?? action.id ?? action.name);
+  const switches = (legal.switches || []).map((action) => action.slot ?? action.id ?? action.name);
+  const actionType = legal.forced_switch ? "forced_switch" : "action";
+  return [sessionId, turn, requestId, sequence, actorId, actionType, moves.join(","), switches.join(",")].join(":");
+}
+
+export function controlPhaseFor({
+  hasSnapshot,
+  presentationBusy,
+  pendingAction,
+  finished = false,
+  legal = {},
+  waitingForReconnect = false,
+}) {
+  if (!hasSnapshot) return "waiting_for_start";
+  if (finished) return "finished";
+  if (presentationBusy) return "presenting";
+  if (pendingAction || waitingForReconnect) return waitingForReconnect ? "reconnecting" : "waiting_for_opponent";
+  if (legal.moves?.length || legal.switches?.length) return "waiting_for_local_action";
+  return "waiting_for_opponent";
+}
+
 export function actionPromptFor({
   legal = {},
   phase,

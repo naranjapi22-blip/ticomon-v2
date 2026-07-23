@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import {
   ActivityPresentationQueue,
   actionPromptFor,
+  controlPhaseFor,
+  controlRenderKey,
   preSnapshotMessage,
   PRESENTATION_TIMINGS,
   presentationDelayFor,
@@ -188,4 +190,32 @@ test("forced-switch prompts distinguish local action, connected rival, and recon
 test("pre-snapshot state waits instead of assigning an actor or exposing actions", () => {
   assert.equal(preSnapshotMessage(false), "Waiting for battle to start...");
   assert.equal(preSnapshotMessage(true), null);
+});
+
+test("control keys distinguish normal actions from forced switches", () => {
+  const base = {
+    sessionId: "session",
+    turn: 1,
+    requestId: "request-a",
+    sequence: 4,
+    actorId: "player-1",
+  };
+  assert.notEqual(
+    controlRenderKey({ ...base, legal: { moves: [{ slot: 1 }] } }),
+    controlRenderKey({ ...base, requestId: "request-b", legal: { forced_switch: true, switches: [{ slot: 1 }] } }),
+  );
+});
+
+test("only local action phase exposes controls", () => {
+  const common = { hasSnapshot: true, legal: { moves: [{ name: "Tackle" }] } };
+  assert.equal(controlPhaseFor({ ...common, presentationBusy: true }), "presenting");
+  assert.equal(controlPhaseFor({ ...common, presentationBusy: false, pendingAction: true }), "waiting_for_opponent");
+  assert.equal(controlPhaseFor({ ...common, presentationBusy: false, pendingAction: false }), "waiting_for_local_action");
+  assert.equal(controlPhaseFor({ hasSnapshot: true, presentationBusy: false, pendingAction: false, legal: {} }), "waiting_for_opponent");
+});
+
+test("a new legal action key is required before controls can be rebuilt", () => {
+  const key = controlRenderKey({ sessionId: "session", turn: 1, requestId: "request", sequence: 4, actorId: "player-1", legal: { moves: [{ slot: 1 }] } });
+  assert.equal(key, controlRenderKey({ sessionId: "session", turn: 1, requestId: "request", sequence: 4, actorId: "player-1", legal: { moves: [{ slot: 1 }] } }));
+  assert.notEqual(key, controlRenderKey({ sessionId: "session", turn: 1, requestId: "request-2", sequence: 5, actorId: "player-1", legal: { moves: [{ slot: 1 }] } }));
 });

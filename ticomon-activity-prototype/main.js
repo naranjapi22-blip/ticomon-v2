@@ -13,7 +13,8 @@ import {
   preSnapshotMessage,
   replaceSpriteAfterPreload,
   shouldRestoreSnapshotImmediately,
-  shouldExposeControls,
+  controlPhaseFor,
+  controlRenderKey,
 } from "./activity_presentation.js";
 import { applyActivityBackground } from "./activity_background.js";
 import {
@@ -87,6 +88,9 @@ const state = {
   pendingSwitchSide: null,
   pendingFaintSide: null,
   preserveSnapshotMessage: false,
+  controlPhase: "waiting_for_start",
+  controlsRenderKey: null,
+  controlsSessionId: null,
   hpValues: { player: null, opponent: null },
 };
 
@@ -94,12 +98,13 @@ const presentationQueue = new ActivityPresentationQueue({
   present: presentQueuedMessage,
   onStart: () => {
     state.presentationBusy = true;
-    hideActionControls();
+    updateControlPresentation("presentation_start");
   },
   onIdle: () => {
     state.presentationBusy = false;
     renderControls(
       state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
+      "presentation_idle",
     );
   },
 });
@@ -265,7 +270,7 @@ function handleServerMessage(message) {
   if (message.type === "startup_error") {
     state.phase = "startup_error";
     state.pendingAction = true;
-    hideActionControls();
+    updateControlPresentation("startup_error");
     showConnectionFailure(
       "The battle could not start.",
       message.message || "The server timed out before the first battle snapshot.",
@@ -320,13 +325,10 @@ function handleServerMessage(message) {
         const waitingMessage = preSnapshotMessage(false);
         elements.message.textContent = waitingMessage;
         elements.actionPrompt.textContent = waitingMessage;
-        hideActionControls();
+        updateControlPresentation("session_state_before_snapshot");
       } else {
         elements.message.textContent = phaseMessage(message.phase);
-        renderActionPrompt(
-          state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
-          false,
-        );
+        updateControlPresentation("session_state");
       }
     }
     return;
@@ -375,7 +377,7 @@ async function presentQueuedMessage(item) {
     elements.message.textContent = item.winner
       ? `${item.winner.display_name || "The winner"} won. Reason: ${item.reason}.`
       : `Battle finished. Reason: ${item.reason}.`;
-    hideActionControls();
+    updateControlPresentation("battle_finished");
   }
   if (item.sequence !== undefined) {
     state.sequence = Math.max(state.sequence, item.sequence);
@@ -393,7 +395,7 @@ async function presentSnapshot(snapshot, { restore = false } = {}) {
     state.sequence = Math.max(state.sequence, snapshot.sequence);
   }
   if (restore) {
-    renderControls(snapshot.legal_actions);
+    renderControls(snapshot.legal_actions, "snapshot_restore");
   }
 }
 
@@ -500,26 +502,88 @@ function renderTeam(element, team, remaining) {
   }
 }
 
-function renderControls(legal = { moves: [], switches: [], forced_switch: false }) {
-  if (!state.snapshotReceived && !state.snapshot) {
-    hideActionControls();
-    elements.forfeit.disabled = false;
-    elements.actionPrompt.textContent = preSnapshotMessage(false);
-    return;
+function renderControls(legal = { moves: [], switches: [], forced_switch: false }, reason = "unknown") {
+  const hasSnapshot = Boolean(state.snapshotReceived || state.snapshot);
+  const phase = controlPhaseFor({
+    hasSnapshot,
+    presentationBusy: state.presentationBusy,
+    pendingAction: state.pendingAction,
+    finished: state.phase === "finished",
+    legal,
+    waitingForReconnect: state.waitingForReconnect,
+  });
+  const key = controlRenderKey({
+    sessionId: state.authoritativeSnapshot?.session_id || state.snapshot?.session_id,
+    turn: state.authoritativeSnapshot?.turn || state.snapshot?.turn,
+    requestId: state.authoritativeSnapshot?.request_id || state.snapshot?.request_id,
+    sequence: state.authoritativeSnapshot?.sequence || state.snapshot?.sequence,
+    actorId: state.requiredUserId,
+    legal,
+  });
+  const shouldBuild = phase === "waiting_for_local_action" && key !== state.controlsRenderKey;
+  if (shouldBuild) {
+    elements.moves.replaceChildren();
+    elements.switches.replaceChildren();
+    legal.moves?.forEach((move) => elements.moves.append(actionButton(move, "choose_move", false)));
+    legal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", false)));
+    state.controlsRenderKey = key;
+    state.controlsSessionId = state.authoritativeSnapshot?.session_id || state.snapshot?.session_id || null;
   }
-  if (!shouldExposeControls(state)) {
-    hideActionControls();
-    return;
+  updateControlPresentation(reason, phase);
+}
+
+function updateControlPresentation(reason, phaseOverride = null) {
+  const legal = state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions || { moves: [], switches: [], forced_switch: false };
+  const calculatedPhase = controlPhaseFor({
+    hasSnapshot: Boolean(state.snapshotReceived || state.snapshot),
+    presentationBusy: state.presentationBusy,
+    pendingAction: state.pendingAction,
+    finished: state.phase === "finished",
+    legal,
+    waitingForReconnect: state.waitingForReconnect,
+  });
+  const currentKey = controlRenderKey({
+    sessionId: state.authoritativeSnapshot?.session_id || state.snapshot?.session_id,
+    turn: state.authoritativeSnapshot?.turn || state.snapshot?.turn,
+    requestId: state.authoritativeSnapshot?.request_id || state.snapshot?.request_id,
+    sequence: state.authoritativeSnapshot?.sequence || state.snapshot?.sequence,
+    actorId: state.requiredUserId,
+    legal,
+  });
+  const phase = phaseOverride || (
+    calculatedPhase === "waiting_for_local_action" && currentKey !== state.controlsRenderKey
+      ? "presenting"
+      : calculatedPhase
+  );
+  const changed = state.controlPhase !== phase;
+  state.controlPhase = phase;
+  const controlsDisabled = phase !== "waiting_for_local_action" || state.role === "unauthorized";
+  [elements.moves, elements.switches].forEach((element) => {
+    element.classList.toggle("controls-disabled", controlsDisabled);
+    element.querySelectorAll("button").forEach((button) => { button.disabled = controlsDisabled; });
+  });
+  elements.forfeit.disabled = controlsDisabled && phase !== "waiting_for_start";
+  if (phase !== "waiting_for_local_action") {
+    elements.moves.hidden = true;
+    elements.switches.hidden = true;
+  } else {
+    elements.moves.hidden = false;
+    elements.switches.hidden = false;
+    renderActionPrompt(legal, false);
   }
-  elements.moves.hidden = false;
-  elements.switches.hidden = false;
-  elements.moves.replaceChildren();
-  elements.switches.replaceChildren();
-  const controlsDisabled = state.role === "unauthorized" || state.pendingAction || state.phase === "finished";
-  renderActionPrompt(legal, controlsDisabled);
-  legal.moves?.forEach((move) => elements.moves.append(actionButton(move, "choose_move", controlsDisabled)));
-  legal.switches?.forEach((switchAction) => elements.switches.append(actionButton(switchAction, "choose_switch", controlsDisabled)));
-  elements.forfeit.disabled = controlsDisabled;
+  if (changed) {
+    console.debug("pvp_activity_control_state", {
+      control_state: phase,
+      render_key: state.controlsRenderKey,
+      actor_id: state.requiredUserId,
+      local_user_id: state.localUserId,
+      legal_moves_count: legal.moves?.length || 0,
+      legal_switches_count: legal.switches?.length || 0,
+      presentation_busy: state.presentationBusy,
+      reason_for_render: phase === "waiting_for_local_action" ? reason : null,
+      reason_for_hide_or_disable: phase === "waiting_for_local_action" ? null : reason,
+    });
+  }
 }
 
 function renderActionPrompt(legal, controlsDisabled) {
@@ -545,12 +609,6 @@ function renderActionPrompt(legal, controlsDisabled) {
   }
 }
 
-function hideActionControls() {
-  elements.moves.hidden = true;
-  elements.switches.hidden = true;
-  elements.forfeit.disabled = true;
-}
-
 function actionButton(action, type, disabled) {
   const button = document.createElement("button");
   button.type = "button";
@@ -562,7 +620,7 @@ function actionButton(action, type, disabled) {
       return;
     }
     state.pendingAction = true;
-    hideActionControls();
+    updateControlPresentation("action_selected", "waiting_for_opponent");
     elements.message.textContent = "Waiting for opponent...";
     send({ type, slot: action.slot });
   });

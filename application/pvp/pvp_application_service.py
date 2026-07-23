@@ -1129,6 +1129,15 @@ class PvpApplicationService:
             controller = session.battle_controller
             if controller is not None:
                 try:
+                    shutdown_reason = (
+                        "battle_finished"
+                        if session.phase is PvpPhase.FINISHED
+                        else "session_cleanup"
+                    )
+                    if hasattr(controller, "set_shutdown_reason"):
+                        controller.set_shutdown_reason(
+                            shutdown_reason, session.phase.value
+                        )
                     await controller.close()
                 except Exception:
                     logger.warning(

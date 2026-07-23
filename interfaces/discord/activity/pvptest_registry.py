@@ -607,11 +607,13 @@ class PvptestActivityRegistry:
         except ValueError:
             pass
         session = self._pvp_service.registry.get(record.session_id)
+        request_id = session.active_action_requests.get(snapshot.player_id)
         return {
             "type": "battle_snapshot",
             "sequence": sequence,
             "turn": snapshot.turn,
             "phase": session.phase.value,
+            "request_id": request_id,
             "deadline": record.deadlines.get(snapshot.player_id),
             "self": pokemon_to_dto(snapshot.player_active, player_side=True),
             "opponent": pokemon_to_dto(snapshot.opponent_active, player_side=False),

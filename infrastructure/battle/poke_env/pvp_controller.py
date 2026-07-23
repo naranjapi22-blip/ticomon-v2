@@ -391,6 +391,12 @@ class PokeEnvPvpController:
         self._attempt = 0
         self._player_usernames: dict[str, int] = {}
         self._log_context = ""
+        self._shutdown_reason = "unexpected"
+        self._shutdown_phase = "unknown"
+
+    def set_shutdown_reason(self, reason: str, phase: str) -> None:
+        self._shutdown_reason = reason
+        self._shutdown_phase = phase
 
     def set_log_context(self, context: str) -> None:
         self._log_context = context
@@ -491,9 +497,13 @@ class PokeEnvPvpController:
     def _battle_task_finished(self, task: asyncio.Task) -> None:
         if task.cancelled():
             logger.warning(
-                "pvp_showdown_battle_task_cancelled %s attempt=%s",
+                "pvp_showdown_battle_task_cancelled %s attempt=%s reason=%s "
+                "phase=%s cleanup_normal=%s",
                 self._log_context,
                 self._attempt,
+                self._shutdown_reason,
+                self._shutdown_phase,
+                self._shutdown_reason in {"session_cleanup", "battle_finished"},
             )
             return
         error = task.exception()
@@ -592,7 +602,7 @@ class PokeEnvPvpController:
                         self._battle_task,
                         current_task=current_task,
                         owner="PokeEnvPvpController",
-                        reason="controller close battle task",
+                        reason=self._shutdown_reason,
                     )
             else:
                 try:
@@ -654,6 +664,8 @@ class PokeEnvPvpController:
         self._attempt = 0
         self._callbacks = None
         self._player_usernames.clear()
+        self._shutdown_reason = "unexpected"
+        self._shutdown_phase = "unknown"
 
     def _pack_team(self, team: tuple[Creature, ...]) -> str:
         sets = []
