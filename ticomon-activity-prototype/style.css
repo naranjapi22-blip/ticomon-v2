@@ -38,7 +38,8 @@ button:disabled {
 .battle {
   position: relative;
   width: min(100vw, 960px);
-  height: min(56.25vw, 540px, 100vh);
+  height: 100vh;
+  max-height: 100vh;
   min-height: 0;
   overflow: hidden;
   background-color: #334155;
@@ -109,7 +110,7 @@ button:disabled {
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: minmax(120px, minmax(0, 1fr)) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
 }
 
@@ -128,29 +129,29 @@ button:disabled {
 
 .pokemon {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   width: auto;
   height: auto;
   max-width: 42%;
-  max-height: 42%;
+  max-height: clamp(100px, 34%, 150px);
   object-fit: contain;
   image-rendering: pixelated;
 }
 
 .opponent {
-  top: 16%;
-  right: 15%;
+  top: clamp(90px, 26%, 150px);
+  right: 10%;
 }
 
 .player {
-  bottom: clamp(20px, 5vh, 64px);
-  left: 13%;
+  bottom: clamp(85px, 18%, 150px);
+  left: 10%;
   max-width: 46%;
 }
 
 .hud {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   width: 34%;
   padding: 9px 12px;
   border: 3px solid #334155;
@@ -224,7 +225,7 @@ button:disabled {
 .flash {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
   background: rgb(255 235 59 / 65%);
   opacity: 0;
@@ -235,6 +236,9 @@ button:disabled {
   z-index: 10;
   min-height: 0;
   flex-shrink: 0;
+  align-self: end;
+  max-height: min(38vh, 240px);
+  overflow-y: auto;
   padding: 8px 14px;
   background: rgb(10 15 25 / 92%);
   font-size: clamp(0.65rem, 1.5vw, 0.9rem);
@@ -420,14 +424,23 @@ button:disabled {
   to { opacity: 1; }
 }
 
-@media (max-height: 620px), (max-width: 520px) {
+@media (max-width: 520px) {
   .action-panel {
     max-height: min(42vh, 230px);
-    overflow-y: auto;
   }
 
-  .battle-shell {
-    grid-template-rows: minmax(120px, minmax(0, 1fr)) auto;
+  .pokemon {
+    max-height: clamp(72px, 34%, 110px);
+  }
+
+  .opponent {
+    top: 22%;
+    right: 8%;
+  }
+
+  .player {
+    bottom: 18%;
+    left: 8%;
   }
 
   .action-grid,
@@ -439,6 +452,24 @@ button:disabled {
   .switch-grid button {
     padding-top: 5px;
     padding-bottom: 5px;
+  }
+}
+
+@media (max-height: 460px) and (min-width: 521px) {
+  .action-panel {
+    max-height: min(34vh, 180px);
+  }
+
+  .pokemon {
+    max-height: clamp(72px, 34%, 110px);
+  }
+
+  .opponent {
+    top: 22%;
+  }
+
+  .player {
+    bottom: 18%;
   }
 }
 
