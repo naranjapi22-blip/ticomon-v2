@@ -38,15 +38,10 @@ button:disabled {
 .battle {
   position: relative;
   width: min(100vw, 960px);
-  aspect-ratio: 16 / 9;
+  height: min(56.25vw, 540px, 100vh);
+  min-height: 0;
   overflow: hidden;
   background-color: #334155;
-  background-image:
-    linear-gradient(rgb(0 0 0 / 5%), rgb(0 0 0 / 20%)),
-    var(--activity-background-image, none);
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
 }
 
 .runtime-status {
@@ -110,9 +105,25 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-.battle-screen {
+.battle-shell {
   position: absolute;
   inset: 0;
+  display: grid;
+  grid-template-rows: minmax(120px, minmax(0, 1fr)) auto;
+  min-height: 0;
+}
+
+.battle-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background-color: #334155;
+  background-image:
+    linear-gradient(rgb(0 0 0 / 5%), rgb(0 0 0 / 20%)),
+    var(--activity-background-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 .pokemon {
@@ -132,7 +143,7 @@ button:disabled {
 }
 
 .player {
-  bottom: 22%;
+  bottom: clamp(20px, 5vh, 64px);
   left: 13%;
   max-width: 46%;
 }
@@ -156,7 +167,7 @@ button:disabled {
 
 .player-hud {
   right: 6%;
-  bottom: 29%;
+  bottom: clamp(12px, 10%, 28px);
 }
 
 .trainer-line,
@@ -219,13 +230,11 @@ button:disabled {
   opacity: 0;
 }
 
-.controls {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 4;
-  min-height: 22%;
+.action-panel {
+  position: relative;
+  z-index: 10;
+  min-height: 0;
+  flex-shrink: 0;
   padding: 8px 14px;
   background: rgb(10 15 25 / 92%);
   font-size: clamp(0.65rem, 1.5vw, 0.9rem);
@@ -236,7 +245,7 @@ button:disabled {
   font-size: 0.8em;
 }
 
-.controls p {
+.action-panel p {
   margin: 5px 0 7px;
 }
 
@@ -313,10 +322,32 @@ button:disabled {
   }
 
   .hp-track { height: 7px; }
-  .controls { min-height: 25%; padding: 6px 8px; }
-  .controls p { margin: 3px 0 5px; }
+  .action-panel { padding: 6px 8px; }
+  .action-panel p { margin: 3px 0 5px; }
   .action-grid button,
   .switch-grid button { padding: 5px 2px; }
+}
+
+@media (max-height: 620px), (max-width: 520px) {
+  .action-panel {
+    max-height: min(42vh, 230px);
+    overflow-y: auto;
+  }
+
+  .battle-shell {
+    grid-template-rows: minmax(120px, minmax(0, 1fr)) auto;
+  }
+
+  .action-grid,
+  .switch-grid {
+    gap: 4px;
+  }
+
+  .action-grid button,
+  .switch-grid button {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

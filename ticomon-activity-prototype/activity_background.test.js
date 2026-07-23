@@ -52,3 +52,29 @@ test("Activity sprites cannot be enlarged beyond intrinsic dimensions", () => {
   assert.doesNotMatch(spriteRule, /(?<!max-)width:\s*\d+%/);
   assert.doesNotMatch(spriteRule, /(?<!max-)height:\s*\d+%/);
 });
+
+test("battle stage and action panel are separate layout regions", () => {
+  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const battleShell = html.match(/id="battle-screen"[\s\S]*?<\/section>\s*<\/section>/)?.[0] || "";
+  assert.match(html, /id="battle-screen" class="battle-shell"/);
+  assert.ok(battleShell.indexOf('class="battle-stage"') < battleShell.indexOf('class="action-panel"'));
+  const stage = battleShell.slice(
+    battleShell.indexOf('<section class="battle-stage">'),
+    battleShell.indexOf('<section class="action-panel">'),
+  );
+  assert.match(stage, /id="opponent" class="pokemon opponent"/);
+  assert.match(stage, /id="player" class="pokemon player"/);
+
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  const actionRule = css.match(/\.action-panel\s*\{([^}]+)\}/s)?.[1] || "";
+  assert.match(actionRule, /position:\s*relative/);
+  assert.doesNotMatch(actionRule, /position:\s*absolute/);
+  assert.match(css, /\.player\s*\{[^}]*bottom:\s*clamp\(20px,\s*5vh,\s*64px\)/s);
+});
+
+test("short viewports scroll the action panel while retaining a stage", () => {
+  const css = readFileSync(new URL("./style.css", import.meta.url), "utf8");
+  assert.match(css, /\.action-panel\s*\{[^}]*max-height:\s*min\(42vh,\s*230px\)/s);
+  assert.match(css, /\.action-panel\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.match(css, /grid-template-rows:\s*minmax\(120px,\s*minmax\(0,\s*1fr\)\)\s+auto/);
+});

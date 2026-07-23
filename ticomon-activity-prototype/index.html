@@ -16,7 +16,8 @@
       <p id="setup-detail" class="muted">The backend is authoritative for every battle action.</p>
     </section>
 
-    <section id="battle-screen" class="battle-screen" hidden>
+    <section id="battle-screen" class="battle-shell" hidden>
+      <section class="battle-stage">
       <section class="hud opponent-hud">
         <div class="trainer-line">
           <strong id="opponent-name">Waiting for battle snapshot...</strong>
@@ -41,8 +42,9 @@
       </section>
 
       <div id="flash" class="flash"></div>
+      </section>
 
-      <section class="controls">
+      <section class="action-panel">
         <div class="battle-meta">
           <span id="turn-label">Turn —</span>
           <span id="timer-label">Waiting</span>
