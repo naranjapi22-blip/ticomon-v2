@@ -10,10 +10,31 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import traceback
 from collections.abc import Iterable
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+_EMPTY_LOG_CONTEXT = "session_id=- guild_id=- channel_id=- player1_id=- player2_id=-"
+
+
+def _safe_task_error(error: BaseException) -> str:
+    message = str(error).replace("\r", " ").replace("\n", " ")
+    return re.sub(
+        r"(?i)(authorization|password|secret|token)(\s*[:=]\s*)\S+",
+        r"\1\2[REDACTED]",
+        message,
+    )[:500]
+
+
+def _safe_task_traceback(error: BaseException) -> str:
+    text = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+    return re.sub(
+        r"(?i)(authorization|password|secret|token)(\s*[:=]\s*)\S+",
+        r"\1\2[REDACTED]",
+        text,
+    )[:4000]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +43,7 @@ class TaskMetadata:
     role: str
     may_call_cleanup: bool
     cleanup_may_cancel: bool
+    log_context: str | None
 
 
 _task_metadata: dict[int, TaskMetadata] = {}
@@ -41,6 +63,7 @@ def register_task(
     role: str,
     may_call_cleanup: bool = False,
     cleanup_may_cancel: bool = True,
+    log_context: str | None = None,
 ) -> asyncio.Task:
     """Register a named task without changing asyncio's task internals."""
     _task_metadata[id(task)] = TaskMetadata(
@@ -48,9 +71,47 @@ def register_task(
         role=role,
         may_call_cleanup=may_call_cleanup,
         cleanup_may_cancel=cleanup_may_cancel,
+        log_context=log_context,
     )
+    task.add_done_callback(_report_task_completion)
     task.add_done_callback(lambda completed: _task_metadata.pop(id(completed), None))
     return task
+
+
+def _report_task_completion(task: asyncio.Task) -> None:
+    metadata = _metadata_for(task)
+    if metadata is None:
+        return
+    if task.cancelled():
+        logger.info(
+            "pvp_task_cancelled %s task=%s owner=%s role=%s",
+            metadata.log_context or _EMPTY_LOG_CONTEXT,
+            task.get_name(),
+            metadata.owner,
+            metadata.role,
+        )
+        return
+    error = task.exception()
+    if error is None:
+        logger.debug(
+            "pvp_task_completed %s task=%s owner=%s role=%s",
+            metadata.log_context or _EMPTY_LOG_CONTEXT,
+            task.get_name(),
+            metadata.owner,
+            metadata.role,
+        )
+        return
+    logger.error(
+        "pvp_task_failed %s task=%s owner=%s role=%s error_type=%s error=%s "
+        "stack_trace=%s",
+        metadata.log_context or _EMPTY_LOG_CONTEXT,
+        task.get_name(),
+        metadata.owner,
+        metadata.role,
+        type(error).__name__,
+        _safe_task_error(error),
+        _safe_task_traceback(error),
+    )
 
 
 def _metadata_for(task: asyncio.Task) -> TaskMetadata | None:

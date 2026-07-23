@@ -84,6 +84,17 @@ class PvpChallengeView(discord.ui.View):
             if session.phase is not PvpPhase.CHALLENGE:
                 raise ValueError("This PvP challenge is no longer pending.")
             session.phase = PvpPhase.TEAM_SELECTION
+            logger.info(
+                "pvp_challenge_accepted session_id=%s guild_id=%s channel_id=%s "
+                "player1_id=%s player2_id=%s phase=%s battle_started=%s",
+                session.id,
+                interaction.guild.id if interaction.guild else "-",
+                interaction.channel.id if interaction.channel else "-",
+                session.initiator_id,
+                session.opponent_id,
+                session.phase.value,
+                session.started_monotonic is not None,
+            )
         except ValueError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return

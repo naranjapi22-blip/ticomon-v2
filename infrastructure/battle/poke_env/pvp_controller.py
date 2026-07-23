@@ -19,6 +19,7 @@ from poke_env.ps_client.account_configuration import AccountConfiguration
 from poke_env.teambuilder import Teambuilder, TeambuilderPokemon
 from websockets.exceptions import ConnectionClosedOK
 
+from application.pvp.log_context import safe_traceback
 from application.pvp.models import (
     PvpAction,
     PvpActionKind,
@@ -164,6 +165,10 @@ class ManualPvpPlayer(Player):
         self.background_errors: list[BaseException] = []
         self._pending_finished_battles: list[AbstractBattle] = []
         self._finished_battle_ids: set[int] = set()
+        self._log_context = kwargs.pop("log_context", "")
+        self._first_message_logged = False
+        self._first_request_logged = False
+        self._first_snapshot_logged = False
         super().__init__(
             account_configuration=AccountConfiguration(username, None),
             battle_format=PVP_BATTLE_FORMAT,
@@ -197,6 +202,7 @@ class ManualPvpPlayer(Player):
             role="final_callback",
             may_call_cleanup=True,
             cleanup_may_cancel=False,
+            log_context=self._log_context,
         )
         if self._callback_tasks is None:
             task.add_done_callback(_consume_task_exception)
@@ -211,6 +217,17 @@ class ManualPvpPlayer(Player):
 
     async def choose_move(self, battle: AbstractBattle):
         actions, orders = self._legal_actions(battle)
+        if not self._first_request_logged:
+            self._first_request_logged = True
+            logger.info(
+                "pvp_showdown_first_request %s trainer_id=%s moves=%s switches=%s "
+                "forced_switch=%s",
+                self._log_context,
+                self.trainer_id,
+                len(actions.moves),
+                len(actions.switches),
+                actions.forced_switch,
+            )
         selected = await self._callbacks.on_actions(self.trainer_id, actions)
         try:
             return orders[selected.identifier]
@@ -218,6 +235,14 @@ class ManualPvpPlayer(Player):
             raise ValueError("Showdown returned an invalid PvP action.") from error
 
     async def _handle_battle_message(self, split_messages):
+        if not self._first_message_logged:
+            self._first_message_logged = True
+            logger.info(
+                "pvp_showdown_first_message %s trainer_id=%s lines=%s",
+                self._log_context,
+                self.trainer_id,
+                len(split_messages),
+            )
         await self._callbacks.on_protocol(self.trainer_id, split_messages)
         try:
             await super()._handle_battle_message(split_messages)
@@ -233,6 +258,14 @@ class ManualPvpPlayer(Player):
             )
         for battle in self.battles.values():
             if self._callbacks.on_snapshot is not None:
+                if not self._first_snapshot_logged:
+                    self._first_snapshot_logged = True
+                    logger.info(
+                        "pvp_showdown_first_snapshot %s trainer_id=%s turn=%s",
+                        self._log_context,
+                        self.trainer_id,
+                        getattr(battle, "turn", None),
+                    )
                 await self._callbacks.on_snapshot(
                     snapshot_battle(
                         battle,
@@ -357,6 +390,10 @@ class PokeEnvPvpController:
         self._callbacks: PvpControllerCallbacks | None = None
         self._attempt = 0
         self._player_usernames: dict[str, int] = {}
+        self._log_context = ""
+
+    def set_log_context(self, context: str) -> None:
+        self._log_context = context
 
     async def start(
         self,
@@ -364,6 +401,11 @@ class PokeEnvPvpController:
         callbacks: PvpControllerCallbacks,
     ) -> None:
         self._callbacks = callbacks
+        logger.info(
+            "pvp_showdown_start %s team_count=%s",
+            self._log_context,
+            len(teams),
+        )
         websocket_url, authentication_url = validate_showdown_configuration()
         player_ids = tuple(teams)
         if len(player_ids) != 2:
@@ -371,6 +413,12 @@ class PokeEnvPvpController:
         packed_teams = {
             trainer_id: self._pack_team(team) for trainer_id, team in teams.items()
         }
+        logger.info(
+            "pvp_showdown_teams_packed %s player1_team_size=%s player2_team_size=%s",
+            self._log_context,
+            len(teams[player_ids[0]]),
+            len(teams[player_ids[1]]),
+        )
         capture_sprite_urls = self._capture_sprite_urls(teams)
         pokeapi_ids = self._pokeapi_ids(teams)
         player_kwargs = {
@@ -382,6 +430,7 @@ class PokeEnvPvpController:
             ),
             "capture_sprite_urls": capture_sprite_urls,
             "pokeapi_ids": pokeapi_ids,
+            "log_context": self._log_context,
         }
         last_error = None
         for attempt in range(1, 4):
@@ -396,6 +445,11 @@ class PokeEnvPvpController:
             second.opponent_id = player_ids[0]
             self._players = first, second
             try:
+                logger.info(
+                    "pvp_showdown_login_wait %s attempt=%s",
+                    self._log_context,
+                    attempt,
+                )
                 await asyncio.wait_for(
                     self._wait_for_login(first, second),
                     timeout=SHOWDOWN_CONNECTION_TIMEOUT_SECONDS,
@@ -407,18 +461,27 @@ class PokeEnvPvpController:
                     ),
                     owner="PokeEnvPvpController",
                     role="battle",
+                    log_context=self._log_context,
                 )
                 self._battle_task.add_done_callback(self._battle_task_finished)
+                logger.info(
+                    "pvp_showdown_battle_task_created %s attempt=%s task=%s",
+                    self._log_context,
+                    attempt,
+                    self._battle_task.get_name(),
+                )
                 await asyncio.sleep(0)
                 return
             except Exception as error:
                 last_error = error
                 logger.warning(
-                    "Retrying PvP Showdown login attempt=%s error_type=%s error=%s",
+                    "pvp_showdown_login_failed %s attempt=%s error_type=%s "
+                    "error=%s stack_trace=%s",
+                    self._log_context,
                     attempt,
                     type(error).__name__,
                     _safe_exception_message(error),
-                    exc_info=(type(error), error, error.__traceback__),
+                    safe_traceback(error),
                 )
                 await self.close()
         raise TimeoutError(
@@ -427,17 +490,30 @@ class PokeEnvPvpController:
 
     def _battle_task_finished(self, task: asyncio.Task) -> None:
         if task.cancelled():
+            logger.warning(
+                "pvp_showdown_battle_task_cancelled %s attempt=%s",
+                self._log_context,
+                self._attempt,
+            )
             return
         error = task.exception()
         if error is None or self._callbacks is None or self._callbacks.on_error is None:
+            logger.info(
+                "pvp_showdown_battle_task_finished %s attempt=%s error=%s",
+                self._log_context,
+                self._attempt,
+                type(error).__name__ if error else "none",
+            )
             _consume_task_exception(task)
             return
         logger.warning(
-            "PvP Showdown battle task failed attempt=%s error_type=%s error=%s",
+            "pvp_showdown_battle_task_failed %s attempt=%s error_type=%s "
+            "error=%s stack_trace=%s",
+            self._log_context,
             self._attempt,
             type(error).__name__,
             _safe_exception_message(error),
-            exc_info=(type(error), error, error.__traceback__),
+            safe_traceback(error),
         )
         callback_task = register_task(
             asyncio.create_task(
@@ -448,6 +524,7 @@ class PokeEnvPvpController:
             role="final_callback",
             may_call_cleanup=True,
             cleanup_may_cancel=False,
+            log_context=self._log_context,
         )
         self._callback_tasks.add(callback_task)
         callback_task.add_done_callback(self._callback_tasks.discard)
@@ -477,6 +554,10 @@ class PokeEnvPvpController:
                 if getattr(player, "background_errors", None):
                     raise player.background_errors[0]
             await asyncio.sleep(0.05)
+        logger.info(
+            "pvp_showdown_login_ready %s players=2/2",
+            self._log_context,
+        )
 
     async def forfeit(self, trainer_id: int) -> None:
         if self._players is None:

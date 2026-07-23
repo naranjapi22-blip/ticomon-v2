@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   ActivityPresentationQueue,
   actionPromptFor,
+  preSnapshotMessage,
   PRESENTATION_TIMINGS,
   presentationDelayFor,
   replaceSpriteAfterPreload,
@@ -182,4 +183,9 @@ test("forced-switch prompts distinguish local action, connected rival, and recon
     }),
     "Waiting for Gin to reconnect.",
   );
+});
+
+test("pre-snapshot state waits instead of assigning an actor or exposing actions", () => {
+  assert.equal(preSnapshotMessage(false), "Waiting for battle to start...");
+  assert.equal(preSnapshotMessage(true), null);
 });

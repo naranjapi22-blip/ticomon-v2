@@ -7,6 +7,11 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable
 from uuid import UUID
 
+from application.pvp.log_context import (
+    format_pvp_context,
+    safe_error_message,
+    safe_traceback,
+)
 from application.pvp.models import (
     PvpAction,
     PvpEvent,
@@ -70,6 +75,18 @@ class PvptestActivityRegistry:
         self._completed_records: dict[UUID, ActivityBattleRecord] = {}
         self._lock = asyncio.Lock()
 
+    @staticmethod
+    def _context(record: ActivityBattleRecord) -> str:
+        return format_pvp_context(
+            {
+                "session_id": str(record.session_id),
+                "guild_id": record.guild_id if record.guild_id is not None else "-",
+                "channel_id": record.channel_id,
+                "player1_id": record.player_ids[0],
+                "player2_id": record.player_ids[1],
+            }
+        )
+
     async def bind(
         self,
         *,
@@ -100,6 +117,11 @@ class PvptestActivityRegistry:
             )
             self._records[session_id] = record
             self._channel_sessions[channel_id] = session_id
+            logger.info(
+                "pvp_activity_session_bound %s battle_started=%s",
+                self._context(record),
+                record.battle_started,
+            )
             return record
 
     def get(self, session_id: UUID) -> ActivityBattleRecord:
@@ -150,8 +172,22 @@ class PvptestActivityRegistry:
             await send_json(self._state_message(record, role))
             return role
         connections = record.connections[1 if role == "player1" else 2]
+        replaced = bool(connections)
         connections.clear()
         connections.add(send_json)
+        logger.info(
+            "pvp_activity_socket_connected %s user_id=%s role=%s replaced=%s "
+            "sockets=%s/2 player1_socket_connected=%s player2_socket_connected=%s "
+            "battle_started=%s",
+            self._context(record),
+            user_id,
+            role,
+            replaced,
+            record.connected_count(),
+            bool(record.connections[1]),
+            bool(record.connections[2]),
+            record.battle_started,
+        )
         await send_json(self._state_message(record, role))
         await self._send_snapshot(record, user_id, send_json)
         if record.connected_count() == 2 and not record.battle_started:
@@ -173,6 +209,15 @@ class PvptestActivityRegistry:
             record.connections[1 if role == "player1" else 2].discard(send_json)
             if record.connected_count() < 2 and not record.battle_started:
                 record.ready_event.clear()
+            logger.info(
+                "pvp_activity_socket_disconnected %s user_id=%s role=%s "
+                "sockets=%s/2 battle_started=%s",
+                self._context(record),
+                user_id,
+                role,
+                record.connected_count(),
+                record.battle_started,
+            )
             await self._broadcast_state(record)
             await self._publish_status(record)
 
@@ -180,9 +225,43 @@ class PvptestActivityRegistry:
         record = self.get(session_id)
         try:
             while record.connected_count() < 2:
+                session = self._pvp_service.registry.get(session_id)
+                logger.info(
+                    "pvp_start_check %s teams=%s/%s sockets=%s/2 started=%s "
+                    "should_start=false player1_team_ready=%s player2_team_ready=%s "
+                    "player1_socket_connected=%s player2_socket_connected=%s "
+                    "showdown_task_exists=%s",
+                    self._context(record),
+                    len(session.confirmed_teams),
+                    len(session.player_ids),
+                    record.connected_count(),
+                    record.battle_started,
+                    session.initiator_id in session.confirmed_teams,
+                    session.opponent_id in session.confirmed_teams,
+                    bool(record.connections[1]),
+                    bool(record.connections[2]),
+                    session.startup_task is not None,
+                )
                 await asyncio.wait_for(record.ready_event.wait(), timeout=180)
             if record.connected_count() < 2:
                 raise asyncio.TimeoutError
+            session = self._pvp_service.registry.get(session_id)
+            logger.info(
+                "pvp_start_check %s teams=%s/%s sockets=%s/2 started=%s "
+                "should_start=true player1_team_ready=%s player2_team_ready=%s "
+                "player1_socket_connected=%s player2_socket_connected=%s "
+                "showdown_task_exists=%s",
+                self._context(record),
+                len(session.confirmed_teams),
+                len(session.player_ids),
+                record.connected_count(),
+                record.battle_started,
+                session.initiator_id in session.confirmed_teams,
+                session.opponent_id in session.confirmed_teams,
+                bool(record.connections[1]),
+                bool(record.connections[2]),
+                session.startup_task is not None,
+            )
             record.battle_started = True
         except asyncio.TimeoutError as error:
             await self.cleanup(session_id)
@@ -203,6 +282,18 @@ class PvptestActivityRegistry:
             "events": [event_to_dto(step)],
         }
         record.last_event = payload
+        if isinstance(step, str) and "startup timed out" in step.casefold():
+            payload = {
+                "type": "startup_error",
+                "message": "The battle did not start before the startup timeout.",
+            }
+        logger.info(
+            "pvp_activity_publish %s type=%s sequence=%s index=0 clients=%s",
+            self._context(record),
+            payload["type"],
+            record.sequence,
+            record.connected_count(),
+        )
         await self._broadcast(record, payload)
         if isinstance(step, str) and "could not start" in step.casefold():
             await self.cleanup(session_id)
@@ -218,6 +309,15 @@ class PvptestActivityRegistry:
             return
         record.latest_snapshots[snapshot.player_id] = snapshot
         record.sequence += 1
+        logger.info(
+            "pvp_activity_publish %s type=battle_snapshot sequence=%s "
+            "player_id=%s turn=%s clients=%s",
+            self._context(record),
+            record.sequence,
+            snapshot.player_id,
+            snapshot.turn,
+            record.connected_count(),
+        )
         await self._broadcast_snapshot(record, sequence=record.sequence)
 
     async def handle_actions(self, session_id: UUID, trainer_id: int, legal) -> None:
@@ -239,6 +339,7 @@ class PvptestActivityRegistry:
             await self._broadcast_to(
                 record.connections[1 if trainer_id == record.player_ids[0] else 2],
                 self._snapshot_message(record, snapshot, record.sequence),
+                context=self._context(record),
             )
         if legal.forced_switch:
             await self._broadcast_state(record)
@@ -264,6 +365,12 @@ class PvptestActivityRegistry:
             or ("tie" if session.final_tie else "normal"),
         }
         record.sequence += 1
+        logger.info(
+            "pvp_activity_publish %s type=battle_finished sequence=%s clients=%s",
+            self._context(record),
+            record.sequence,
+            record.connected_count(),
+        )
         await self._broadcast(record, payload)
         await self._post_result(record, session)
         if record.public_status is not None:
@@ -341,7 +448,19 @@ class PvptestActivityRegistry:
     ) -> None:
         snapshot = record.latest_snapshots.get(user_id)
         if snapshot is None:
+            logger.info(
+                "pvp_activity_snapshot_unavailable %s user_id=%s",
+                self._context(record),
+                user_id,
+            )
             return
+        logger.info(
+            "pvp_activity_snapshot_delivery %s sequence=%s player_id=%s "
+            "recipients=1 legal_actions=initial",
+            self._context(record),
+            record.sequence,
+            user_id,
+        )
         await send_json(self._snapshot_message(record, snapshot, record.sequence))
 
     async def _broadcast_snapshot(
@@ -355,27 +474,72 @@ class PvptestActivityRegistry:
             if snapshot is None:
                 continue
             payload = self._snapshot_message(record, snapshot, sequence)
-            await self._broadcast_to(connections, payload)
+            logger.info(
+                "pvp_activity_snapshot_delivery %s sequence=%s player_id=%s "
+                "recipients=%s legal_actions=%s",
+                self._context(record),
+                sequence,
+                user_id,
+                len(connections),
+                {
+                    "moves": len(payload["legal_actions"]["moves"]),
+                    "switches": len(payload["legal_actions"]["switches"]),
+                    "forced_switch": payload["legal_actions"]["forced_switch"],
+                },
+            )
+            await self._broadcast_to(
+                connections, payload, context=self._context(record)
+            )
 
     async def _broadcast(self, record: ActivityBattleRecord, payload: dict) -> None:
         for connections in record.connections.values():
-            await self._broadcast_to(connections, payload)
+            await self._broadcast_to(
+                connections, payload, context=self._context(record)
+            )
 
-    async def _broadcast_to(self, connections: set[SendJson], payload: dict) -> None:
+    async def _broadcast_to(
+        self, connections: set[SendJson], payload: dict, *, context="session_id=-"
+    ) -> None:
+        if not connections:
+            logger.warning(
+                "pvp_activity_publish_no_clients %s type=%s sequence=%s",
+                context,
+                payload.get("type"),
+                payload.get("sequence"),
+            )
         for send_json in tuple(connections):
             try:
                 await send_json(payload)
-            except Exception:
+            except Exception as error:
                 connections.discard(send_json)
-                logger.debug("Unable to send Activity update", exc_info=True)
+                logger.error(
+                    "pvp_activity_send_failed %s type=%s sequence=%s "
+                    "error_type=%s error=%s stack_trace=%s",
+                    context,
+                    payload.get("type"),
+                    payload.get("sequence"),
+                    type(error).__name__,
+                    safe_error_message(error),
+                    safe_traceback(error),
+                )
 
     async def _publish_status(self, record: ActivityBattleRecord) -> None:
         if record.public_status is not None:
+            logger.info(
+                "pvp_activity_presence_published %s sockets=%s/2",
+                self._context(record),
+                record.connected_count(),
+            )
             await record.public_status(
                 f"Activity status: {record.connected_count()}/2 connected"
             )
 
     async def _broadcast_state(self, record: ActivityBattleRecord) -> None:
+        logger.info(
+            "pvp_activity_publish %s type=session_state clients=%s",
+            self._context(record),
+            record.connected_count(),
+        )
         for role, connections in record.connections.items():
             await self._broadcast_to(
                 connections,
@@ -383,6 +547,7 @@ class PvptestActivityRegistry:
                     record,
                     "player1" if role == 1 else "player2",
                 ),
+                context=self._context(record),
             )
 
     def _state_message(self, record: ActivityBattleRecord, role: str) -> dict:

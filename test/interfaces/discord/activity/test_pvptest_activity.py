@@ -166,6 +166,52 @@ async def test_activity_presence_is_broadcast_to_both_connected_clients():
 
 
 @pytest.mark.asyncio
+async def test_first_snapshot_is_delivered_to_each_connected_client():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=991,
+        player_ids=(10, 20),
+        display_names={10: "Jorroco", 20: "Orange"},
+    )
+    record = registry.get(session.id)
+    record.latest_snapshots[10] = _snapshot(player_id=10)
+    record.latest_snapshots[20] = _snapshot(player_id=20)
+    service.legal[(session.id, 10)] = PvpLegalActions()
+    service.legal[(session.id, 20)] = PvpLegalActions()
+    first, second = [], []
+
+    async def send_first(payload):
+        first.append(payload)
+
+    async def send_second(payload):
+        second.append(payload)
+
+    await registry.connect(
+        session_id=session.id,
+        user_id=10,
+        guild_id=1,
+        channel_id=991,
+        instance_id="activity-1",
+        send_json=send_first,
+    )
+    await registry.connect(
+        session_id=session.id,
+        user_id=20,
+        guild_id=1,
+        channel_id=991,
+        instance_id="activity-1",
+        send_json=send_second,
+    )
+
+    assert any(payload["type"] == "battle_snapshot" for payload in first)
+    assert any(payload["type"] == "battle_snapshot" for payload in second)
+
+
+@pytest.mark.asyncio
 async def test_activity_wait_timeout_cleans_up_the_session(monkeypatch):
     service = FakeService()
     registry = PvptestActivityRegistry(service)

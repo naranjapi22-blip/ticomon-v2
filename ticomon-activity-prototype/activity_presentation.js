@@ -79,6 +79,10 @@ export function actionPromptFor({
   return `${opponentName} is choosing...`;
 }
 
+export function preSnapshotMessage(hasSnapshot) {
+  return hasSnapshot ? null : "Waiting for battle to start...";
+}
+
 export function preloadSprite(source, ImageConstructor = globalThis.Image) {
   return new Promise((resolve, reject) => {
     if (!source || typeof ImageConstructor !== "function") {

@@ -11,6 +11,11 @@ from dataclasses import replace
 from uuid import UUID, uuid4
 
 from application.pvp.events import PvpEventTranslator
+from application.pvp.log_context import (
+    format_pvp_context,
+    safe_traceback,
+    session_log_context,
+)
 from application.pvp.models import PvpAction, PvpLegalActions, is_decisive_event
 from application.pvp.snapshots import PvpBattleSnapshot, snapshot_battle
 from application.pvp.task_management import cancel_tasks_safely, register_task
@@ -30,6 +35,8 @@ from infrastructure.battle.poke_env.pvp_controller import (
 )
 
 logger = logging.getLogger(__name__)
+
+FIRST_SNAPSHOT_TIMEOUT_SECONDS = 30
 
 
 def _event_matches_pokemon(event_name: str | None, pokemon) -> bool:
@@ -162,9 +169,33 @@ class PvpApplicationService:
         self._last_decisive_events: dict[UUID, tuple[object, int]] = {}
         self._cleaned_sessions: dict[UUID, PvpSession] = {}
         self._cleanup_tasks: dict[UUID, asyncio.Task] = {}
+        self._log_contexts: dict[UUID, dict[str, object]] = {}
+        self._first_snapshot_events: dict[UUID, asyncio.Event] = {}
 
     def challenge(self, initiator_id: int, opponent_id: int) -> PvpSession:
-        return self.registry.create(initiator_id, opponent_id)
+        session = self.registry.create(initiator_id, opponent_id)
+        logger.info(
+            "pvp_challenge_created %s phase=%s battle_started=%s",
+            format_pvp_context(session_log_context(session)),
+            session.phase.value,
+            False,
+        )
+        return session
+
+    def set_log_context(self, session_id: UUID, *, guild_id, channel_id) -> None:
+        session = self.registry.get(session_id)
+        self._log_contexts[session_id] = session_log_context(
+            session, guild_id=guild_id, channel_id=channel_id
+        )
+
+    def _session_log_context(self, session_id: UUID) -> str:
+        context = self._log_contexts.get(session_id)
+        if context is None:
+            try:
+                context = session_log_context(self.registry.get(session_id))
+            except ValueError:
+                context = {"session_id": str(session_id)}
+        return format_pvp_context(context)
 
     def is_cleaned_up(self, session_id: UUID) -> bool:
         return session_id in self._cleaned_sessions
@@ -225,6 +256,16 @@ class PvpApplicationService:
         async with session.lock:
             session.select_team(trainer_id, tuple(creature.id for creature in team))
             session.selected_creatures[trainer_id] = team
+        logger.info(
+            "pvp_team_selected %s trainer_id=%s confirmed=%s/%s phase=%s "
+            "battle_started=%s",
+            self._session_log_context(session_id),
+            trainer_id,
+            len(session.confirmed_teams),
+            len(session.player_ids),
+            session.phase.value,
+            session.started_monotonic is not None,
+        )
         return team
 
     async def confirm_team(
@@ -241,11 +282,37 @@ class PvpApplicationService:
     ) -> bool:
         session = self.registry.get(session_id)
         async with session.lock:
+            logger.info(
+                "pvp_start_lock_acquired %s startup_claimed=%s battle_started=%s",
+                self._session_log_context(session_id),
+                session.startup_claimed,
+                session.started_monotonic is not None,
+            )
             if session.startup_claimed:
+                logger.info(
+                    "pvp_start_already_claimed %s",
+                    self._session_log_context(session_id),
+                )
                 return False
             ready = session.confirm_team(trainer_id)
+            logger.info(
+                "pvp_team_confirmed %s trainer_id=%s teams=%s/%s phase=%s "
+                "battle_started=%s",
+                self._session_log_context(session_id),
+                trainer_id,
+                len(session.confirmed_teams),
+                len(session.player_ids),
+                session.phase.value,
+                session.started_monotonic is not None,
+            )
             if not ready:
                 return False
+            logger.info(
+                "pvp_teams_ready %s teams=2/2 phase=%s battle_started=%s",
+                self._session_log_context(session_id),
+                session.phase.value,
+                session.started_monotonic is not None,
+            )
             selected = getattr(session, "selected_creatures", {})
             teams = {player_id: selected[player_id] for player_id in session.player_ids}
             if self._team_repository is None:
@@ -321,9 +388,6 @@ class PvpApplicationService:
                 self._action_handlers[session_id] = on_actions
             if on_cleanup is not None:
                 self._cleanup_handlers[session_id] = on_cleanup
-            session.begin_battle()
-            session.phase = PvpPhase.STARTING
-
         callbacks = PvpControllerCallbacks(
             on_actions=lambda player_id, legal: self.request_action(
                 session_id, player_id, legal
@@ -335,37 +399,132 @@ class PvpApplicationService:
             on_snapshot=lambda snapshot: self.handle_snapshot(session_id, snapshot),
             on_error=lambda error: self.handle_controller_error(session_id, error),
         )
-        task = register_task(
-            asyncio.create_task(
-                self._start_controller(
-                    session_id, session, controller, teams, callbacks
+        try:
+            task = register_task(
+                asyncio.create_task(
+                    self._start_controller(
+                        session_id, session, controller, teams, callbacks
+                    ),
+                    name=f"pvp-startup:{session_id}",
                 ),
-                name=f"pvp-startup:{session_id}",
-            ),
-            owner="PvpApplicationService",
-            role="startup",
-        )
+                owner="PvpApplicationService",
+                role="startup",
+                log_context=self._session_log_context(session_id),
+            )
+        except Exception as error:
+            logger.error(
+                "pvp_start_task_create_failed %s phase=%s battle_started=%s "
+                "stack_trace=%s",
+                self._session_log_context(session_id),
+                session.phase.value,
+                session.started_monotonic is not None,
+                safe_traceback(error),
+            )
+            session.startup_claimed = False
+            session.cancel()
+            await self.cleanup(session_id)
+            raise
+            if hasattr(controller, "set_log_context"):
+                controller.set_log_context(self._session_log_context(session_id))
+            logger.info(
+                "pvp_showdown_controller_created %s controller=%s",
+                self._session_log_context(session_id),
+                type(controller).__name__,
+            )
         session.startup_task = task
         session.timeout_tasks.add(task)
         task.add_done_callback(self._consume_start_task)
+        self._first_snapshot_events[session_id] = asyncio.Event()
+        watchdog = register_task(
+            asyncio.create_task(
+                self._watch_first_snapshot(session_id),
+                name=f"pvp-first-snapshot-watchdog:{session_id}",
+            ),
+            owner="PvpApplicationService",
+            role="startup_watchdog",
+            log_context=self._session_log_context(session_id),
+        )
+        session.timeout_tasks.add(watchdog)
+        session.begin_battle()
+        session.phase = PvpPhase.STARTING
+        logger.info(
+            "pvp_start_task_created %s phase=%s battle_started=%s task=%s",
+            self._session_log_context(session_id),
+            session.phase.value,
+            session.started_monotonic is not None,
+            task.get_name(),
+        )
         return True
+
+    async def _watch_first_snapshot(self, session_id: UUID) -> None:
+        event = self._first_snapshot_events.get(session_id)
+        if event is None:
+            return
+        try:
+            await asyncio.wait_for(event.wait(), FIRST_SNAPSHOT_TIMEOUT_SECONDS)
+            logger.info(
+                "pvp_first_snapshot_watchdog_satisfied %s",
+                self._session_log_context(session_id),
+            )
+        except asyncio.TimeoutError:
+            try:
+                session = self.registry.get(session_id)
+                logger.error(
+                    "pvp_startup_timeout %s teams=%s/%s sockets=unknown/2 "
+                    "battle_started=%s showdown_task_exists=%s phase=%s",
+                    self._session_log_context(session_id),
+                    len(session.confirmed_teams),
+                    len(session.player_ids),
+                    session.started_monotonic is not None,
+                    session.startup_task is not None
+                    and not session.startup_task.done(),
+                    session.phase.value,
+                )
+                handler = self._event_handlers.get(session_id)
+                if handler is not None:
+                    await handler(
+                        "PvP startup timed out before the first battle snapshot."
+                    )
+                await self.cleanup(session_id)
+            except ValueError:
+                return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "pvp_first_snapshot_watchdog_failed %s",
+                self._session_log_context(session_id),
+            )
 
     async def _start_controller(
         self, session_id, session, controller, teams, callbacks
     ) -> None:
         try:
+            logger.info(
+                "pvp_showdown_start_attempt %s phase=%s battle_started=%s",
+                self._session_log_context(session_id),
+                session.phase.value,
+                session.started_monotonic is not None,
+            )
             await controller.start(teams, callbacks)
             session.phase = PvpPhase.WAITING_FOR_ACTIONS
+            logger.info(
+                "pvp_showdown_start_completed %s phase=%s task_exists=%s",
+                self._session_log_context(session_id),
+                session.phase.value,
+                session.startup_task is not None,
+            )
         except asyncio.CancelledError:
             raise
         except Exception as error:
             logger.warning(
-                "PvP startup failed session_id=%s phase=%s error_type=%s error=%s",
+                "PvP startup failed session_id=%s phase=%s error_type=%s error=%s "
+                "stack_trace=%s",
                 session_id,
                 session.phase.value,
                 type(error).__name__,
                 _safe_exception_message(error),
-                exc_info=True,
+                safe_traceback(error),
             )
             handler = self._event_handlers.get(session_id)
             try:
@@ -379,12 +538,13 @@ class PvpApplicationService:
         self, session_id: UUID, error: BaseException
     ) -> None:
         logger.warning(
-            "PvP controller task failed session_id=%s phase=%s error_type=%s error=%s",
+            "PvP controller task failed session_id=%s phase=%s error_type=%s "
+            "error=%s stack_trace=%s",
             session_id,
             self._session_phase(session_id),
             type(error).__name__,
             _safe_exception_message(error),
-            exc_info=(type(error), error, error.__traceback__),
+            safe_traceback(error),
         )
         handler = self._event_handlers.get(session_id)
         if handler is not None:
@@ -857,6 +1017,16 @@ class PvpApplicationService:
                 snapshot.turn,
             )
             return
+        snapshot_event = self._first_snapshot_events.get(session_id)
+        first_snapshot = snapshot_event is not None and not snapshot_event.is_set()
+        logger.info(
+            "pvp_snapshot_received %s player_id=%s turn=%s first=%s phase=%s",
+            self._session_log_context(session_id),
+            snapshot.player_id,
+            snapshot.turn,
+            first_snapshot,
+            self._session_phase(session_id),
+        )
         previous = self._latest_snapshots.setdefault(session_id, {}).get(
             snapshot.player_id
         )
@@ -881,6 +1051,15 @@ class PvpApplicationService:
         handler = self._snapshot_handlers.get(session_id)
         if handler is not None:
             await handler(snapshot)
+        if first_snapshot:
+            event = self._first_snapshot_events.setdefault(session_id, asyncio.Event())
+            event.set()
+            logger.info(
+                "pvp_first_snapshot_published %s player_id=%s turn=%s",
+                self._session_log_context(session_id),
+                snapshot.player_id,
+                snapshot.turn,
+            )
 
     async def decline(self, session_id: UUID) -> None:
         session = self.registry.get(session_id)
@@ -970,6 +1149,8 @@ class PvpApplicationService:
             self._cleanup_handlers.pop(session_id, None)
             self._event_translators.pop(session_id, None)
             self._latest_snapshots.pop(session_id, None)
+            self._first_snapshot_events.pop(session_id, None)
+            self._log_contexts.pop(session_id, None)
             self._protocol_event_keys.pop(session_id, None)
             self._cleaned_sessions[session_id] = session
             self.registry.remove(session_id)

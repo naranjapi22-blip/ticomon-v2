@@ -10,6 +10,7 @@ import { authenticateActivity } from "./activity_auth.js";
 import {
   ActivityPresentationQueue,
   actionPromptFor,
+  preSnapshotMessage,
   replaceSpriteAfterPreload,
   shouldRestoreSnapshotImmediately,
   shouldExposeControls,
@@ -261,6 +262,26 @@ function handleServerMessage(message) {
     }
     return;
   }
+  if (message.type === "startup_error") {
+    state.phase = "startup_error";
+    state.pendingAction = true;
+    hideActionControls();
+    showConnectionFailure(
+      "The battle could not start.",
+      message.message || "The server timed out before the first battle snapshot.",
+    );
+    return;
+  }
+  if (message.type === "session_closed") {
+    if (!state.snapshot) {
+      state.phase = "closed";
+      showConnectionFailure(
+        "The battle session was closed.",
+        "No first battle snapshot was received.",
+      );
+    }
+    return;
+  }
   if (message.type === "connection_ready") {
     state.role = message.role;
     if (isAuthorizedRole(state.role)) {
@@ -295,11 +316,18 @@ function handleServerMessage(message) {
       showSetup("Unauthorized Activity user.", "You can observe the Activity, but only the selected players can act.");
     } else {
       clearActivityOverlay("Connected to the battle.");
-      elements.message.textContent = phaseMessage(message.phase);
-      renderActionPrompt(
-        state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
-        false,
-      );
+      if (!state.snapshotReceived && !state.snapshot) {
+        const waitingMessage = preSnapshotMessage(false);
+        elements.message.textContent = waitingMessage;
+        elements.actionPrompt.textContent = waitingMessage;
+        hideActionControls();
+      } else {
+        elements.message.textContent = phaseMessage(message.phase);
+        renderActionPrompt(
+          state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
+          false,
+        );
+      }
     }
     return;
   }
@@ -473,6 +501,12 @@ function renderTeam(element, team, remaining) {
 }
 
 function renderControls(legal = { moves: [], switches: [], forced_switch: false }) {
+  if (!state.snapshotReceived && !state.snapshot) {
+    hideActionControls();
+    elements.forfeit.disabled = false;
+    elements.actionPrompt.textContent = preSnapshotMessage(false);
+    return;
+  }
   if (!shouldExposeControls(state)) {
     hideActionControls();
     return;

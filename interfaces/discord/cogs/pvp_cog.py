@@ -57,6 +57,22 @@ class PvpCog(commands.Cog):
         except ValueError as error:
             await ctx.send(f"PvP challenge unavailable: {error}")
             return
+        if activity_mode:
+            self._core.pvp_application_service.set_log_context(
+                session.id,
+                guild_id=ctx.guild.id if ctx.guild else None,
+                channel_id=ctx.channel.id,
+            )
+        logger.info(
+            "pvp_challenge_presented session_id=%s guild_id=%s channel_id=%s "
+            "player1_id=%s player2_id=%s activity_mode=%s",
+            session.id,
+            ctx.guild.id if ctx.guild else "-",
+            ctx.channel.id,
+            ctx.author.id,
+            opponent.id,
+            activity_mode,
+        )
 
         on_activity_ready = None
         on_activity_finished = None
@@ -118,6 +134,15 @@ class PvpCog(commands.Cog):
                 await ctx.send(result)
 
             try:
+                logger.info(
+                    "pvp_activity_session_registering session_id=%s guild_id=%s "
+                    "channel_id=%s player1_id=%s player2_id=%s",
+                    session.id,
+                    ctx.guild.id if ctx.guild else "-",
+                    ctx.channel.id,
+                    ctx.author.id,
+                    opponent.id,
+                )
                 await self._activity_registry.bind(
                     session_id=session.id,
                     guild_id=ctx.guild.id if ctx.guild else None,
@@ -126,6 +151,16 @@ class PvpCog(commands.Cog):
                     display_names=display_names,
                     public_status=public_status,
                     public_result=public_result,
+                )
+                logger.info(
+                    "pvp_activity_session_registered session_id=%s guild_id=%s "
+                    "channel_id=%s player1_id=%s player2_id=%s battle_started=%s",
+                    session.id,
+                    ctx.guild.id if ctx.guild else "-",
+                    ctx.channel.id,
+                    ctx.author.id,
+                    opponent.id,
+                    False,
                 )
             except Exception:
                 await self._core.pvp_application_service.cleanup(session.id)

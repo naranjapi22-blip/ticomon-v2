@@ -16,6 +16,7 @@ from application.pvp.events import (
 from application.pvp.models import PvpAction, PvpActionKind, PvpLegalActions
 from application.pvp.pvp_application_service import PvpApplicationService
 from application.pvp.snapshots import PvpBattleSnapshot, PvpPokemonSnapshot
+from application.pvp.task_management import register_task
 from core.pvp.session import PvpPhase, PvpSessionRegistry
 
 
@@ -98,6 +99,45 @@ async def test_forced_switch_timeout_applies_only_a_legal_switch(monkeypatch):
 
     assert action in legal.switches
     assert session.selected_actions == {1: action.identifier}
+
+
+@pytest.mark.asyncio
+async def test_startup_watchdog_reports_visible_timeout_and_cleans_session(monkeypatch):
+    monkeypatch.setattr(pvp_service_module, "FIRST_SNAPSHOT_TIMEOUT_SECONDS", 0.01)
+    service = PvpApplicationService(registry=PvpSessionRegistry())
+    session = service.challenge(1, 2)
+    messages = []
+
+    async def collect(message):
+        messages.append(message)
+
+    service._event_handlers[session.id] = collect
+    service._first_snapshot_events[session.id] = asyncio.Event()
+
+    await service._watch_first_snapshot(session.id)
+
+    assert messages == ["PvP startup timed out before the first battle snapshot."]
+    assert service.is_cleaned_up(session.id)
+
+
+@pytest.mark.asyncio
+async def test_background_task_failure_is_logged_without_secret(caplog):
+    async def fail():
+        raise RuntimeError("Showdown token=secret-value failed")
+
+    task = register_task(
+        asyncio.create_task(fail(), name="pvp-test-background-failure"),
+        owner="test",
+        role="startup",
+        log_context="session_id=s guild_id=g channel_id=c player1_id=1 player2_id=2",
+    )
+    with pytest.raises(RuntimeError):
+        await task
+    await asyncio.sleep(0)
+
+    assert "pvp_task_failed" in caplog.text
+    assert "secret-value" not in caplog.text
+    assert "session_id=s" in caplog.text
 
 
 @pytest.mark.asyncio

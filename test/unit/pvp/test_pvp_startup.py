@@ -318,7 +318,8 @@ async def test_start_failure_cleans_session_and_releases_trainers(caplog):
     assert "login timeout" in startup_records[0].message
     assert "secret-value" not in startup_records[0].message
     assert "token=[REDACTED]" in startup_records[0].message
-    assert startup_records[0].exc_info is not None
+    assert "stack_trace=Traceback" in startup_records[0].message
+    assert startup_records[0].exc_info is None
 
 
 class FakePlayer:
