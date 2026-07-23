@@ -776,3 +776,96 @@ async def test_rejected_activity_origin_logs_only_safe_request_metadata(
     assert "{'https://allowed.example'}" in message
     assert "session-token" not in message
     assert "unexpected" not in message
+
+
+def test_find_for_channel_releases_orphan_mapping():
+    service = FakeService()
+    registry = PvptestActivityRegistry(service)
+    orphan_session_id = service.registry.create(10, 20).id
+    service.registry.remove(orphan_session_id)
+    registry._channel_sessions[99] = orphan_session_id
+
+    assert registry.find_for_channel(99) is None
+    assert 99 not in registry._channel_sessions
+
+
+@pytest.mark.asyncio
+async def test_find_for_channel_releases_terminal_session():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+    session.cancel()
+
+    assert registry.find_for_channel(99) is None
+    assert 99 not in registry._channel_sessions
+    assert session.id not in registry._records
+
+
+@pytest.mark.asyncio
+async def test_active_channel_session_still_blocks_a_second_bind():
+    service = FakeService()
+    first = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=first.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+    second = service.registry.create(30, 40)
+
+    with pytest.raises(ValueError, match="already active"):
+        await registry.bind(
+            session_id=second.id,
+            guild_id=1,
+            channel_id=99,
+            player_ids=(30, 40),
+            display_names={30: "Orange", 40: "Gin"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_bind_replaces_stale_channel_session():
+    service = FakeService()
+    stale = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=stale.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+    stale.cancel()
+    replacement = service.registry.create(30, 40)
+
+    record = await registry.bind(
+        session_id=replacement.id,
+        guild_id=1,
+        channel_id=99,
+        player_ids=(30, 40),
+        display_names={30: "Orange", 40: "Gin"},
+    )
+
+    assert record.session_id == replacement.id
+    assert registry.find_for_channel(99) is record
+
+
+@pytest.mark.asyncio
+async def test_cleanup_removes_orphan_channel_mapping_without_record():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    registry._channel_sessions[99] = session.id
+
+    await registry.cleanup(session.id)
+
+    assert 99 not in registry._channel_sessions

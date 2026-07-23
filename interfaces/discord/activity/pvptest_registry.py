@@ -101,6 +101,44 @@ class PvptestActivityRegistry:
             }
         )
 
+    def _release_stale_channel_session(
+        self, channel_id: int, session_id: UUID, *, reason: str
+    ) -> None:
+        record = self._records.pop(session_id, None)
+        if self._channel_sessions.get(channel_id) == session_id:
+            self._channel_sessions.pop(channel_id, None)
+        if record is not None:
+            if record.finished:
+                self._completed_records[session_id] = record
+            if record.cleanup_task is not None and not record.cleanup_task.done():
+                record.cleanup_task.cancel()
+        logger.warning(
+            "pvp_activity_stale_channel_session_released "
+            "session_id=%s channel_id=%s reason=%s",
+            session_id,
+            channel_id,
+            reason,
+        )
+
+    def _stale_channel_reason(
+        self, session_id: UUID, record: ActivityBattleRecord | None
+    ) -> str | None:
+        if record is None:
+            return "activity_record_missing"
+        if record.finished:
+            return "activity_record_finished"
+        try:
+            session = self._pvp_service.registry.get(session_id)
+        except ValueError:
+            return "pvp_session_missing"
+        if session.phase in {
+            PvpPhase.FINISHED,
+            PvpPhase.CANCELLED,
+            PvpPhase.CLEANED_UP,
+        }:
+            return f"pvp_session_{session.phase.value}"
+        return None
+
     async def bind(
         self,
         *,
@@ -114,6 +152,14 @@ class PvptestActivityRegistry:
     ) -> ActivityBattleRecord:
         async with self._lock:
             existing_id = self._channel_sessions.get(channel_id)
+            if existing_id is not None:
+                existing_record = self._records.get(existing_id)
+                stale_reason = self._stale_channel_reason(existing_id, existing_record)
+                if stale_reason is not None:
+                    self._release_stale_channel_session(
+                        channel_id, existing_id, reason=stale_reason
+                    )
+                    existing_id = None
             if existing_id is not None and existing_id != session_id:
                 raise ValueError(
                     "An Activity PvP test is already active in this channel."
@@ -146,7 +192,16 @@ class PvptestActivityRegistry:
 
     def find_for_channel(self, channel_id: int) -> ActivityBattleRecord | None:
         session_id = self._channel_sessions.get(channel_id)
-        return self._records.get(session_id) if session_id is not None else None
+        if session_id is None:
+            return None
+        record = self._records.get(session_id)
+        stale_reason = self._stale_channel_reason(session_id, record)
+        if stale_reason is not None:
+            self._release_stale_channel_session(
+                channel_id, session_id, reason=stale_reason
+            )
+            return None
+        return record
 
     def completed(self, session_id: UUID) -> ActivityBattleRecord:
         try:
@@ -544,7 +599,21 @@ class PvptestActivityRegistry:
 
     async def cleanup(self, session_id: UUID) -> None:
         record = self._records.pop(session_id, None)
+        stale_channels = [
+            channel_id
+            for channel_id, mapped_session_id in self._channel_sessions.items()
+            if mapped_session_id == session_id
+        ]
+        for channel_id in stale_channels:
+            self._channel_sessions.pop(channel_id, None)
         if record is None:
+            if stale_channels:
+                logger.warning(
+                    "pvp_activity_orphan_channel_mapping_removed "
+                    "session_id=%s channel_ids=%s",
+                    session_id,
+                    stale_channels,
+                )
             return
         if record.finished:
             self._completed_records[session_id] = record
