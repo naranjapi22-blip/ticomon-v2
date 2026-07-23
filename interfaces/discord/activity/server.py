@@ -139,6 +139,7 @@ class PvptestActivityServer:
         send_json = self._sender(websocket)
         session_id = None
         user_id = None
+        role = "unknown"
         try:
             message = await websocket.receive_json(timeout=10)
             if message.get("type") != "authenticate":
@@ -171,9 +172,30 @@ class PvptestActivityServer:
             await send_json({"type": "connection_ready", "role": role})
             async for incoming in websocket:
                 if incoming.type is WSMsgType.TEXT:
-                    await self._handle_message(
-                        record, identity.user_id, json.loads(incoming.data), send_json
-                    )
+                    try:
+                        await self._handle_message(
+                            record,
+                            identity.user_id,
+                            json.loads(incoming.data),
+                            send_json,
+                        )
+                    except Exception as error:
+                        logger.exception(
+                            "Activity message failed session_id=%s user_id=%s "
+                            "role=%s phase=%s error_type=%s error=%s",
+                            session_id,
+                            user_id,
+                            role,
+                            self._session_phase(session_id),
+                            type(error).__name__,
+                            str(error),
+                        )
+                        await send_json(
+                            {
+                                "type": "error",
+                                "message": "The battle server rejected that update.",
+                            }
+                        )
                 elif incoming.type in {WSMsgType.CLOSE, WSMsgType.ERROR}:
                     break
         except (
@@ -183,8 +205,42 @@ class PvptestActivityServer:
             ValueError,
             PermissionError,
         ) as error:
+            logger.warning(
+                "Activity websocket rejected session_id=%s user_id=%s role=%s "
+                "phase=%s error_type=%s error=%s",
+                session_id,
+                user_id,
+                role,
+                self._session_phase(session_id),
+                type(error).__name__,
+                str(error),
+            )
             await send_json({"type": "error", "message": str(error)})
+        except Exception as error:
+            logger.exception(
+                "Activity websocket failed session_id=%s user_id=%s role=%s "
+                "phase=%s close_code=%s close_reason=%s error_type=%s error=%s",
+                session_id,
+                user_id,
+                role,
+                self._session_phase(session_id),
+                websocket.close_code,
+                getattr(websocket, "close_reason", ""),
+                type(error).__name__,
+                str(error),
+            )
         finally:
+            logger.info(
+                "Activity websocket closing session_id=%s user_id=%s role=%s "
+                "phase=%s close_code=%s close_reason=%s intentional=%s",
+                session_id,
+                user_id,
+                role,
+                self._session_phase(session_id),
+                websocket.close_code,
+                getattr(websocket, "close_reason", ""),
+                False,
+            )
             if session_id is not None and user_id is not None:
                 await self.registry.disconnect(session_id, user_id, send_json)
         return websocket
@@ -246,3 +302,11 @@ class PvptestActivityServer:
     @staticmethod
     def _optional_int(value) -> int | None:
         return int(value) if value is not None else None
+
+    def _session_phase(self, session_id) -> str:
+        if session_id is None:
+            return "unknown"
+        try:
+            return self.registry._pvp_service.registry.get(session_id).phase.value
+        except ValueError:
+            return "unknown"

@@ -47,6 +47,7 @@ class ActivityBattleRecord:
     deadlines: dict[int, str] = field(default_factory=dict)
     cleanup_task: asyncio.Task | None = None
     ready_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    battle_started: bool = False
 
     def role_for(self, user_id: int) -> str:
         if user_id == self.player_ids[0]:
@@ -153,8 +154,10 @@ class PvptestActivityRegistry:
         connections.add(send_json)
         await send_json(self._state_message(record, role))
         await self._send_snapshot(record, user_id, send_json)
-        if record.connected_count() == 2:
+        if record.connected_count() == 2 and not record.battle_started:
             record.ready_event.set()
+        elif record.connected_count() < 2 and not record.battle_started:
+            record.ready_event.clear()
         await self._broadcast_state(record)
         await self._publish_status(record)
         return role
@@ -168,13 +171,19 @@ class PvptestActivityRegistry:
         role = record.role_for(user_id)
         if role in {"player1", "player2"}:
             record.connections[1 if role == "player1" else 2].discard(send_json)
+            if record.connected_count() < 2 and not record.battle_started:
+                record.ready_event.clear()
             await self._broadcast_state(record)
             await self._publish_status(record)
 
     async def wait_until_ready(self, session_id: UUID) -> None:
         record = self.get(session_id)
         try:
-            await asyncio.wait_for(record.ready_event.wait(), timeout=180)
+            while record.connected_count() < 2:
+                await asyncio.wait_for(record.ready_event.wait(), timeout=180)
+            if record.connected_count() < 2:
+                raise asyncio.TimeoutError
+            record.battle_started = True
         except asyncio.TimeoutError as error:
             await self.cleanup(session_id)
             raise ValueError(
@@ -231,6 +240,8 @@ class PvptestActivityRegistry:
                 record.connections[1 if trainer_id == record.player_ids[0] else 2],
                 self._snapshot_message(record, snapshot, record.sequence),
             )
+        if legal.forced_switch:
+            await self._broadcast_state(record)
 
     async def handle_finished(self, session_id: UUID, _battle: object) -> None:
         record = self._records.get(session_id)
@@ -386,6 +397,9 @@ class PvptestActivityRegistry:
             "phase": phase,
             "players_connected": record.connected_count(),
             "players_expected": 2,
+            "battle_started": record.battle_started,
+            "required_user_id": self._required_action_user_id(record),
+            "waiting_for_reconnect": self._waiting_for_reconnect(record),
             "players": [
                 {
                     "role": "player1",
@@ -399,6 +413,22 @@ class PvptestActivityRegistry:
                 },
             ],
         }
+
+    def _required_action_user_id(self, record: ActivityBattleRecord) -> int | None:
+        try:
+            session = self._pvp_service.registry.get(record.session_id)
+        except ValueError:
+            return None
+        if session.phase is not PvpPhase.FORCED_SWITCH:
+            return None
+        return next(iter(session.active_action_requests), None)
+
+    def _waiting_for_reconnect(self, record: ActivityBattleRecord) -> bool:
+        user_id = self._required_action_user_id(record)
+        if user_id is None:
+            return False
+        role = record.role_for(user_id)
+        return not record.connections[1 if role == "player1" else 2]
 
     def _snapshot_message(
         self, record: ActivityBattleRecord, snapshot: PvpBattleSnapshot, sequence: int

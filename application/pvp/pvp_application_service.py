@@ -459,6 +459,13 @@ class PvpApplicationService:
             return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
         except asyncio.TimeoutError:
             action = self._automatic_action(legal)
+            if legal.forced_switch:
+                logger.warning(
+                    "PvP forced switch timed out; applying automatic selection "
+                    "session_id=%s trainer_id=%s policy=automatic_selection",
+                    session_id,
+                    trainer_id,
+                )
             async with session.lock:
                 request_id = self._request_ids.get(key)
                 applied = request_id is not None and session.try_choose_action(

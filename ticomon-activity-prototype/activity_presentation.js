@@ -60,6 +60,25 @@ export function shouldExposeControls({ presentationBusy, pendingAction }) {
   return !presentationBusy && !pendingAction;
 }
 
+export function actionPromptFor({
+  legal = {},
+  phase,
+  waitingForReconnect = false,
+  requiredName = "Opponent",
+  localName = "You",
+  opponentName = "Opponent",
+}) {
+  const forcedSwitch = Boolean(legal.forced_switch || phase === "forced_switch");
+  const localCanAct = Boolean(legal.moves?.length || legal.switches?.length);
+  if (forcedSwitch && localCanAct) return "Choose a replacement Pokémon.";
+  if (forcedSwitch && waitingForReconnect) {
+    return `Waiting for ${requiredName} to reconnect.`;
+  }
+  if (forcedSwitch) return `${requiredName} is choosing a replacement.`;
+  if (localCanAct) return `${localName}, choose your action`;
+  return `${opponentName} is choosing...`;
+}
+
 export function preloadSprite(source, ImageConstructor = globalThis.Image) {
   return new Promise((resolve, reject) => {
     if (!source || typeof ImageConstructor !== "function") {

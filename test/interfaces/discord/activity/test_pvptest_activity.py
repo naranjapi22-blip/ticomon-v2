@@ -191,6 +191,96 @@ async def test_activity_wait_timeout_cleans_up_the_session(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_activity_readiness_clears_after_second_client_disconnects():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=988,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Papel"},
+    )
+
+    async def send(_payload):
+        return None
+
+    await registry.connect(
+        session_id=session.id,
+        user_id=10,
+        guild_id=1,
+        channel_id=988,
+        instance_id="activity-1",
+        send_json=send,
+    )
+    await registry.connect(
+        session_id=session.id,
+        user_id=20,
+        guild_id=1,
+        channel_id=988,
+        instance_id="activity-1",
+        send_json=send,
+    )
+    await registry.disconnect(session.id, 20, send)
+
+    record = registry.get(session.id)
+    assert record.connected_count() == 1
+    assert not record.ready_event.is_set()
+    assert not record.battle_started
+
+
+@pytest.mark.asyncio
+async def test_forced_switch_disconnect_broadcasts_waiting_state():
+    service = FakeService()
+    session = service.registry.create(10, 20)
+    session.phase = PvpPhase.FORCED_SWITCH
+    session.active_action_requests[20] = "switch-request"
+    registry = PvptestActivityRegistry(service)
+    await registry.bind(
+        session_id=session.id,
+        guild_id=1,
+        channel_id=989,
+        player_ids=(10, 20),
+        display_names={10: "Darwin", 20: "Gin"},
+    )
+    first = []
+    second = []
+
+    async def send_first(payload):
+        first.append(payload)
+
+    async def send_second(payload):
+        second.append(payload)
+
+    await registry.connect(
+        session_id=session.id,
+        user_id=10,
+        guild_id=1,
+        channel_id=989,
+        instance_id="activity-1",
+        send_json=send_first,
+    )
+    legal = PvpLegalActions(moves=(), switches=(), forced_switch=True)
+    service.legal[(session.id, 20)] = legal
+    await registry.handle_actions(session.id, 20, legal)
+    waiting = [payload for payload in first if payload["type"] == "session_state"][-1]
+    assert waiting["waiting_for_reconnect"] is True
+    assert waiting["required_user_id"] == 20
+
+    await registry.connect(
+        session_id=session.id,
+        user_id=20,
+        guild_id=1,
+        channel_id=989,
+        instance_id="activity-1",
+        send_json=send_second,
+    )
+    assert second[-1]["type"] == "session_state"
+    assert second[-1]["waiting_for_reconnect"] is False
+
+
+@pytest.mark.asyncio
 async def test_registry_rejects_second_active_battle_in_one_channel():
     service = FakeService()
     registry = PvptestActivityRegistry(service)

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   ActivityPresentationQueue,
+  actionPromptFor,
   PRESENTATION_TIMINGS,
   presentationDelayFor,
   replaceSpriteAfterPreload,
@@ -156,4 +157,29 @@ test("reconnecting discards events waiting behind the current presentation", () 
   queue.clearPending();
   assert.equal(queue.items.length, 0);
   assert.equal(queue.keys.size, 0);
+});
+
+test("forced-switch prompts distinguish local action, connected rival, and reconnect", () => {
+  const legalSwitch = { moves: [], switches: [{ name: "Raichu" }], forced_switch: true };
+  assert.equal(
+    actionPromptFor({ legal: legalSwitch, phase: "forced_switch" }),
+    "Choose a replacement Pokémon.",
+  );
+  assert.equal(
+    actionPromptFor({
+      legal: { forced_switch: true },
+      phase: "forced_switch",
+      requiredName: "Gin",
+    }),
+    "Gin is choosing a replacement.",
+  );
+  assert.equal(
+    actionPromptFor({
+      legal: { forced_switch: true },
+      phase: "forced_switch",
+      waitingForReconnect: true,
+      requiredName: "Gin",
+    }),
+    "Waiting for Gin to reconnect.",
+  );
 });

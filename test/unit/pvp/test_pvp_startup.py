@@ -228,6 +228,52 @@ async def test_simultaneous_confirmations_start_one_controller():
 
 
 @pytest.mark.asyncio
+async def test_activity_start_gate_waits_for_both_authenticated_clients():
+    creatures = _creatures()
+    starts = 0
+    gate_entered = asyncio.Event()
+    release_gate = asyncio.Event()
+
+    class Controller:
+        async def start(self, teams, callbacks):
+            nonlocal starts
+            starts += 1
+
+        async def close(self):
+            return
+
+    async def activity_ready(_session_id):
+        gate_entered.set()
+        await release_gate.wait()
+
+    service = PvpApplicationService(
+        registry=PvpSessionRegistry(),
+        creature_repository=CreatureRepository(creatures),
+        team_repository=TeamRepository(creatures),
+        team_validator=Validator(),
+        controller_factory=Controller,
+    )
+    session = service.challenge(1, 2)
+    await service.select_team(session.id, 1, [1, 2, 3])
+    await service.select_team(session.id, 2, [11, 12, 13])
+    assert not await service.confirm_team(session.id, 1)
+
+    confirmation = asyncio.create_task(
+        service.confirm_team(session.id, 2, start_gate=activity_ready)
+    )
+    await gate_entered.wait()
+    await asyncio.sleep(0)
+    assert starts == 0
+    assert session.turn_number == 0
+
+    release_gate.set()
+    assert await confirmation
+    await asyncio.sleep(0)
+    assert starts == 1
+    await service.cleanup(session.id)
+
+
+@pytest.mark.asyncio
 async def test_start_failure_cleans_session_and_releases_trainers(caplog):
     creatures = _creatures()
     closed = 0

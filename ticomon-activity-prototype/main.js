@@ -9,6 +9,7 @@ import {
 import { authenticateActivity } from "./activity_auth.js";
 import {
   ActivityPresentationQueue,
+  actionPromptFor,
   replaceSpriteAfterPreload,
   shouldRestoreSnapshotImmediately,
   shouldExposeControls,
@@ -66,6 +67,11 @@ const state = {
   pendingAction: false,
   deadline: null,
   phase: "initializing",
+  playersConnected: 0,
+  requiredUserId: null,
+  waitingForReconnect: false,
+  localUserId: null,
+  playerNames: {},
   snapshot: null,
   authoritativeSnapshot: null,
   timer: null,
@@ -188,12 +194,14 @@ function connectSocket() {
   }
   const wsUrl = new URL("/api/activity/pvptest/ws", apiOrigin || window.location.origin);
   wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
-  state.socket = new WebSocket(wsUrl);
-  state.socket.addEventListener("open", () => {
+  const socket = new WebSocket(wsUrl);
+  state.socket = socket;
+  socket.addEventListener("open", () => {
+    if (state.socket !== socket) return;
     if (state.snapshot) {
       showConnectionState("Syncing the current battle...");
     }
-    state.socket.send(JSON.stringify({
+    socket.send(JSON.stringify({
       type: "authenticate",
       session_token: state.sessionToken,
       instance_id: state.discordSdk.instanceId,
@@ -201,7 +209,8 @@ function connectSocket() {
       guild_id: state.discordSdk.guildId,
     }));
   });
-  state.socket.addEventListener("message", (event) => {
+  socket.addEventListener("message", (event) => {
+    if (state.socket !== socket) return;
     try {
       handleServerMessage(JSON.parse(event.data));
     } catch (error) {
@@ -209,7 +218,8 @@ function connectSocket() {
       console.error("Invalid Activity server message.", error);
     }
   });
-  state.socket.addEventListener("close", () => {
+  socket.addEventListener("close", (event) => {
+    if (state.socket !== socket) return;
     if (state.intentionalSocketClose) {
       state.intentionalSocketClose = false;
       return;
@@ -217,12 +227,18 @@ function connectSocket() {
     if (state.phase === "finished" || state.phase === "unauthorized") {
       return;
     }
+    console.warn("PvP Activity WebSocket closed", {
+      code: event.code,
+      reason: event.reason || "",
+      phase: state.phase,
+    });
     state.reconnecting = true;
     setRuntime("Reconnecting");
     showConnectionState("Reconnecting to the battle...");
     window.setTimeout(connectSocket, Math.min(5000, 500 * 2 ** state.reconnectAttempt++));
   });
-  state.socket.addEventListener("error", () => {
+  socket.addEventListener("error", () => {
+    if (state.socket !== socket) return;
     setRuntime("Reconnecting");
   });
 }
@@ -258,12 +274,20 @@ function handleServerMessage(message) {
   if (message.type === "session_state") {
     state.role = message.role;
     state.phase = message.phase;
+    state.playersConnected = message.players_connected || 0;
+    state.requiredUserId = message.required_user_id ?? null;
+    state.waitingForReconnect = Boolean(message.waiting_for_reconnect);
     elements.presenceLabel.textContent = `${message.players_connected}/${message.players_expected} players connected`;
     const players = Object.fromEntries(
       (message.players || []).map((player) => [player.role, player.name]),
     );
+    state.playerNames = Object.fromEntries(
+      (message.players || []).map((player) => [player.user_id, player.name]),
+    );
     if (state.role === "player1" || state.role === "player2") {
       const opponentRole = state.role === "player1" ? "player2" : "player1";
+      const localPlayer = (message.players || []).find((player) => player.role === state.role);
+      state.localUserId = localPlayer?.user_id ?? null;
       elements.playerName.textContent = players[state.role] || "You";
       elements.opponentName.textContent = players[opponentRole] || "Opponent";
     }
@@ -272,6 +296,10 @@ function handleServerMessage(message) {
     } else {
       clearActivityOverlay("Connected to the battle.");
       elements.message.textContent = phaseMessage(message.phase);
+      renderActionPrompt(
+        state.authoritativeSnapshot?.legal_actions || state.snapshot?.legal_actions,
+        false,
+      );
     }
     return;
   }
@@ -461,15 +489,25 @@ function renderControls(legal = { moves: [], switches: [], forced_switch: false 
 }
 
 function renderActionPrompt(legal, controlsDisabled) {
+  legal ||= { moves: [], switches: [], forced_switch: false };
   if (controlsDisabled || state.phase === "finished") {
     elements.actionPrompt.textContent = "";
     return;
   }
-  const canAct = Boolean(legal.moves?.length || legal.switches?.length);
-  if (canAct) {
-    elements.actionPrompt.textContent = `${elements.playerName.textContent || "You"}, choose your action`;
-  } else {
-    elements.actionPrompt.textContent = `${elements.opponentName.textContent || "Opponent"} is choosing...`;
+  const requiredName = state.playerNames[state.requiredUserId]
+    || elements.opponentName.textContent
+    || "Opponent";
+  elements.actionPrompt.textContent = actionPromptFor({
+    legal,
+    phase: state.phase,
+    waitingForReconnect: state.waitingForReconnect,
+    requiredName,
+    localName: elements.playerName.textContent || "You",
+    opponentName: elements.opponentName.textContent || "Opponent",
+  });
+  const isForcedSwitch = state.phase === "forced_switch" || legal.forced_switch;
+  if (isForcedSwitch) {
+    elements.message.textContent = elements.actionPrompt.textContent;
   }
 }
 
