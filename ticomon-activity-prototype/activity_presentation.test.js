@@ -121,5 +121,22 @@ test("forced switches pause before controls return", () => {
     presentationDelayFor({ type: "battle_snapshot", phase: "forced_switch" }),
     PRESENTATION_TIMINGS.forcedSwitch,
   );
-  assert.equal(PRESENTATION_TIMINGS.forcedSwitch, 800);
+  assert.equal(PRESENTATION_TIMINGS.forcedSwitch, 900);
+});
+
+test("action reading and result timings meet the pacing floor", () => {
+  assert.equal(PRESENTATION_TIMINGS.moveText, 800);
+  assert.equal(PRESENTATION_TIMINGS.attack, 400);
+  assert.equal(PRESENTATION_TIMINGS.impact, 500);
+  assert.equal(PRESENTATION_TIMINGS.hp, 800);
+  assert.equal(PRESENTATION_TIMINGS.notice, 1000);
+  assert.equal(PRESENTATION_TIMINGS.normalPause, 600);
+});
+
+test("reconnecting discards events waiting behind the current presentation", () => {
+  const queue = new ActivityPresentationQueue({ present: async () => {} });
+  queue.enqueue({ type: "battle_events", sequence: 12, index: 0, event: { kind: "move" } });
+  queue.clearPending();
+  assert.equal(queue.items.length, 0);
+  assert.equal(queue.keys.size, 0);
 });

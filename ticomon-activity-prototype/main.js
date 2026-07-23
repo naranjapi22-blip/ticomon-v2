@@ -169,6 +169,9 @@ async function authenticate(initialLaunch = false) {
 function connectSocket() {
   const wasReconnecting = state.reconnecting;
   state.reconnecting = false;
+  if (wasReconnecting) {
+    presentationQueue.clearPending();
+  }
   state.restoringSnapshot = wasReconnecting && Boolean(state.snapshot);
   if (!wasReconnecting && !state.snapshot) {
     state.sequence = 0;
@@ -457,19 +460,43 @@ function send(message) {
 }
 
 async function presentBattleEvent(event) {
-  elements.message.textContent = event.message || event.kind;
+  elements.message.textContent = event.move_name || event.message || event.kind;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
   const plan = reduceAnimationPlan(eventAnimationPlan(event), reducedMotion);
   if (event.switch) {
     state.pendingSwitchSide = resolveSide(event.target_side || event.source_side || event.target);
   }
   try {
-    for (const step of plan) {
+    for (let index = 0; index < plan.length; index += 1) {
+      const step = plan[index];
       if (step.target === "notice") {
         elements.message.textContent = step.text;
         await wait(step.duration);
         elements.message.textContent = event.message || event.kind;
         continue;
+      }
+      if (step.target === "timing") {
+        await wait(step.duration);
+        continue;
+      }
+      if (
+        step.target === "defender" &&
+        plan[index + 1]?.target === "flash"
+      ) {
+        const defender = animationElement(step.target, event);
+        const flash = animationElement("flash", event);
+        if (defender && flash) {
+          await Promise.all([
+            playAnimation(defender, step.className, step.duration),
+            playAnimation(
+              flash,
+              plan[index + 1].className,
+              plan[index + 1].duration,
+            ),
+          ]);
+          index += 1;
+          continue;
+        }
       }
       const element = animationElement(step.target, event);
       if (element) {

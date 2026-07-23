@@ -6,7 +6,11 @@ import {
   eventAnimationPlan,
   reduceAnimationPlan,
 } from "./activity_animation.js";
-import { ActivityPresentationQueue } from "./activity_presentation.js";
+import {
+  ActivityPresentationQueue,
+  PRESENTATION_TIMINGS,
+  presentationDelayFor,
+} from "./activity_presentation.js";
 
 test("physical events lunge before defender recoil", () => {
   const plan = eventAnimationPlan({
@@ -141,4 +145,78 @@ test("reduced motion removes movement but retains notices and a brief flash", ()
   assert.equal(reduced.some((step) => step.className === "attack-physical"), false);
   assert.equal(reduced.some((step) => step.target === "flash"), true);
   assert.equal(reduced.at(-1).text, "Super effective!");
+});
+
+test("reduced motion preserves the timing budget of movement steps", () => {
+  const plan = eventAnimationPlan({ kind: "move", move_name: "Tackle" });
+  const reduced = reduceAnimationPlan(plan, true);
+  assert.equal(
+    reduced.reduce((total, step) => total + step.duration, 0),
+    plan.reduce((total, step) => total + step.duration, 0),
+  );
+});
+
+test("faint and switch actions use the longer result pause", () => {
+  assert.equal(
+    presentationDelayFor({
+      type: "battle_snapshot",
+      phase: "resolving",
+    }),
+    PRESENTATION_TIMINGS.snapshot,
+  );
+  assert.equal(
+    presentationDelayFor({
+      type: "battle_snapshot",
+      phase: "resolving",
+    }, {
+      type: "battle_events",
+      event: { kind: "faint", fainted: true },
+    }),
+    PRESENTATION_TIMINGS.faintPause,
+  );
+  assert.equal(
+    presentationDelayFor({ type: "battle_snapshot", phase: "resolving" }, {
+      type: "battle_events",
+      event: { kind: "switch", switch: "Pikachu" },
+    }),
+    PRESENTATION_TIMINGS.switchPause,
+  );
+});
+
+test("consecutive presentations never overlap", async () => {
+  let active = 0;
+  let maximum = 0;
+  const queue = new ActivityPresentationQueue({
+    present: async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active -= 1;
+    },
+    wait: async () => {},
+  });
+  queue.enqueue({ type: "battle_events", sequence: 20, index: 0, event: { kind: "move" } });
+  queue.enqueue({ type: "battle_events", sequence: 20, index: 1, event: { kind: "move" } });
+  await queue.drainPromise;
+  assert.equal(maximum, 1);
+});
+
+test("an action presents movement, impact, HP, then the result pause", async () => {
+  const order = [];
+  const queue = new ActivityPresentationQueue({
+    present: async (item) => {
+      if (item.type === "battle_events") {
+        order.push("movement", "impact");
+      } else {
+        order.push("hp");
+      }
+    },
+    wait: async (duration) => {
+      if (duration >= PRESENTATION_TIMINGS.normalPause) order.push("pause");
+    },
+  });
+  queue.enqueue({ type: "battle_events", sequence: 21, index: 0, event: { kind: "move" } });
+  queue.enqueue({ type: "battle_snapshot", sequence: 22, phase: "resolving" });
+  await queue.drainPromise;
+  assert.deepEqual(order, ["movement", "impact", "hp", "pause"]);
 });

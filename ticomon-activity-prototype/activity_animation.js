@@ -1,12 +1,12 @@
 export const ANIMATION_TIMINGS = Object.freeze({
-  attacker: 300,
-  defender: 400,
-  effectiveness: 600,
-  hp: 700,
+  attacker: 400,
+  defender: 500,
+  effectiveness: 1000,
+  hp: 800,
   faint: 800,
-  switchOut: 450,
+  switchOut: 500,
   switchIn: 500,
-  impactFlash: 250,
+  impactFlash: 500,
 });
 
 export const IMPACT_FLASH_CLASSES = Object.freeze([
@@ -87,9 +87,12 @@ export function eventAnimationPlan(event) {
 
 export function reduceAnimationPlan(plan, reducedMotion) {
   if (!reducedMotion) return plan;
-  return plan.filter(
-    (step) => !step.className?.split(" ").some((name) => MOVEMENT_CLASSES.has(name)),
-  );
+  return plan.map((step) => {
+    if (!step.className?.split(" ").some((name) => MOVEMENT_CLASSES.has(name))) {
+      return step;
+    }
+    return { ...step, target: "timing", className: "" };
+  });
 }
 
 export function effectivenessFromMessage(message) {

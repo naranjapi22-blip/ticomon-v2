@@ -1,25 +1,36 @@
 export const PRESENTATION_TIMINGS = Object.freeze({
-  move: 150,
-  damage: 150,
-  faint: 150,
-  switch: 150,
-  forcedSwitch: 800,
-  snapshot: 650,
+  moveText: 800,
+  attack: 400,
+  impact: 500,
+  hp: 800,
+  notice: 1000,
+  normalPause: 600,
+  faintPause: 900,
+  switchPause: 900,
+  forcedSwitch: 900,
+  snapshot: 600,
   finished: 0,
   initialSnapshot: 0,
-  defaultEvent: 150,
+  defaultEvent: 600,
 });
 
-export function presentationDelayFor(item) {
+export function presentationDelayFor(item, previous = null) {
   if (item.type === "battle_finished") return PRESENTATION_TIMINGS.finished;
   if (item.type === "battle_snapshot") {
+    if (previous?.type === "battle_events" && previous.event?.fainted) {
+      return PRESENTATION_TIMINGS.faintPause;
+    }
+    if (previous?.type === "battle_events" && previous.event?.switch) {
+      return PRESENTATION_TIMINGS.switchPause;
+    }
     return item.initial
       ? PRESENTATION_TIMINGS.initialSnapshot
       : item.phase === "forced_switch"
         ? PRESENTATION_TIMINGS.forcedSwitch
         : PRESENTATION_TIMINGS.snapshot;
   }
-  return PRESENTATION_TIMINGS[item.event?.kind] || PRESENTATION_TIMINGS.defaultEvent;
+  if (item.type === "battle_events") return 0;
+  return PRESENTATION_TIMINGS.defaultEvent;
 }
 
 export function presentationKey(item) {
@@ -79,6 +90,11 @@ export class ActivityPresentationQueue {
     this.running = false;
   }
 
+  clearPending() {
+    this.items = [];
+    this.keys.clear();
+  }
+
   enqueue(item) {
     const key = presentationKey(item);
     if (this.keys.has(key)) return false;
@@ -91,10 +107,12 @@ export class ActivityPresentationQueue {
   async drain() {
     this.running = true;
     this.onStart();
+    let previous = null;
     while (this.items.length) {
       const item = this.items.shift();
       await this.present(item);
-      await this.wait(presentationDelayFor(item));
+      await this.wait(presentationDelayFor(item, previous));
+      previous = item;
     }
     this.running = false;
     this.onIdle();
