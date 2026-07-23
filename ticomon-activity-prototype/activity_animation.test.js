@@ -66,6 +66,17 @@ test("super effective events use heavy impact and readable text", () => {
   assert.match(plan[1].className, /hit-heavy/);
   assert.equal(plan.at(-1).text, "Super effective!");
   assert.equal(plan.find((step) => step.target === "flash").className, "screen-flash flash-heavy");
+  assert.equal(plan.at(-1).duration, ANIMATION_TIMINGS.effectiveness);
+});
+
+test("faint waits for the HP snapshot before the faint animation", () => {
+  const plan = eventAnimationPlan({
+    kind: "move",
+    move_name: "Tackle",
+    fainted: true,
+  });
+  assert.equal(plan.some((step) => step.className === "fainting"), false);
+  assert.deepEqual(plan.map((step) => step.target), ["attacker", "defender", "flash"]);
 });
 
 test("hits flash, misses do not, and resisted hits use a lighter flash", () => {
@@ -212,11 +223,12 @@ test("an action presents movement, impact, HP, then the result pause", async () 
       }
     },
     wait: async (duration) => {
-      if (duration >= PRESENTATION_TIMINGS.normalPause) order.push("pause");
+      if (duration === PRESENTATION_TIMINGS.impactToHp) order.push("impact-hold");
+      if (duration === PRESENTATION_TIMINGS.normalPause) order.push("pause");
     },
   });
   queue.enqueue({ type: "battle_events", sequence: 21, index: 0, event: { kind: "move" } });
   queue.enqueue({ type: "battle_snapshot", sequence: 22, phase: "resolving" });
   await queue.drainPromise;
-  assert.deepEqual(order, ["movement", "impact", "hp", "pause"]);
+  assert.deepEqual(order, ["movement", "impact", "impact-hold", "hp", "pause"]);
 });

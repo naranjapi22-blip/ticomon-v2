@@ -144,16 +144,38 @@ test("forced switches pause before controls return", () => {
     presentationDelayFor({ type: "battle_snapshot", phase: "forced_switch" }),
     PRESENTATION_TIMINGS.forcedSwitch,
   );
-  assert.equal(PRESENTATION_TIMINGS.forcedSwitch, 900);
+  assert.equal(PRESENTATION_TIMINGS.forcedSwitch, 0);
 });
 
 test("action reading and result timings meet the pacing floor", () => {
   assert.equal(PRESENTATION_TIMINGS.moveText, 800);
   assert.equal(PRESENTATION_TIMINGS.attack, 400);
-  assert.equal(PRESENTATION_TIMINGS.impact, 500);
-  assert.equal(PRESENTATION_TIMINGS.hp, 800);
-  assert.equal(PRESENTATION_TIMINGS.notice, 1000);
-  assert.equal(PRESENTATION_TIMINGS.normalPause, 600);
+  assert.equal(PRESENTATION_TIMINGS.impact, 400);
+  assert.equal(PRESENTATION_TIMINGS.hp, 700);
+  assert.equal(PRESENTATION_TIMINGS.notice, 800);
+  assert.equal(PRESENTATION_TIMINGS.normalPause, 450);
+  assert.equal(PRESENTATION_TIMINGS.finished, 2000);
+});
+
+test("effectiveness remains visible while HP is presented", () => {
+  assert.equal(
+    presentationDelayFor(
+      { type: "battle_snapshot", phase: "resolving" },
+      { type: "battle_events", event: { kind: "move", effectiveness: "super effective" } },
+    ),
+    PRESENTATION_TIMINGS.effectivenessPause,
+  );
+});
+
+test("forced switch controls return immediately after the faint presentation", () => {
+  assert.equal(
+    presentationDelayFor(
+      { type: "battle_snapshot", phase: "forced_switch" },
+      { type: "battle_events", event: { kind: "move", fainted: true } },
+    ),
+    PRESENTATION_TIMINGS.faintPause,
+  );
+  assert.equal(PRESENTATION_TIMINGS.faintLead, 250);
 });
 
 test("reconnecting discards events waiting behind the current presentation", () => {

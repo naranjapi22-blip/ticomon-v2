@@ -1,15 +1,19 @@
 export const PRESENTATION_TIMINGS = Object.freeze({
   moveText: 800,
   attack: 400,
-  impact: 500,
-  hp: 800,
-  notice: 1000,
-  normalPause: 600,
-  faintPause: 900,
-  switchPause: 900,
-  forcedSwitch: 900,
-  snapshot: 600,
-  finished: 0,
+  impact: 400,
+  hp: 700,
+  notice: 800,
+  impactToHp: 350,
+  normalPause: 450,
+  betweenActions: 300,
+  faintLead: 250,
+  faintPause: 0,
+  switchPause: 0,
+  forcedSwitch: 0,
+  effectivenessPause: 650,
+  snapshot: 450,
+  finished: 2000,
   initialSnapshot: 0,
   defaultEvent: 600,
 });
@@ -17,11 +21,10 @@ export const PRESENTATION_TIMINGS = Object.freeze({
 export function presentationDelayFor(item, previous = null) {
   if (item.type === "battle_finished") return PRESENTATION_TIMINGS.finished;
   if (item.type === "battle_snapshot") {
-    if (previous?.type === "battle_events" && previous.event?.fainted) {
-      return PRESENTATION_TIMINGS.faintPause;
-    }
-    if (previous?.type === "battle_events" && previous.event?.switch) {
-      return PRESENTATION_TIMINGS.switchPause;
+    if (previous?.type === "battle_events" && previous.event?.fainted) return PRESENTATION_TIMINGS.faintPause;
+    if (previous?.type === "battle_events" && previous.event?.switch) return PRESENTATION_TIMINGS.switchPause;
+    if (previous?.type === "battle_events" && (previous.event?.effectiveness || previous.event?.missed)) {
+      return PRESENTATION_TIMINGS.effectivenessPause;
     }
     return item.initial
       ? PRESENTATION_TIMINGS.initialSnapshot
@@ -29,7 +32,12 @@ export function presentationDelayFor(item, previous = null) {
         ? PRESENTATION_TIMINGS.forcedSwitch
         : PRESENTATION_TIMINGS.snapshot;
   }
-  if (item.type === "battle_events") return 0;
+  if (item.type === "battle_events") {
+    if (item.event?.switch) return PRESENTATION_TIMINGS.switchPause;
+    return previous?.type === "battle_snapshot"
+      ? PRESENTATION_TIMINGS.betweenActions
+      : PRESENTATION_TIMINGS.impactToHp;
+  }
   return PRESENTATION_TIMINGS.defaultEvent;
 }
 

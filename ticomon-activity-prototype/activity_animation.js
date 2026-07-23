@@ -1,12 +1,12 @@
 export const ANIMATION_TIMINGS = Object.freeze({
   attacker: 400,
-  defender: 500,
-  effectiveness: 1000,
-  hp: 800,
-  faint: 800,
-  switchOut: 500,
-  switchIn: 500,
-  impactFlash: 500,
+  defender: 400,
+  effectiveness: 800,
+  hp: 700,
+  faint: 700,
+  switchOut: 600,
+  switchIn: 600,
+  impactFlash: 400,
 });
 
 export const IMPACT_FLASH_CLASSES = Object.freeze([
@@ -60,7 +60,6 @@ export function eventAnimationPlan(event) {
       plan.push({ target: "defender", className: impactClass || "hit-recoil", duration: ANIMATION_TIMINGS.defender });
       plan.push({ target: "flash", className: flashClass, duration: ANIMATION_TIMINGS.impactFlash });
     }
-    plan.push({ target: "defender", className: "fainting", duration: ANIMATION_TIMINGS.faint });
   } else if (attackEvent) {
     plan.push({ target: "attacker", className: attackerClass, duration: ANIMATION_TIMINGS.attacker });
     if (!miss) {

@@ -95,6 +95,8 @@ const state = {
   controlsRenderKey: null,
   controlsSessionId: null,
   hpValues: { player: null, opponent: null },
+  noticeUntil: 0,
+  noticePromise: null,
 };
 
 const presentationQueue = new ActivityPresentationQueue({
@@ -417,6 +419,18 @@ async function renderSnapshot(snapshot, { animate = true } = {}) {
     renderHp(elements.playerHp, elements.playerHpText, snapshot.self, "player", animate),
     renderHp(elements.opponentHp, elements.opponentHpText, snapshot.opponent, "opponent", animate),
   ]);
+  await waitForActiveNotice();
+  if (state.pendingFaintSide) {
+    await wait(ANIMATION_TIMINGS.faintLead);
+    const fainted = elementForSide(state.pendingFaintSide);
+    if (fainted) {
+      fainted.hidden = false;
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+      if (reducedMotion) await wait(ANIMATION_TIMINGS.faint);
+      else await playAnimation(fainted, "fainting", ANIMATION_TIMINGS.faint);
+      fainted.hidden = true;
+    }
+  }
   if (state.pendingSwitchSide) {
     const switched = elementForSide(state.pendingSwitchSide);
     if (switched) {
@@ -663,13 +677,16 @@ async function presentBattleEvent(event) {
     state.pendingFaintSide = resolveSide(event.target_side || event.target);
   }
   state.preserveSnapshotMessage = true;
+  state.noticeUntil = 0;
+  state.noticePromise = null;
   try {
-    for (let index = 0; index < plan.length; index += 1) {
+    const animation = (async () => {
+      for (let index = 0; index < plan.length; index += 1) {
       const step = plan[index];
       if (step.target === "notice") {
         elements.message.textContent = step.text;
-        await wait(step.duration);
-        elements.message.textContent = event.message || event.kind;
+        state.noticeUntil = Date.now() + step.duration;
+        state.noticePromise = wait(step.duration);
         continue;
       }
       if (step.target === "timing") {
@@ -680,6 +697,12 @@ async function presentBattleEvent(event) {
         step.target === "defender" &&
         plan[index + 1]?.target === "flash"
       ) {
+        const notice = plan[index + 2]?.target === "notice" ? plan[index + 2] : null;
+        if (notice) {
+          elements.message.textContent = notice.text;
+          state.noticeUntil = Date.now() + notice.duration;
+          state.noticePromise = wait(notice.duration);
+        }
         const defender = animationElement(step.target, event);
         const flash = animationElement("flash", event);
         if (defender && flash) {
@@ -691,7 +714,7 @@ async function presentBattleEvent(event) {
               plan[index + 1].duration,
             ),
           ]);
-          index += 1;
+          index += notice ? 2 : 1;
           continue;
         }
       }
@@ -702,14 +725,25 @@ async function presentBattleEvent(event) {
           element.hidden = true;
         }
       }
-    }
+      }
+    })();
+    await Promise.all([animation, wait(ANIMATION_TIMINGS.moveText)]);
   } finally {
     clearImpactFlash(elements.flash);
   }
-  if (event.fainted || event.switch) {
+  if (event.switch) {
     const endingElement = animationElement("defender", event);
     if (endingElement) endingElement.hidden = true;
   }
+}
+
+async function waitForActiveNotice() {
+  if (!state.noticePromise) return;
+  const remaining = Math.max(0, state.noticeUntil - Date.now());
+  if (remaining) await wait(remaining);
+  await state.noticePromise;
+  state.noticePromise = null;
+  state.noticeUntil = 0;
 }
 
 function animationElement(target, event) {
